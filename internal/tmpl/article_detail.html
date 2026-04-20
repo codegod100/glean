@@ -53,6 +53,14 @@
             {{end}}
         </div>
 
+        {{if .Article.URL.Valid}}
+        {{with youtubeID .Article.URL.String}}
+        <div class="my-6 aspect-video w-full rounded-xl overflow-hidden shadow-spot">
+            <iframe class="w-full h-full" src="https://www.youtube.com/embed/{{.}}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        </div>
+        {{end}}
+        {{end}}
+
         <hr class="my-8 border-spot-divider">
 
         {{if .Article.Content.Valid}}
@@ -63,8 +71,8 @@
         <div class="article-body">
             {{sanitizeHTML .Article.Summary.String}}
         </div>
-        {{else}}
-        <p class="text-spot-secondary">No content available. <a href="{{.Article.URL.String}}" class="text-spot-green hover:underline">Read the original article.</a></p>
+        {{else if not .Article.URL.Valid}}
+        <p class="text-spot-secondary">No content available.</p>
         {{end}}
     </article>
 

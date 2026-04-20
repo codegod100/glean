@@ -229,6 +229,41 @@ func (s *Server) loadTemplates() {
 		"add": func(a, b int) int {
 			return a + b
 		},
+		"youtubeID": func(rawURL string) string {
+			u, err := url.Parse(rawURL)
+			if err != nil {
+				return ""
+			}
+			host := strings.ToLower(u.Hostname())
+			if host == "youtu.be" {
+				id := strings.TrimPrefix(u.Path, "/")
+				if id != "" {
+					return id
+				}
+				return ""
+			}
+			if host == "www.youtube.com" || host == "youtube.com" || host == "m.youtube.com" {
+				if u.Path == "/watch" || u.Path == "/watch/" {
+					id := u.Query().Get("v")
+					if id != "" {
+						return id
+					}
+				}
+				if strings.HasPrefix(u.Path, "/embed/") {
+					id := strings.TrimPrefix(u.Path, "/embed/")
+					if id != "" {
+						return id
+					}
+				}
+				if strings.HasPrefix(u.Path, "/shorts/") {
+					id := strings.TrimPrefix(u.Path, "/shorts/")
+					if id != "" {
+						return id
+					}
+				}
+			}
+			return ""
+		},
 		"sanitizeHTML": func(input string) template.HTML {
 			return template.HTML(sanitize.HTML(input))
 		},
