@@ -85,6 +85,7 @@ var schema = []string{
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_did TEXT NOT NULL REFERENCES users(did),
 		feed_url TEXT NOT NULL REFERENCES feeds(feed_url),
+		title TEXT,
 		category TEXT,
 		added_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		uri TEXT,

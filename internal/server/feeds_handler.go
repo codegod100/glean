@@ -42,6 +42,7 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "feeds.html", map[string]any{
 		"User":                  user,
 		"Subscriptions":         subs,
+		"SubscriptionCount":     len(allSubs),
 		"Categories":            categories,
 		"Category":              category,
 		"FeedRecommendations":   feedRecs,
@@ -116,7 +117,7 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 		subCID = cid
 	}
 
-	if err := s.db.CreateSubscription(r.Context(), user.DID, feedURL, category, subURI, subCID); err != nil {
+	if err := s.db.CreateSubscription(r.Context(), user.DID, feedURL, feedTitle, category, subURI, subCID); err != nil {
 		s.logger.Error("failed to create subscription", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -158,7 +159,34 @@ func (s *Server) handleRemoveFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) handleClearAllSubscriptions(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+
+	subs, _ := s.db.ListSubscriptions(r.Context(), user.DID, "", 1000, 0)
+	if client := s.pdsClientForUser(r); client != nil {
+		for _, sub := range subs {
+			if sub.URI.Valid {
+				parsed, ok := atproto.ParseRecordURI(sub.URI.String)
+				if ok {
+					if delErr := client.DeleteRecord(r.Context(), user.DID, parsed.Collection, parsed.RKey); delErr != nil {
+						s.logger.Error("failed to delete subscription from PDS", "error", delErr, "uri", sub.URI.String)
+					}
+				}
+			}
+		}
+	}
+
+	if err := s.db.DeleteAllSubscriptions(r.Context(), user.DID); err != nil {
+		s.logger.Error("failed to clear subscriptions", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("HX-Redirect", "/feeds")
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
@@ -181,8 +209,10 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 	client := s.pdsClientForUser(r)
 	for _, fu := range feedURLs {
 		f := &db.Feed{
-			FeedURL: fu.URL,
-			Title:   nullString(fu.Title),
+			FeedURL:     fu.URL,
+			Title:       nullString(fu.Title),
+			SiteURL:     nullString(fu.SiteURL),
+			Description: nullString(fu.Description),
 		}
 		if upsertErr := s.db.UpsertFeed(r.Context(), f); upsertErr != nil {
 			s.logger.Error("failed to upsert feed", "error", upsertErr)
@@ -206,19 +236,15 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 			subCID = cid
 		}
 
-		if subErr := s.db.CreateSubscription(r.Context(), user.DID, fu.URL, fu.Category, subURI, subCID); subErr != nil {
+		if subErr := s.db.CreateSubscription(r.Context(), user.DID, fu.URL, fu.Title, fu.Category, subURI, subCID); subErr != nil {
 			s.logger.Error("failed to create subscription", "error", subErr)
 			continue
 		}
 		added++
 	}
 
-	subs, _ := s.db.ListSubscriptions(r.Context(), user.DID, "", 100, 0)
-	s.render(w, r, "feeds.html", map[string]any{
-		"User":          user,
-		"Subscriptions": subs,
-		"AddedCount":    added,
-	})
+	w.Header().Set("HX-Redirect", "/feeds")
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *Server) handleOPMLDownload(w http.ResponseWriter, r *http.Request) {
@@ -227,14 +253,9 @@ func (s *Server) handleOPMLDownload(w http.ResponseWriter, r *http.Request) {
 
 	var feedURLs []feed.FeedURL
 	for _, sub := range subs {
-		f, err := s.db.GetFeed(r.Context(), sub.FeedURL)
-		title := ""
-		if err == nil {
-			title = f.Title.String
-		}
 		feedURLs = append(feedURLs, feed.FeedURL{
 			URL:   sub.FeedURL,
-			Title: title,
+			Title: sub.FeedTitle,
 		})
 	}
 

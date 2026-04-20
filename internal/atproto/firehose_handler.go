@@ -52,7 +52,7 @@ func (h *FirehoseDBHandler) handleSubscription(ctx context.Context, event *Fireh
 
 		f := &db.Feed{FeedURL: rec.FeedURL, Title: db.NullStr(rec.Title)}
 		_ = h.db.UpsertFeed(ctx, f)
-		return h.db.CreateSubscription(ctx, event.DID, rec.FeedURL, rec.Category, event.URI, event.CID)
+		return h.db.CreateSubscription(ctx, event.DID, rec.FeedURL, rec.Title, rec.Category, event.URI, event.CID)
 
 	case "delete":
 		parsed, ok := ParseRecordURI(event.URI)

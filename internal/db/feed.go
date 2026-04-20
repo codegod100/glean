@@ -126,11 +126,11 @@ func (db *DB) DecrementSubscriberCount(ctx context.Context, feedURL string) erro
 	return err
 }
 
-func (db *DB) CreateSubscription(ctx context.Context, userDID, feedURL, category, uri, cid string) error {
+func (db *DB) CreateSubscription(ctx context.Context, userDID, feedURL, title, category, uri, cid string) error {
 	_, err := db.ExecContext(ctx, `
-		INSERT INTO subscriptions (user_did, feed_url, category, uri, cid)
-		VALUES (?, ?, ?, ?, ?)
-	`, userDID, feedURL, category, uriOrNil(category, uri), uriOrNil(category, cid))
+		INSERT INTO subscriptions (user_did, feed_url, title, category, uri, cid)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, userDID, feedURL, nilIfEmpty(title), category, uriOrNil(category, uri), uriOrNil(category, cid))
 	if err != nil {
 		return err
 	}
@@ -151,6 +151,13 @@ func uriOrNil(category, v string) any {
 	return v
 }
 
+func nilIfEmpty(v string) any {
+	if v == "" {
+		return nil
+	}
+	return v
+}
+
 func (db *DB) DeleteSubscription(ctx context.Context, userDID, feedURL string) error {
 	_, err := db.ExecContext(ctx, `
 		DELETE FROM subscriptions WHERE user_did = ? AND feed_url = ?
@@ -161,10 +168,46 @@ func (db *DB) DeleteSubscription(ctx context.Context, userDID, feedURL string) e
 	return db.DecrementSubscriberCount(ctx, feedURL)
 }
 
+func (db *DB) DeleteAllSubscriptions(ctx context.Context, userDID string) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.QueryContext(ctx, `SELECT feed_url FROM subscriptions WHERE user_did = ?`, userDID)
+	if err != nil {
+		return err
+	}
+	var feedURLs []string
+	for rows.Next() {
+		var u string
+		if err := rows.Scan(&u); err != nil {
+			rows.Close()
+			return err
+		}
+		feedURLs = append(feedURLs, u)
+	}
+	rows.Close()
+
+	_, err = tx.ExecContext(ctx, `DELETE FROM subscriptions WHERE user_did = ?`, userDID)
+	if err != nil {
+		return err
+	}
+
+	for _, u := range feedURLs {
+		if _, err := tx.ExecContext(ctx, `UPDATE feeds SET subscriber_count = MAX(subscriber_count - 1, 0) WHERE feed_url = ?`, u); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
 func (db *DB) GetSubscription(ctx context.Context, userDID, feedURL string) (*Subscription, error) {
 	s := &Subscription{}
 	err := db.QueryRowContext(ctx, `
-		SELECT s.id, s.user_did, s.feed_url, COALESCE(f.title, ''), s.category, s.added_at,
+		SELECT s.id, s.user_did, s.feed_url, COALESCE(s.title, f.title, ''), s.category, s.added_at,
 		COALESCE(f.fetch_interval_minutes, 30), s.uri, s.cid
 		FROM subscriptions s
 		LEFT JOIN feeds f ON s.feed_url = f.feed_url
@@ -177,7 +220,7 @@ func (db *DB) GetSubscription(ctx context.Context, userDID, feedURL string) (*Su
 }
 
 func (db *DB) ListSubscriptions(ctx context.Context, userDID, category string, limit, offset int) ([]*Subscription, error) {
-	query := `SELECT s.id, s.user_did, s.feed_url, COALESCE(f.title, ''), s.category, s.added_at,
+	query := `SELECT s.id, s.user_did, s.feed_url, COALESCE(s.title, f.title, ''), s.category, s.added_at,
 		COALESCE(f.fetch_interval_minutes, 30), s.uri, s.cid
 		FROM subscriptions s
 		LEFT JOIN feeds f ON s.feed_url = f.feed_url

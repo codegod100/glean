@@ -107,6 +107,7 @@ func (s *Server) setupRoutes() {
 		r.Get("/list", s.handleFeedList)
 		r.Post("/set-interval", s.handleUpdateFeedInterval)
 		r.Get("/discover-url", s.handleDiscoverFeedURL)
+		r.Post("/clear", s.handleClearAllSubscriptions)
 	})
 
 	s.router.Route("/articles", func(r chi.Router) {

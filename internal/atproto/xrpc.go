@@ -25,7 +25,7 @@ func (h *XRPCHandler) ListSubscriptions(w http.ResponseWriter, r *http.Request) 
 	cursor := r.URL.Query().Get("cursor")
 
 	query := `
-		SELECT s.id, f.feed_url, f.title, s.category, s.added_at
+		SELECT s.id, f.feed_url, COALESCE(s.title, f.title), s.category, s.added_at
 		FROM subscriptions s
 		JOIN feeds f ON s.feed_url = f.feed_url
 		WHERE s.user_did = ?`
@@ -428,7 +428,7 @@ func (h *XRPCHandler) ListFeedLists(w http.ResponseWriter, r *http.Request) {
 		}
 
 		subRows, err := h.db.QueryContext(r.Context(), `
-			SELECT f.feed_url, f.title, s.category
+			SELECT s.feed_url, COALESCE(s.title, f.title), s.category
 			FROM subscriptions s
 			JOIN feeds f ON s.feed_url = f.feed_url
 			WHERE s.user_did = ?

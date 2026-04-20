@@ -103,17 +103,6 @@
             </div>
         </div>
         {{end}}
-
-        <div>
-            <h2 class="text-lg font-semibold text-spot-text mb-4">Quick add</h2>
-            <form hx-post="/feeds/add" hx-target="#feed-list" hx-swap="beforeend" class="flex gap-2">
-                {{csrfInput .CSRFToken}}
-                <input type="url" name="feed_url" placeholder="Feed URL"
-                       class="flex-1 bg-spot-hover text-spot-text rounded-pill px-5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder"
-                       required>
-                <button type="submit" class="bg-spot-green text-white rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Add</button>
-            </form>
-        </div>
     </div>
 </div>
 {{end}}

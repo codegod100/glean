@@ -1,6 +1,6 @@
 {{define "feeds.html"}}
 <div class="flex items-center justify-between mb-2">
-    <h1 class="text-2xl font-bold text-spot-text">Feeds</h1>
+    <h1 class="text-2xl font-bold text-spot-text">Feeds <span class="text-base font-normal text-spot-secondary">({{.SubscriptionCount}})</span></h1>
     <div class="flex items-center gap-3">
         <button hx-post="/feeds/refresh" hx-target="#feed-list" hx-swap="innerHTML"
                 hx-indicator="#refresh-indicator"
@@ -53,15 +53,17 @@
 
         <div id="feed-list" class="bg-spot-surface rounded-xl divide-y divide-spot-divider">
             {{range .Subscriptions}}
-            <div class="px-5 py-4 flex items-center justify-between hover:bg-spot-hover-50 transition rounded-xl">
-                <div class="min-w-0">
-                    <div class="font-bold text-spot-text truncate">{{if .FeedTitle}}{{.FeedTitle}}{{else}}{{.FeedURL}}{{end}}</div>
-                    {{if and .FeedTitle .FeedURL}}<div class="text-xs text-spot-muted truncate">{{.FeedURL}}</div>{{end}}
-                    {{if .Category.Valid}}<span class="text-xs text-spot-secondary">{{.Category.String}}</span>{{end}}
+            <div class="feed-item px-5 py-4 flex items-center justify-between hover:bg-spot-hover-50 transition rounded-xl">
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2">
+                        <span class="font-bold text-spot-text truncate">{{if .FeedTitle}}{{.FeedTitle}}{{else}}{{.FeedURL}}{{end}}</span>
+                        {{if .Category.Valid}}<span class="text-xs bg-spot-hover text-spot-secondary px-2 py-0.5 rounded-full shrink-0">{{.Category.String}}</span>{{end}}
+                    </div>
+                    <div class="text-xs text-spot-muted truncate mt-0.5">{{.FeedURL}}</div>
                 </div>
                 <div class="flex items-center gap-3">
                     {{if .UnreadCount}}<span class="text-xs bg-spot-green/20 text-spot-green px-2.5 py-0.5 rounded-full font-bold">{{.UnreadCount}}</span>{{end}}
-                    <form hx-post="/feeds/set-interval" hx-swap="none" hx-vals='{"feed_url": "{{.FeedURL}}"}' class="inline-flex items-center gap-1">
+                    <form hx-post="/feeds/set-interval" hx-swap="none" class="inline-flex items-center gap-1">
                         {{csrfInput $.CSRFToken}}
                         <input type="hidden" name="feed_url" value="{{.FeedURL}}">
                         <select name="interval" onchange="this.form.submit()"
@@ -75,7 +77,7 @@
                             <option value="1440" {{if eq .FetchInterval 1440}}selected{{end}}>24h</option>
                         </select>
                     </form>
-                    <form hx-delete="/feeds/remove" hx-target="closest .px-5" hx-swap="outerHTML swap:0.3s"
+                    <form hx-delete="/feeds/remove" hx-target="closest .feed-item" hx-swap="outerHTML swap:0.3s"
                           hx-confirm="Unsubscribe from this feed?" class="inline">
                         {{csrfInput $.CSRFToken}}
                         <input type="hidden" name="url" value="{{.FeedURL}}">
@@ -85,7 +87,7 @@
             </div>
             {{else}}
             <div class="px-4 py-8 text-center text-spot-secondary">
-                <p>No feeds yet. Add one below!</p>
+                <p>No feeds yet. Add one from the sidebar.</p>
             </div>
             {{end}}
         </div>
@@ -94,7 +96,7 @@
         <div class="text-center py-4">
             <button hx-get="/feeds?offset={{.Page.NextOffset}}{{if .Category}}&category={{.Category}}{{end}}"
                     hx-target="#feed-list" hx-swap="beforeend"
-                    hx-select=".px-5"
+                    hx-select=".feed-item"
                     class="text-sm text-spot-secondary hover:text-spot-green transition">
                 Load more
             </button>
@@ -114,12 +116,15 @@
                        class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
                 <button type="submit" class="w-full bg-spot-green text-white rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Add</button>
             </form>
-            <form hx-post="/feeds/opml/upload" hx-encoding="multipart/form-data" class="flex flex-col gap-2">
-                {{csrfInput .CSRFToken}}
-                <label class="text-xs text-spot-secondary font-bold uppercase tracking-wide">Import OPML</label>
-                <input type="file" name="opml" accept=".opml,.xml" class="text-sm text-spot-secondary file:mr-2 file:py-1 file:px-3 file:rounded-pill file:border-0 file:text-sm file:bg-spot-hover file:text-spot-text hover:file:bg-spot-surface file:cursor-pointer">
-                <button type="submit" class="w-full border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-sm font-bold uppercase tracking-button hover:border-spot-text transition">Import</button>
-            </form>
+            <div class="border-t border-spot-divider pt-4 space-y-3">
+                <h2 class="text-xs text-spot-secondary font-bold uppercase tracking-wide">Import / Export</h2>
+                <form hx-post="/feeds/opml/upload" hx-encoding="multipart/form-data" class="flex flex-col gap-2">
+                    {{csrfInput .CSRFToken}}
+                    <input type="file" name="opml" accept=".opml,.xml" class="text-sm text-spot-secondary file:mr-2 file:py-1 file:px-3 file:rounded-pill file:border-0 file:text-sm file:bg-spot-hover file:text-spot-text hover:file:bg-spot-surface file:cursor-pointer">
+                    <button type="submit" class="w-full border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-sm font-bold uppercase tracking-button hover:border-spot-text transition">Import OPML</button>
+                </form>
+                <a href="/feeds/opml/download" class="block w-full text-center border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-sm font-bold uppercase tracking-button hover:border-spot-text transition">Export OPML</a>
+            </div>
         </div>
 
         {{if .PeopleRecommendations}}
@@ -138,6 +143,13 @@
                 {{end}}
             </div>
         </div>
+        {{end}}
+
+        {{if .Subscriptions}}
+        <form hx-post="/feeds/clear" hx-confirm="Are you sure you want to unsubscribe from ALL feeds? This cannot be undone.">
+            {{csrfInput .CSRFToken}}
+            <button type="submit" class="w-full border border-spot-red/50 text-spot-red rounded-pill px-4 py-1.5 text-sm font-bold uppercase tracking-button hover:border-spot-red hover:bg-spot-red/10 transition">Clear all subscriptions</button>
+        </form>
         {{end}}
     </div>
 </div>

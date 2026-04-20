@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"io"
+	"strings"
 )
 
 type OPML struct {
@@ -18,30 +19,60 @@ type OPML struct {
 }
 
 type Outline struct {
-	Text     string    `xml:"text,attr"`
-	Title    string    `xml:"title,attr"`
-	XMLURL   string    `xml:"xmlUrl,attr"`
-	HTMLURL  string    `xml:"htmlUrl,attr"`
-	Outlines []Outline `xml:"outline"`
+	Text        string    `xml:"text,attr"`
+	Title       string    `xml:"title,attr"`
+	XMLURL      string    `xml:"xmlUrl,attr"`
+	HTMLURL     string    `xml:"htmlUrl,attr"`
+	Description string    `xml:"description,attr"`
+	Outlines    []Outline `xml:"outline"`
+}
+
+func (o Outline) GetTitle() string {
+	if o.Title != "" {
+		return o.Title
+	}
+	if o.Text != "" {
+		return o.Text
+	}
+	if o.HTMLURL != "" {
+		return o.HTMLURL
+	}
+	if o.XMLURL != "" {
+		return o.XMLURL
+	}
+	return ""
+}
+
+func (o Outline) GetSiteURL() string {
+	if o.HTMLURL != "" {
+		return o.HTMLURL
+	}
+	return o.XMLURL
+}
+
+func (o Outline) IsSubscription() bool {
+	return strings.TrimSpace(o.XMLURL) != ""
+}
+
+func (o Outline) HasChildren() bool {
+	return len(o.Outlines) > 0
 }
 
 type FeedURL struct {
-	URL      string
-	Title    string
-	Category string
+	URL         string
+	Title       string
+	SiteURL     string
+	Description string
+	Category    string
 }
 
 func ParseOPML(r io.Reader) (*OPML, error) {
-	data, err := io.ReadAll(r)
-	if err != nil {
-		return nil, err
-	}
-
 	var opml OPML
-	if err := xml.Unmarshal(data, &opml); err != nil {
+	dec := xml.NewDecoder(r)
+	dec.Strict = false
+	if err := dec.Decode(&opml); err != nil {
 		return nil, err
 	}
-
 	return &opml, nil
 }
 
@@ -53,18 +84,17 @@ func ExtractFeedURLs(opml *OPML) []FeedURL {
 
 func extractOutlines(outlines []Outline, category string, urls *[]FeedURL) {
 	for _, o := range outlines {
-		if o.XMLURL != "" {
+		if o.IsSubscription() {
 			*urls = append(*urls, FeedURL{
-				URL:      o.XMLURL,
-				Title:    o.Title,
-				Category: category,
+				URL:         o.XMLURL,
+				Title:       o.GetTitle(),
+				SiteURL:     o.GetSiteURL(),
+				Description: o.Description,
+				Category:    category,
 			})
+		} else if o.HasChildren() {
+			extractOutlines(o.Outlines, o.GetTitle(), urls)
 		}
-		childCategory := o.Text
-		if childCategory == "" {
-			childCategory = category
-		}
-		extractOutlines(o.Outlines, childCategory, urls)
 	}
 }
 
@@ -75,11 +105,13 @@ func GenerateOPML(feeds []FeedURL, title string) ([]byte, error) {
 	opml.Head.Title = title
 
 	for _, f := range feeds {
-		opml.Body.Outlines = append(opml.Body.Outlines, Outline{
-			Text:   f.Title,
-			Title:  f.Title,
-			XMLURL: f.URL,
-		})
+		outline := Outline{
+			Text:    f.Title,
+			Title:   f.Title,
+			XMLURL:  f.URL,
+			HTMLURL: f.SiteURL,
+		}
+		opml.Body.Outlines = append(opml.Body.Outlines, outline)
 	}
 
 	var buf bytes.Buffer

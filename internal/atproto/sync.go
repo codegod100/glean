@@ -80,7 +80,7 @@ func (s *Sync) reconcileSubscription(ctx context.Context, userDID, uri, cid stri
 	f := &db.Feed{FeedURL: rec.FeedURL, Title: db.NullStr(rec.Title)}
 	_ = s.db.UpsertFeed(ctx, f)
 
-	return s.db.CreateSubscription(ctx, userDID, rec.FeedURL, rec.Category, uri, cid)
+	return s.db.CreateSubscription(ctx, userDID, rec.FeedURL, rec.Title, rec.Category, uri, cid)
 }
 
 func (s *Sync) reconcileLike(ctx context.Context, userDID, uri, cid string, value json.RawMessage) error {
