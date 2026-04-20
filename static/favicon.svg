@@ -1,11 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
   <rect width="32" height="32" rx="8" fill="#1E3932"/>
-  <path d="M16 6 L16 22" stroke="#00754A" stroke-width="2.5" stroke-linecap="round"/>
-  <path d="M16 10 Q10 8 8 12" stroke="#00754A" stroke-width="2" stroke-linecap="round" fill="none"/>
-  <path d="M16 10 Q22 8 24 12" stroke="#00754A" stroke-width="2" stroke-linecap="round" fill="none"/>
-  <path d="M16 14 Q9 12 7 17" stroke="#00754A" stroke-width="2" stroke-linecap="round" fill="none"/>
-  <path d="M16 14 Q23 12 25 17" stroke="#00754A" stroke-width="2" stroke-linecap="round" fill="none"/>
-  <path d="M16 18 Q11 16 9 21" stroke="#00754A" stroke-width="2" stroke-linecap="round" fill="none"/>
-  <path d="M16 18 Q21 16 23 21" stroke="#00754A" stroke-width="2" stroke-linecap="round" fill="none"/>
-  <circle cx="16" cy="25" r="2" fill="#00754A"/>
+  <ellipse cx="16" cy="20" rx="5.5" ry="6" fill="#00754A"/>
+  <path d="M10.5 19.5c-2.5-1-5.5-4-5-7.5.2-1.2 1-1.8 1.8-1.5 2 .7 3.5 4 3.8 7" fill="#00754A" fill-opacity=".5"/>
+  <path d="M21.5 19.5c2.5-1 5.5-4 5-7.5-.2-1.2-1-1.8-1.8-1.5-2 .7-3.5 4-3.8 7" fill="#00754A" fill-opacity=".5"/>
+  <line x1="13" y1="17" x2="19" y2="17" stroke="#1E3932" stroke-width="1.2"/>
+  <line x1="12.5" y1="20" x2="19.5" y2="20" stroke="#1E3932" stroke-width="1.2"/>
+  <line x1="13" y1="23" x2="19" y2="23" stroke="#1E3932" stroke-width="1.2"/>
+  <circle cx="13.5" cy="11" r="1.8" fill="#00754A"/>
+  <circle cx="18.5" cy="11" r="1.8" fill="#00754A"/>
+  <line x1="13.5" y1="9.2" x2="12" y2="6.5" stroke="#00754A" stroke-width="1.3" stroke-linecap="round"/>
+  <line x1="18.5" y1="9.2" x2="20" y2="6.5" stroke="#00754A" stroke-width="1.3" stroke-linecap="round"/>
+  <path d="M13 26c.5 1 1.5 1.5 3 1.5s2.5-.5 3-1.5" stroke="#00754A" stroke-width="1.2" stroke-linecap="round" fill="none"/>
 </svg>

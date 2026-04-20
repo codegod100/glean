@@ -38,9 +38,9 @@
             {{end}}
         </div>
 
-        {{if .HasMore}}
+        {{if .Page.HasMore}}
         <div class="text-center py-4">
-            <button hx-get="/dashboard?offset={{.NextOffset}}"
+            <button hx-get="/dashboard?offset={{.Page.NextOffset}}"
                     hx-target="#article-list" hx-swap="beforeend"
                     hx-select="article"
                     class="text-sm text-spot-secondary hover:text-spot-green transition">

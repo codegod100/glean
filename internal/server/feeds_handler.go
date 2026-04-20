@@ -18,16 +18,11 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	category := r.URL.Query().Get("category")
 
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
-	if offset < 0 {
-		offset = 0
-	}
-	pageLimit := 50
-
-	subs, _ := s.db.ListSubscriptions(r.Context(), user.DID, category, pageLimit+1, offset)
-	hasMore := len(subs) > pageLimit
-	if hasMore {
-		subs = subs[:pageLimit]
+	page := pageFromRequest(r, 50)
+	subs, _ := s.db.ListSubscriptions(r.Context(), user.DID, category, page.FetchLimit(), page.Offset)
+	page = page.Paginate(len(subs))
+	if page.HasMore {
+		subs = subs[:page.Limit]
 	}
 
 	allSubs, _ := s.db.ListSubscriptions(r.Context(), user.DID, "", 1000, 0)
@@ -52,8 +47,7 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 		"FeedRecommendations":   feedRecs,
 		"PeopleRecommendations": peopleRecs,
 		"DeadFeeds":             deadFeeds,
-		"HasMore":               hasMore,
-		"NextOffset":            offset + pageLimit,
+		"Page":                  page,
 	})
 }
 

@@ -17,9 +17,9 @@
     {{end}}
 </div>
 
-{{if .HasMore}}
+{{if .Page.HasMore}}
 <div class="text-center py-4">
-    <button hx-get="/articles?offset={{.NextOffset}}{{if .FeedURL}}&feed={{.FeedURL}}{{end}}{{if .Starred}}&starred=1{{end}}"
+    <button hx-get="/articles?offset={{.Page.NextOffset}}{{if .FeedURL}}&feed={{.FeedURL}}{{end}}"
             hx-target="#article-list" hx-swap="beforeend"
             hx-select="article"
             class="text-sm text-spot-secondary hover:text-spot-green transition">

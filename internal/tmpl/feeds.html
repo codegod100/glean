@@ -90,9 +90,9 @@
             {{end}}
         </div>
 
-        {{if .HasMore}}
+        {{if .Page.HasMore}}
         <div class="text-center py-4">
-            <button hx-get="/feeds?offset={{.NextOffset}}{{if .Category}}&category={{.Category}}{{end}}"
+            <button hx-get="/feeds?offset={{.Page.NextOffset}}{{if .Category}}&category={{.Category}}{{end}}"
                     hx-target="#feed-list" hx-swap="beforeend"
                     hx-select=".px-5"
                     class="text-sm text-spot-secondary hover:text-spot-green transition">

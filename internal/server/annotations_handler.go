@@ -4,11 +4,48 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/db"
 )
+
+func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+
+	likedOffset, _ := strconv.Atoi(r.URL.Query().Get("liked_offset"))
+	if likedOffset < 0 {
+		likedOffset = 0
+	}
+	annotOffset, _ := strconv.Atoi(r.URL.Query().Get("annot_offset"))
+	if annotOffset < 0 {
+		annotOffset = 0
+	}
+	limit := 20
+
+	articles, _ := s.db.ListLikedArticles(r.Context(), user.DID, limit+1, likedOffset)
+	likedHasMore := len(articles) > limit
+	if likedHasMore {
+		articles = articles[:limit]
+	}
+
+	annotations, _ := s.db.ListAnnotations(r.Context(), "", "", user.DID, limit+1, annotOffset)
+	annotHasMore := len(annotations) > limit
+	if annotHasMore {
+		annotations = annotations[:limit]
+	}
+
+	s.render(w, r, "library.html", map[string]any{
+		"User":          user,
+		"Articles":      articles,
+		"Annotations":   annotations,
+		"LikedHasMore":  likedHasMore,
+		"AnnotHasMore":  annotHasMore,
+		"NextLiked":     likedOffset + limit,
+		"NextAnnot":     annotOffset + limit,
+	})
+}
 
 func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)

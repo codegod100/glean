@@ -2,7 +2,6 @@ package server
 
 import (
 	"net/http"
-	"strconv"
 	"time"
 
 	"pkg.rbrt.fr/glean/internal/db"
@@ -16,31 +15,25 @@ func (s *Server) handleTrending(w http.ResponseWriter, r *http.Request) {
 		scope = "for-me"
 	}
 
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
-	if offset < 0 {
-		offset = 0
-	}
-	pageLimit := 25
-
+	page := pageFromRequest(r, 25)
 	since := time.Now().AddDate(0, 0, -7).Format(time.RFC3339)
 
 	var trending []*db.TrendingItem
 	if scope == "for-me" {
-		trending, _ = s.db.ListTrendingArticlesForUser(r.Context(), user.DID, since, pageLimit+1, offset)
+		trending, _ = s.db.ListTrendingArticlesForUser(r.Context(), user.DID, since, page.FetchLimit(), page.Offset)
 	} else {
-		trending, _ = s.db.ListTrendingArticles(r.Context(), since, pageLimit+1, offset)
+		trending, _ = s.db.ListTrendingArticles(r.Context(), since, page.FetchLimit(), page.Offset)
 	}
 
-	hasMore := len(trending) > pageLimit
-	if hasMore {
-		trending = trending[:pageLimit]
+	page = page.Paginate(len(trending))
+	if page.HasMore {
+		trending = trending[:page.Limit]
 	}
 
 	s.render(w, r, "trending.html", map[string]any{
-		"User":       user,
-		"Trending":   trending,
-		"Scope":      scope,
-		"HasMore":    hasMore,
-		"NextOffset": offset + pageLimit,
+		"User":     user,
+		"Trending": trending,
+		"Scope":    scope,
+		"Page":     page,
 	})
 }

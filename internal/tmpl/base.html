@@ -10,12 +10,35 @@
     </script>
     <link rel="stylesheet" href="/static/output.css">
     <script src="https://unpkg.com/htmx.org@2"></script>
+    <script>
+    document.addEventListener('htmx:confirm', function(e) {
+        if (!e.detail.question) return;
+        e.preventDefault();
+        var dlg = document.getElementById('confirm-dialog');
+        document.getElementById('confirm-dialog-msg').textContent = e.detail.question;
+        var okBtn = document.getElementById('confirm-dialog-ok');
+        var handler = function() {
+            dlg.close();
+            okBtn.removeEventListener('click', handler);
+            e.detail.issueRequest(true);
+        };
+        okBtn.addEventListener('click', handler);
+        dlg.showModal();
+    });
+    </script>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body class="bg-spot-bg text-spot-text min-h-screen flex">
+    <dialog id="confirm-dialog" class="bg-spot-surface rounded-xl p-6 max-w-sm shadow-lg border border-spot-divider backdrop:bg-black/50" style="color-scheme:dark" onclick="if(event.target===this)this.close()">
+        <p id="confirm-dialog-msg" class="text-spot-text text-sm mb-6"></p>
+        <div class="flex justify-end gap-3">
+            <button onclick="document.getElementById('confirm-dialog').close(false)" class="text-sm text-spot-secondary hover:text-spot-text px-4 py-2 rounded-pill border border-spot-outline transition">Cancel</button>
+            <button id="confirm-dialog-ok" class="text-sm text-white bg-spot-red hover:brightness-110 px-4 py-2 rounded-pill font-bold uppercase tracking-button transition">Confirm</button>
+        </div>
+    </dialog>
     {{if .User}}
     <aside class="hidden lg:flex flex-col w-60 bg-spot-bg h-screen fixed left-0 top-0 px-3 py-4 z-20">
         <div class="mb-8 px-3">
@@ -43,17 +66,15 @@
                 Library
             </a>
         </nav>
-        <div class="mt-auto pt-4 border-t border-spot-divider-30">
-            <a href="/profile/{{.User.DID}}" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-spot-hover-50 transition">
-                {{if .User.AvatarURL.Valid}}<img src="{{.User.AvatarURL.String}}" class="w-8 h-8 rounded-full">{{end}}
-                <div class="min-w-0 flex-1">
-                    <div class="text-sm font-bold truncate text-spot-text">@{{.User.Handle}}</div>
-                </div>
+        <div class="mt-auto pt-4 border-t border-spot-divider-30 flex items-center gap-2 px-1">
+            <a href="/profile/{{.User.DID}}" class="flex items-center gap-2 flex-1 min-w-0 px-2 py-1.5 rounded-md hover:bg-spot-hover-50 transition">
+                {{if .User.AvatarURL.Valid}}<img src="{{.User.AvatarURL.String}}" class="w-7 h-7 rounded-full shrink-0">{{end}}
+                <span class="text-sm font-medium truncate text-spot-text">@{{.User.Handle}}</span>
             </a>
-            <form method="POST" action="/auth/logout">
+            <form method="POST" action="/auth/logout" class="shrink-0">
                 {{csrfInput .CSRFToken}}
-                <button type="submit" class="text-spot-secondary hover:text-spot-red transition" title="Logout">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                <button type="submit" class="text-spot-secondary hover:text-spot-red p-1.5 rounded-md hover:bg-spot-hover-50 transition" title="Logout">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
                 </button>
             </form>
         </div>
@@ -113,13 +134,13 @@
                                     <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
                                     Trending
                                 </a>
-                            </div>
-                            <div class="flex flex-col gap-1.5">
-                                <div class="text-spot-text font-bold text-xs uppercase tracking-wide mb-1">Library</div>
                                 <a href="/articles" class="text-xs text-spot-secondary hover:text-spot-text hover:underline inline-flex gap-1.5 items-center transition">
                                     <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2"/></svg>
                                     Articles
                                 </a>
+                            </div>
+                            <div class="flex flex-col gap-1.5">
+                                <div class="text-spot-text font-bold text-xs uppercase tracking-wide mb-1">Library</div>
                                 <a href="/feeds" class="text-xs text-spot-secondary hover:text-spot-text hover:underline inline-flex gap-1.5 items-center transition">
                                     <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7m-7-1a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
                                     Feeds
@@ -140,7 +161,7 @@
                             </div>
                         </div>
                         <div class="text-right">
-                            <div class="text-xs text-spot-secondary">&copy; {{now.Format "2006"}} Glean</div>
+                            <div class="text-xs text-spot-secondary">&copy; {{now.Format "2006"}} Glean.at</div>
                             <div class="text-[10px] text-spot-muted mt-0.5">Built on the AT Protocol</div>
                         </div>
                     </div>
@@ -198,6 +219,15 @@
         });
     }
     updateThemeIcons(document.documentElement.getAttribute('data-theme') || 'dark');
+
+    function toggleAnnotate(btn) {
+        var card = btn.closest('article');
+        var form = card.querySelector('.annotate-form');
+        form.classList.toggle('hidden');
+        if (!form.classList.contains('hidden')) {
+            form.querySelector('input[name="quote"]').focus();
+        }
+    }
 
     document.addEventListener('keydown', function(e) {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
