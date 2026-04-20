@@ -1,0 +1,17 @@
+{{define "login.html"}}
+<div class="max-w-md mx-auto mt-20">
+    <div class="bg-spot-surface rounded-lg shadow-spot-heavy p-8">
+        <h1 class="text-2xl font-bold font-title text-spot-text mb-6">Sign in to Glean</h1>
+        <form action="/auth/callback" method="GET">
+            <label class="block text-sm font-bold text-spot-secondary mb-2 uppercase tracking-button">Bluesky Handle</label>
+            <input type="text" name="handle" placeholder="you.bsky.social"
+                   class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-3 mb-5 focus:outline-none focus:ring-2 focus:ring-spot-purple placeholder:text-spot-placeholder"
+                   required>
+            <button type="submit" class="w-full bg-spot-purple text-spot-bg rounded-pill px-4 py-3 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">
+                Sign in with Bluesky
+            </button>
+        </form>
+        <p class="mt-5 text-sm text-spot-secondary">We'll authenticate you via your Bluesky account. No password needed.</p>
+    </div>
+</div>
+{{end}}

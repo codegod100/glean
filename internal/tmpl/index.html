@@ -1,0 +1,33 @@
+{{define "index.html"}}
+<div class="max-w-2xl mx-auto mt-20 lg:mt-32 text-center">
+    <h1 class="text-5xl font-bold font-title mb-6 text-spot-text">Glean</h1>
+    <p class="text-lg text-spot-secondary mb-10 max-w-lg mx-auto leading-relaxed">A social RSS reader. Follow feeds, share what you read, discover new sources through your network.</p>
+    <div class="flex flex-col sm:flex-row justify-center gap-3">
+        <a href="/auth/login" class="bg-spot-purple text-spot-bg rounded-pill px-8 py-3 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Sign in with Bluesky</a>
+        <a href="/trending" class="border border-spot-outline text-spot-text rounded-pill px-8 py-3 text-sm font-bold uppercase tracking-button hover:border-spot-text transition">Browse trending</a>
+    </div>
+    <div class="mt-24 grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
+        <div class="bg-spot-surface hover:bg-spot-hover rounded-lg p-6 transition shadow-spot">
+            <div class="text-spot-purple text-2xl mb-3">
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7m-7-1a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
+            </div>
+            <h3 class="font-bold text-spot-text mb-1">Follow any feed</h3>
+            <p class="text-sm text-spot-secondary">Subscribe to RSS and Atom feeds. Organize with categories. Import via OPML.</p>
+        </div>
+        <div class="bg-spot-surface hover:bg-spot-hover rounded-lg p-6 transition shadow-spot">
+            <div class="text-spot-purple text-2xl mb-3">
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </div>
+            <h3 class="font-bold text-spot-text mb-1">Read together</h3>
+            <p class="text-sm text-spot-secondary">See what your network reads. Like and annotate articles. Share discoveries.</p>
+        </div>
+        <div class="bg-spot-surface hover:bg-spot-hover rounded-lg p-6 transition shadow-spot">
+            <div class="text-spot-purple text-2xl mb-3">
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            </div>
+            <h3 class="font-bold text-spot-text mb-1">Find new sources</h3>
+            <p class="text-sm text-spot-secondary">Get recommendations based on your reading. Find people with similar tastes.</p>
+        </div>
+    </div>
+</div>
+{{end}}

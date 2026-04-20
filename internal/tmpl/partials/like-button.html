@@ -1,0 +1,4 @@
+{{define "like-button.html"}}
+<button hx-post="/articles/{{.ID}}/like" hx-target="this" hx-swap="outerHTML"
+        class="text-spot-muted hover:text-spot-red text-lg transition">&#9829;</button>
+{{end}}

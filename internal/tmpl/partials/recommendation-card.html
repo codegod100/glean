@@ -1,0 +1,11 @@
+{{define "recommendation-card.html"}}
+<div class="bg-spot-surface rounded-lg p-3 hover:bg-spot-hover-50 transition">
+    <div class="flex items-center justify-between">
+        <div class="min-w-0">
+            <div class="font-bold text-sm text-spot-text">{{if .title}}{{.title}}{{else}}{{.feed_url}}{{end}}</div>
+            {{if .description}}<p class="text-xs text-spot-secondary truncate mt-0.5">{{.description}}</p>{{end}}
+        </div>
+        <span class="text-xs text-spot-secondary shrink-0 ml-2">{{.subscriber_count}} subs</span>
+    </div>
+</div>
+{{end}}

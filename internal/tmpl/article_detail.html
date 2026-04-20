@@ -1,0 +1,102 @@
+{{define "article_detail.html"}}
+<div class="max-w-3xl mx-auto">
+    <a href="/articles" class="text-sm text-spot-secondary hover:text-spot-text mb-4 inline-block transition">&larr; Back to articles</a>
+
+    <article>
+        <h1 class="text-3xl font-bold font-title leading-tight">
+            {{if .Article.URL.Valid}}<a href="{{.Article.URL.String}}" target="_blank" rel="noopener noreferrer" class="text-spot-text hover:text-spot-purple transition">{{.Article.Title}}</a>
+            {{else}}<span class="text-spot-text">{{.Article.Title}}</span>{{end}}
+        </h1>
+
+        <div class="flex items-center gap-3 mt-3 text-sm text-spot-secondary">
+            {{if .Article.Author.Valid}}<span>{{.Article.Author.String}}</span>{{end}}
+            {{if .Article.Published.Valid}}<span>{{.Article.Published.Time.Format "Jan 2, 2006 15:04"}}</span>{{end}}
+            {{if .Feed}}
+            <a href="/articles?feed={{.Feed.FeedURL}}" class="hover:text-spot-purple transition">{{if .Feed.Title.Valid}}{{.Feed.Title.String}}{{else}}{{.Feed.FeedURL}}{{end}}</a>
+            {{end}}
+        </div>
+
+        <div class="flex items-center gap-3 mt-4">
+            <button hx-post="/articles/{{.Article.ID}}/like" hx-target="#like-btn" hx-swap="outerHTML"
+                    id="like-btn"
+                    class="text-lg {{if .HasLiked}}text-spot-red{{else}}text-spot-muted hover:text-spot-red{{end}} transition">
+                &#9829; <span class="text-sm text-spot-secondary">{{.LikeCount}}</span>
+            </button>
+
+            <a href="https://bsky.app/intent/compose?text={{.Article.Title}}%20{{if .Article.URL.Valid}}{{.Article.URL.String}}{{end}}"
+               target="_blank" rel="noopener noreferrer"
+               class="text-xs border border-spot-outline text-spot-text rounded-pill px-3 py-1 hover:border-spot-text uppercase tracking-button transition inline-flex items-center gap-1">
+                🦋
+                Share
+            </a>
+
+            <button hx-post="/articles/{{.Article.ID}}/{{if .ReadState.IsRead}}unread{{else}}read{{end}}"
+                    hx-target="#read-btn" hx-swap="outerHTML"
+                    id="read-btn"
+                    class="text-xs border border-spot-outline text-spot-text rounded-pill px-3 py-1 hover:border-spot-text uppercase tracking-button transition">
+                {{if .ReadState.IsRead}}Mark unread{{else}}Mark read{{end}}
+            </button>
+        </div>
+
+        <hr class="my-6 border-spot-divider-30">
+
+        {{if .Article.Content.Valid}}
+        <div class="article-body">
+            {{sanitizeHTML .Article.Content.String}}
+        </div>
+        {{else if .Article.Summary.Valid}}
+        <div class="article-body">
+            {{sanitizeHTML .Article.Summary.String}}
+        </div>
+        {{else}}
+        <p class="text-spot-secondary">No content available. <a href="{{.Article.URL.String}}" class="text-spot-purple hover:underline">Read the original article.</a></p>
+        {{end}}
+    </article>
+
+    <hr class="my-8 border-spot-divider-30">
+
+    <section>
+        <h2 class="text-lg font-semibold text-spot-text mb-4">Annotations</h2>
+
+        <form hx-post="/annotations/create" hx-target="#annotations-list" hx-swap="beforeend"
+              hx-on::after-request="this.reset()"
+              class="bg-spot-surface rounded-lg shadow-spot p-4 mb-4 space-y-3">
+            {{csrfInput .CSRFToken}}
+            <input type="hidden" name="feed_url" value="{{.Article.FeedURL}}">
+            <input type="hidden" name="article_url" value="{{if .Article.URL.Valid}}{{.Article.URL.String}}{{end}}">
+            <div>
+                <textarea name="note" rows="2" placeholder="Add a note..."
+                          class="w-full bg-spot-hover text-spot-text rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-purple placeholder:text-spot-placeholder resize-none"></textarea>
+            </div>
+            <div class="flex gap-2">
+                <input type="text" name="quote" placeholder="Quote (optional)"
+                       class="flex-1 bg-spot-hover text-spot-text rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-purple placeholder:text-spot-placeholder">
+                <input type="text" name="tags" placeholder="Tags (comma separated)"
+                       class="flex-1 bg-spot-hover text-spot-text rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-purple placeholder:text-spot-placeholder">
+            </div>
+            <button type="submit" class="bg-spot-purple text-spot-bg rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Annotate</button>
+        </form>
+
+        <div id="annotations-list" class="space-y-3">
+            {{range .Annotations}}
+            {{template "annotation-card.html" .}}
+            {{else}}
+            <p class="text-sm text-spot-secondary">No annotations yet. Be the first to add one.</p>
+            {{end}}
+        </div>
+    </section>
+</div>
+
+<script>
+document.addEventListener('keydown', function(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key === 'l') {
+        document.getElementById('like-btn') && document.getElementById('like-btn').click();
+    } else if (e.key === 'm') {
+        document.getElementById('read-btn') && document.getElementById('read-btn').click();
+    } else if (e.key === 'Escape') {
+        window.location.href = '/articles';
+    }
+});
+</script>
+{{end}}

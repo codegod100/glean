@@ -1,0 +1,58 @@
+{{define "discover.html"}}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold font-title text-spot-text">Discover</h1>
+    <p class="text-spot-secondary text-sm mt-1">Feeds and readers similar to you.</p>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <div>
+        <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended feeds</h2>
+        <div class="space-y-3">
+            {{range .FeedRecommendations}}
+            {{template "recommendation-card.html" .}}
+            {{else}}
+            <p class="text-sm text-spot-secondary">Subscribe to some feeds first to get recommendations.</p>
+            {{end}}
+        </div>
+    </div>
+
+    <div>
+        <h2 class="text-lg font-semibold text-spot-text mb-4">Similar readers</h2>
+        <div class="space-y-3">
+            {{range .PeopleRecommendations}}
+            <div class="bg-spot-surface rounded-lg p-4 flex items-center gap-3 hover:bg-spot-hover-50 transition">
+                {{if .avatar_url}}<img src="{{.avatar_url}}" class="w-10 h-10 rounded-full">{{end}}
+                <div class="min-w-0 flex-1">
+                    <a href="/profile/{{.handle}}" class="font-bold text-spot-text hover:text-spot-purple transition">@{{.handle}}</a>
+                    {{if .display_name}}<div class="text-sm text-spot-secondary">{{.display_name}}</div>{{end}}
+                </div>
+                <span class="text-xs text-spot-secondary">{{.common_feeds}} shared feeds</span>
+            </div>
+            {{else}}
+            <p class="text-sm text-spot-secondary">Not enough data yet. Keep reading!</p>
+            {{end}}
+        </div>
+    </div>
+</div>
+
+<div class="mt-8">
+    <h2 class="text-lg font-semibold text-spot-text mb-4">Browse all feeds</h2>
+    <div class="bg-spot-surface rounded-lg divide-y divide-spot-divider">
+        {{range .PopularFeeds}}
+        <div class="px-5 py-4 flex items-center justify-between hover:bg-spot-hover-50 transition rounded-lg">
+            <div class="min-w-0">
+                <div class="font-bold text-spot-text">{{if .Title.Valid}}{{.Title.String}}{{else}}{{.FeedURL}}{{end}}</div>
+                {{if .Description.Valid}}<p class="text-sm text-spot-secondary truncate">{{.Description.String}}</p>{{end}}
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+                <span class="text-xs text-spot-secondary">{{.SubscriberCount}} subscribers</span>
+                <button hx-post="/feeds" hx-vals='{"feed_url": "{{.FeedURL}}"}' hx-target="this" hx-swap="outerHTML"
+                        class="text-xs bg-spot-purple/20 text-spot-purple px-4 py-1.5 rounded-pill font-bold uppercase tracking-button hover:bg-spot-purple hover:text-spot-bg transition">Subscribe</button>
+            </div>
+        </div>
+        {{else}}
+        <div class="px-4 py-8 text-center text-spot-secondary">No feeds in the directory yet.</div>
+        {{end}}
+    </div>
+</div>
+{{end}}

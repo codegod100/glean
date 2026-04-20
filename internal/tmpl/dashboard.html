@@ -1,0 +1,99 @@
+{{define "dashboard.html"}}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2">
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-bold font-title text-spot-text">Dashboard</h1>
+            <div class="flex gap-4 text-sm">
+                <span class="text-spot-secondary"><strong class="text-spot-text">{{.UnreadCount}}</strong> unread</span>
+                <span class="text-spot-secondary"><strong class="text-spot-text">{{.SubscriptionCount}}</strong> feeds</span>
+            </div>
+        </div>
+
+        <div class="space-y-3">
+            {{range .Articles}}
+            {{template "article-card.html" .}}
+            {{else}}
+            <div class="text-center text-spot-secondary py-12">No unread articles. You're all caught up!</div>
+            {{end}}
+        </div>
+
+        {{if .Articles}}
+        <div class="mt-4 text-center">
+            <a href="/articles" class="text-sm text-spot-secondary hover:text-spot-purple transition">View all articles &rarr;</a>
+        </div>
+        {{end}}
+    </div>
+
+    <div class="space-y-8">
+        {{if .Trending}}
+        <div>
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-spot-text">Trending</h2>
+                <a href="/trending" class="text-xs text-spot-secondary hover:text-spot-purple uppercase tracking-button transition">See all</a>
+            </div>
+            <div class="space-y-3">
+                {{range .Trending}}
+                <a href="/articles/{{.ArticleID}}" class="block bg-spot-surface rounded-lg p-4 hover:bg-spot-hover-50 transition">
+                    <div class="font-bold text-sm text-spot-text leading-tight">{{.Title}}</div>
+                    <div class="flex items-center gap-2 mt-1 text-xs text-spot-secondary">
+                        {{if .Author}}<span>{{.Author}}</span>{{end}}
+                        <span class="text-spot-muted">{{if .FeedTitle}}{{.FeedTitle}}{{end}}</span>
+                    </div>
+                    <div class="flex items-center gap-3 mt-2 text-xs text-spot-secondary">
+                        <span>&#9829; {{.LikeCount}}</span>
+                        <span class="text-spot-muted">{{.AnnotationCount}} notes</span>
+                    </div>
+                </a>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+
+        {{if .PeopleRecommendations}}
+        <div>
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-spot-text">Similar readers</h2>
+                <a href="/discover" class="text-xs text-spot-secondary hover:text-spot-purple uppercase tracking-button transition">See all</a>
+            </div>
+            <div class="space-y-3">
+                {{range .PeopleRecommendations}}
+                <div class="bg-spot-surface rounded-lg p-4 flex items-center gap-3 hover:bg-spot-hover-50 transition">
+                    {{if .avatar_url}}<img src="{{.avatar_url}}" class="w-10 h-10 rounded-full">{{end}}
+                    <div class="min-w-0 flex-1">
+                        <a href="/profile/{{.handle}}" class="font-bold text-spot-text hover:text-spot-purple transition">@{{.handle}}</a>
+                        {{if .display_name}}<div class="text-sm text-spot-secondary">{{.display_name}}</div>{{end}}
+                    </div>
+                    <span class="text-xs text-spot-secondary">{{.common_feeds}} shared</span>
+                </div>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+
+        {{if .FeedRecommendations}}
+        <div>
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-spot-text">Recommended feeds</h2>
+                <a href="/discover" class="text-xs text-spot-secondary hover:text-spot-purple uppercase tracking-button transition">See all</a>
+            </div>
+            <div class="space-y-3">
+                {{range .FeedRecommendations}}
+                {{template "recommendation-card.html" .}}
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+
+        <div>
+            <h2 class="text-lg font-semibold text-spot-text mb-4">Quick add</h2>
+            <form hx-post="/feeds/add" hx-target="#feed-list" hx-swap="beforeend" class="flex gap-2">
+                {{csrfInput .CSRFToken}}
+                <input type="url" name="feed_url" placeholder="Feed URL"
+                       class="flex-1 bg-spot-hover text-spot-text rounded-pill px-5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-purple placeholder:text-spot-placeholder"
+                       required>
+                <button type="submit" class="bg-spot-purple text-spot-bg rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Add</button>
+            </form>
+        </div>
+    </div>
+</div>
+{{end}}

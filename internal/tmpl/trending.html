@@ -1,0 +1,31 @@
+{{define "trending.html"}}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold font-title text-spot-text">Trending</h1>
+    <p class="text-spot-secondary text-sm mt-1">Most liked and discussed articles across Glean.</p>
+</div>
+
+<div class="space-y-3">
+    {{range $i, $t := .Trending}}
+    <article class="bg-spot-surface rounded-lg px-5 py-4 hover:bg-spot-hover-50 transition shadow-spot">
+        <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0 flex-1">
+                <a href="/articles/{{$t.ArticleID}}" class="font-bold text-spot-text hover:text-spot-purple transition text-lg leading-tight">{{$t.Title}}</a>
+                <div class="text-sm text-spot-secondary mt-1 flex items-center gap-2">
+                    {{if $t.Author}}<span>{{$t.Author}}</span>{{end}}
+                    <span class="text-spot-muted">{{if $t.FeedTitle}}{{$t.FeedTitle}}{{else}}{{$t.FeedURL}}{{end}}</span>
+                </div>
+                {{if $t.Summary}}
+                <p class="text-sm text-spot-secondary mt-2 line-clamp-2">{{$t.Summary}}</p>
+                {{end}}
+            </div>
+            <div class="flex flex-col items-end gap-1 shrink-0 text-sm text-spot-secondary">
+                <span>&#9829; {{$t.LikeCount}}</span>
+                <span class="text-spot-muted">{{$t.AnnotationCount}} notes</span>
+            </div>
+        </div>
+    </article>
+    {{else}}
+    <div class="text-center text-spot-secondary py-12">No trending articles yet. Start liking and annotating!</div>
+    {{end}}
+</div>
+{{end}}
