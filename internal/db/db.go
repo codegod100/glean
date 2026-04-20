@@ -161,12 +161,5 @@ func migrate(db *sql.DB) error {
 		}
 	}
 
-	migrations := []string{
-		`ALTER TABLE feeds ADD COLUMN favicon_url TEXT`,
-	}
-	for _, m := range migrations {
-		tx.Exec(m)
-	}
-
 	return tx.Commit()
 }

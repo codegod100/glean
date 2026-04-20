@@ -24,21 +24,19 @@ func (e *Engine) ComputeArticleRecommendations(ctx context.Context) error {
 
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO user_article_recommendations (user_did, feed_url, article_url, score)
-		SELECT target, l.feed_url, l.article_url, SUM(us.jaccard) AS score
+		SELECT targets.target, l.feed_url, l.article_url, SUM(targets.jaccard) AS score
 		FROM (
-			SELECT us.user_a AS target, s.user_did AS peer
+			SELECT us.user_a AS target, us.user_b AS peer, us.jaccard
 			FROM user_similarity us
 			WHERE us.jaccard > 0.2
 			UNION ALL
-			SELECT us.user_b AS target, s.user_did AS peer
+			SELECT us.user_b AS target, us.user_a AS peer, us.jaccard
 			FROM user_similarity us
 			WHERE us.jaccard > 0.2
 		) targets
 		JOIN likes l ON l.author_did = targets.peer
-		WHERE l.article_url NOT IN (
-			SELECT a.url FROM articles a
-			JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = targets.target
-			LEFT JOIN read_state r ON r.user_did = targets.target AND r.article_id = a.id
+		WHERE NOT EXISTS (
+			SELECT 1 FROM subscriptions sub WHERE sub.user_did = targets.target AND sub.feed_url = l.feed_url
 		)
 		AND NOT EXISTS (
 			SELECT 1 FROM likes ul WHERE ul.author_did = targets.target AND ul.feed_url = l.feed_url AND ul.article_url = l.article_url
