@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+
+	"pkg.rbrt.fr/glean/internal/metrics"
 )
 
 type FirehoseEvent struct {
@@ -54,6 +56,7 @@ func (fc *FirehoseConsumer) Start(ctx context.Context) error {
 		}
 		if err != nil {
 			fc.logger.Error("firehose connection error", "error", err)
+			metrics.FirehoseReconnects.Inc()
 		}
 
 		select {
@@ -181,7 +184,10 @@ func (fc *FirehoseConsumer) parseCommit(ctx context.Context, raw json.RawMessage
 
 		if err := fc.handler(ctx, evt); err != nil {
 			fc.logger.Error("firehose handler error", "error", err)
+			metrics.FirehoseErrors.Inc()
 		}
+
+		metrics.FirehoseEvents.WithLabelValues(collection, action).Inc()
 	}
 }
 

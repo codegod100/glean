@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"pkg.rbrt.fr/glean/internal/metrics"
 )
 
 type Fetcher struct {
@@ -132,8 +134,11 @@ func (s *Scheduler) FetchFeed(ctx context.Context, feed *Feed) {
 		close(call.done)
 	}()
 
+	start := time.Now()
 	result, newEtag, newLastModified, err := s.fetcher.Fetch(ctx, feed.URL, feed.ETag, feed.LastModified)
+	metrics.FeedsFetchedDuration.Observe(time.Since(start).Seconds())
 	if err != nil {
+		metrics.FeedsFetched.WithLabelValues("error").Inc()
 		s.logger.Error("failed to fetch feed", "error", err, "feed", feed.URL)
 		if updErr := s.store.MarkFeedFetchError(ctx, feed.URL, err.Error()); updErr != nil {
 			s.logger.Error("failed to update feed fetch error", "error", updErr, "feed", feed.URL)
@@ -142,16 +147,21 @@ func (s *Scheduler) FetchFeed(ctx context.Context, feed *Feed) {
 	}
 
 	if result == nil {
+		metrics.FeedsFetched.WithLabelValues("not_modified").Inc()
 		if updErr := s.store.MarkFeedFetched(ctx, feed.URL, feed.ETag, feed.LastModified); updErr != nil {
 			s.logger.Error("failed to update feed fetch result", "error", updErr, "feed", feed.URL)
 		}
 		return
 	}
 
+	metrics.FeedsFetched.WithLabelValues("success").Inc()
+
 	for i := range result.Articles {
 		result.Articles[i].FeedURL = feed.URL
 		if _, upsertErr := s.store.UpsertArticle(ctx, &result.Articles[i]); upsertErr != nil {
 			s.logger.Error("failed to upsert article", "error", upsertErr, "url", result.Articles[i].URL)
+		} else {
+			metrics.ArticlesUpserted.Inc()
 		}
 	}
 

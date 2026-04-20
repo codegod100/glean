@@ -13,7 +13,7 @@ The core idea: your RSS subscriptions are a strong signal about your interests. 
 | Layer            | Technology                         |
 | ---------------- | ---------------------------------- |
 | Backend          | Go                                 |
-| Database         | SQLite (via `modernc.org/sqlite`)  |
+| Database         | SQLite (via `mattn/go-sqlite3`)    |
 | Frontend         | htmx + TailwindCSS                 |
 | Auth             | AT Protocol OAuth / DID resolution |
 | AT Protocol role | AppView for `at.glean.*` lexicons  |
@@ -239,25 +239,30 @@ Glean is first and foremost an RSS reader. It fetches, parses, and stores articl
 
 ### 4.1 Feed Fetching
 
-A background scheduler polls subscribed feeds at regular intervals.
+A background scheduler polls subscribed feeds on a fixed 5-minute tick. Feeds are fetched at most once per cycle regardless of how many users share them.
 
 ```
                     ┌─────────────────────────┐
                     │     Feed Scheduler      │
                     │  (background goroutine) │
                     └────────┬────────────────┘
-                             │ every N minutes
+                             │ every 5 min
                     ┌────────▼────────────────┐
                     │     Feed Fetcher        │
                     │                         │
                     │  1. SELECT feeds where   │
-                    │     next_fetch <= now   │
-                    │  2. Respect ETag/If-None-│
+                    │     subscriber_count > 0 │
+                    │     AND not fetched in   │
+                    │     last 30 min         │
+                    │  2. Dedup in-flight:    │
+                    │     skip if already     │
+                    │     being fetched       │
+                    │  3. Respect ETag/If-None│
                     │     Match / Last-Modified│
-                    │  3. GET feed URL        │
-                    │  4. Parse XML/JSON      │
-                    │  5. Upsert articles     │
-                    │  6. Update feed metadata│
+                    │  4. GET feed URL        │
+                    │  5. Parse XML/JSON      │
+                    │  6. Upsert articles     │
+                    │  7. Update feed metadata│
                     └────────┬────────────────┘
                              │
               ┌──────────────┼──────────────┐
@@ -270,19 +275,21 @@ A background scheduler polls subscribed feeds at regular intervals.
 
 ### 4.2 Fetch Schedule
 
-Feeds are not all fetched at the same frequency. The scheduler adapts based on:
+The scheduler uses a single fixed interval with in-flight deduplication:
 
-- **Base interval**: Default 30 minutes
-- **Feed-level override**: User can set per-feed refresh rate (15min / 30min / 1h / 3h / 6h / 12h / daily)
-- **Adaptive backoff**: If a feed has not published new articles in the last N fetches, increase the interval. If it starts publishing again, decrease back.
+- **Tick interval**: The scheduler checks for stale feeds every 5 minutes
+- **Staleness threshold**: Feeds not fetched in the last 30 minutes are eligible
+- **Subscriber filter**: Only feeds with `subscriber_count > 0` are fetched
+- **In-flight dedup**: If a feed is already being fetched (e.g., manual refresh and background scheduler overlap), the second caller waits for the first to complete rather than fetching again
 - **HTTP cache**: Honor `ETag` and `Last-Modified` headers to skip parsing when nothing changed (304 Not Modified)
-- **Error backoff**: On failure, double the interval up to 24h, reset on success
+- **Error tracking**: `error_count` increments on failure, resets to 0 on success. Feeds with high error counts are surfaced as "dead feeds" to the user.
 
 ```sql
-ALTER TABLE feeds ADD COLUMN fetch_interval_minutes INTEGER NOT NULL DEFAULT 30;
-ALTER TABLE feeds ADD COLUMN next_fetch_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;
-ALTER TABLE feeds ADD COLUMN consecutive_empty_fetches INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE feeds ADD COLUMN error_count INTEGER NOT NULL DEFAULT 0;
+-- Feeds are fetched once regardless of subscriber count
+SELECT ... FROM feeds
+WHERE subscriber_count > 0
+  AND (last_fetched_at IS NULL OR last_fetched_at <= :cutoff)
+ORDER BY last_fetched_at ASC NULLS FIRST
 ```
 
 ### 4.3 Feed Parsing
@@ -440,8 +447,11 @@ CREATE TABLE subscriptions (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     user_did    TEXT NOT NULL REFERENCES users(did),
     feed_url    TEXT NOT NULL,
+    title       TEXT,
     category    TEXT,
     added_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    uri         TEXT,
+    cid         TEXT,
     UNIQUE(user_did, feed_url)
 );
 
@@ -462,7 +472,14 @@ CREATE TABLE feeds (
     feed_type       TEXT CHECK(feed_type IN ('rss', 'atom', 'json')),
     last_fetched_at DATETIME,
     last_error      TEXT,
-    subscriber_count INTEGER NOT NULL DEFAULT 0
+    subscriber_count INTEGER NOT NULL DEFAULT 0,
+    etag            TEXT,
+    last_modified   TEXT,
+    fetch_interval_minutes INTEGER NOT NULL DEFAULT 30,
+    next_fetch_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    consecutive_empty_fetches INTEGER NOT NULL DEFAULT 0,
+    error_count     INTEGER NOT NULL DEFAULT 0,
+    favicon_url     TEXT
 );
 ```
 
@@ -475,10 +492,13 @@ CREATE TABLE articles (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     feed_url    TEXT NOT NULL REFERENCES feeds(feed_url),
     guid        TEXT NOT NULL,
-    title       TEXT,
+    title       TEXT NOT NULL DEFAULT '',
     url         TEXT,
     author      TEXT,
+    summary     TEXT,
+    content     TEXT,
     published   DATETIME,
+    updated     DATETIME,
     fetched_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(feed_url, guid)
 );
@@ -487,8 +507,24 @@ CREATE INDEX idx_articles_feed ON articles(feed_url);
 CREATE INDEX idx_articles_published ON articles(published DESC);
 ```
 
-### 6.5 Annotations, Likes
+### 6.5 Read State
 
+```sql
+CREATE TABLE read_state (
+    user_did    TEXT NOT NULL REFERENCES users(did),
+    article_id  INTEGER NOT NULL REFERENCES articles(id),
+    is_read     BOOLEAN NOT NULL DEFAULT 0,
+    read_at     DATETIME,
+    is_starred  BOOLEAN NOT NULL DEFAULT 0,
+    starred_at  DATETIME,
+    PRIMARY KEY (user_did, article_id)
+);
+
+CREATE INDEX idx_read_state_unread ON read_state(user_did, is_read) WHERE is_read = 0;
+CREATE INDEX idx_read_state_starred ON read_state(user_did, is_starred) WHERE is_starred = 1;
+```
+
+### 6.6 Annotations, Likes
 Local mirror of AT Protocol lexicon records for fast querying.
 
 ```sql
@@ -502,7 +538,8 @@ CREATE TABLE annotations (
     note        TEXT,
     tags        TEXT,
     rating      INTEGER,
-    created_at  DATETIME NOT NULL
+    created_at  DATETIME NOT NULL,
+    cid         TEXT
 );
 
 CREATE TABLE likes (
@@ -512,11 +549,12 @@ CREATE TABLE likes (
     feed_url    TEXT NOT NULL,
     article_url TEXT NOT NULL,
     created_at  DATETIME NOT NULL,
+    cid         TEXT,
     UNIQUE(author_did, feed_url, article_url)
 );
 ```
 
-### 6.6 Cluster Precomputation
+### 6.7 Cluster Precomputation
 
 Stores precomputed similarity data to avoid recalculating on every request.
 
@@ -657,15 +695,19 @@ The server renders HTML fragments that htmx swaps into the page. No JSON API nee
 | `/feeds/opml/download` | GET    | Export subscriptions as OPML (offboarding)               |
 | `/feeds/add`           | POST   | Add a single feed URL                                    |
 | `/feeds/remove`        | DELETE | Remove a feed                                            |
+| `/feeds/refresh`       | POST   | Refresh all subscribed feeds                             |
+| `/feeds/clear`         | POST   | Clear all subscriptions                                  |
 | `/articles`            | GET    | Read articles (paginated, filterable by feed)            |
+| `/articles/{id}`       | GET    | Article detail view                                      |
+| `/articles/{id}/read`  | POST   | Mark article as read                                     |
+| `/articles/{id}/unread`| POST   | Mark article as unread                                   |
+| `/articles/{id}/like`  | POST   | Like an article                                          |
+| `/articles/mark-all-read` | POST | Mark all articles as read                               |
 | `/trending`            | GET    | Community feed: articles ranked by likes                 |
-| `/discover`            | GET    | Feed recommendations + similar people                    |
-| `/discover/feeds`      | GET    | Recommended feeds                                        |
-| `/discover/people`     | GET    | People with similar reading habits                       |
+| `/library`             | GET    | Liked articles and annotations                           |
+| `/library/create`      | POST   | Create annotation on an article                          |
+| `/library/{id}/delete` | POST   | Delete an annotation                                     |
 | `/profile/{did}`       | GET    | Public profile: their feeds, likes, annotations          |
-| `/articles/{id}/like`  | POST   | Like an article (amplify into community feed)            |
-| `/annotations`         | GET    | View your annotations                                    |
-| `/annotations/create`  | POST   | Create annotation on an article                          |
 
 ### 8.2 htmx Patterns
 
@@ -681,12 +723,14 @@ glean/
 ├── main.go                        # Entry point, wire everything
 ├── go.mod
 ├── go.sum
+├── Dockerfile
+├── Makefile
 ├── internal/
 │   ├── atproto/
 │   │   ├── auth.go                # DID resolution, OAuth flow
 │   │   ├── client.go              # XRPC client (write to user PDS)
 │   │   ├── firehose.go            # Subscribe to AT Relay firehose
-│   │   ├── lexicon.go             # Lexicon record types + validation
+│   │   ├── sync.go                # PDS record reconciliation
 │   │   └── xrpc.go                # XRPC query handlers (AppView endpoints)
 │   ├── db/
 │   │   ├── db.go                  # SQLite connection, migrations
@@ -694,49 +738,51 @@ glean/
 │   │   ├── feed.go                # Feed + subscription queries
 │   │   ├── article.go             # Article queries
 │   │   ├── social.go              # Like, annotation queries
-│   │   └── cluster.go             # Similarity + recommendation queries
+│   │   ├── cluster.go             # Similarity + recommendation queries
+│   │   ├── oauth_store.go         # OAuth session storage
+│   │   └── store.go               # FeedStore adapter for scheduler
 │   ├── feed/
 │   │   ├── parser.go              # RSS/Atom/JSON feed parser
-│   │   ├── fetcher.go             # Fetch and parse feeds from URLs
+│   │   ├── fetcher.go             # Scheduler with dedup + Fetcher
+│   │   ├── discover.go            # Feed auto-discovery from URLs
 │   │   └── opml.go                # OPML import/export
+│   ├── metrics/
+│   │   └── metrics.go             # Prometheus metrics definitions
 │   ├── cluster/
 │   │   ├── jaccard.go             # Jaccard similarity computation
 │   │   ├── recommender.go         # Feed + people recommendation logic
 │   │   └── cron.go                # Background recomputation scheduler
 │   ├── server/
 │   │   ├── server.go              # HTTP server, router setup
+│   │   ├── auth_handler.go        # OAuth login/callback
+│   │   ├── feeds_handler.go       # Feed management handlers
+│   │   ├── articles_handler.go    # Article reading handlers
+│   │   ├── dashboard_handler.go   # Dashboard handler
+│   │   ├── trending_handler.go    # Trending handler
+│   │   ├── library_handler.go     # Library (likes + annotations)
+│   │   ├── profile_handler.go     # Public profile handler
 │   │   ├── middleware.go          # Auth, logging, CSRF middleware
-│   │   ├── session.go             # Session management (cookie + DID)
-│   │   └── handlers/
-│   │       ├── dashboard.go
-│   │       ├── feeds.go
-│   │       ├── articles.go
-│   │       ├── trending.go
-│   │       ├── discover.go
-│   │       ├── profile.go
-│   │       ├── annotations.go
-│   │       └── auth.go
+│   │   └── session.go             # Session management
+│   ├── sanitize/
+│   │   └── sanitize.go            # HTML sanitization for article content
 │   └── tmpl/
 │       ├── base.html              # Base template with htmx + Tailwind
-│       ├── partials/
-│       │   ├── feed-list.html
-│       │   ├── article-list.html
-│       │   ├── like-button.html
-│       │   ├── annotation-card.html
-│       │   ├── recommendation-card.html
-│       │   └── profile-card.html
-│       ├── dashboard.html
-│       ├── feeds.html
-│       ├── articles.html
-│       ├── trending.html
-│       ├── discover.html
-│       ├── profile.html
-│       └── annotations.html
+│       ├── index.html             # Landing page
+│       ├── login.html             # Login page
+│       ├── dashboard.html         # Dashboard
+│       ├── feeds.html             # Feed management
+│       ├── articles.html          # Article listing
+│       ├── article_detail.html    # Article detail
+│       ├── trending.html          # Trending articles
+│       ├── library.html           # Liked articles + annotations
+│       ├── profile.html           # User profile
+│       └── partials/              # Reusable template fragments
 ├── static/
 │   ├── input.css                  # Tailwind input
 │   └── output.css                 # Tailwind compiled output
 ├── docs/
-│   └── design.md                  # This document
+│   ├── specs.md                   # Technical specification (this document)
+│   └── design.md                  # Design system
 └── tailwind.config.js
 ```
 
@@ -808,6 +854,17 @@ Browser ──GET /discover/feeds──► Server
 - More than sufficient for the expected scale (tens of thousands of users)
 - Go's `database/sql` interface makes it easy to swap later if needed
 - Matches the project's philosophy of simplicity
+
+### 12.3 Prometheus Metrics
+
+Glean exposes a `/metrics` endpoint for monitoring. Key metrics:
+
+- **`glean_feeds_fetched_total`** — Feed fetch attempts labeled by status (`success`, `error`, `not_modified`)
+- **`glean_feed_fetch_duration_seconds`** — Histogram of feed fetch latency
+- **`glean_articles_upserted_total`** — Counter of articles stored from feeds
+- **`glean_firehose_events_total`** — Firehose events labeled by collection and action
+- **`glean_http_requests_total`** — HTTP request counts labeled by method, path, and status
+- **`glean_cluster_runs_total`** / **`glean_cluster_duration_seconds`** — Recommendation engine runs and timing
 
 ### 12.3 Why htmx?
 

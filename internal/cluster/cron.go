@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"time"
+
+	"pkg.rbrt.fr/glean/internal/metrics"
 )
 
 type Cron struct {
@@ -19,6 +21,7 @@ func NewCron(engine *Engine, interval time.Duration, logger *slog.Logger) *Cron 
 func (c *Cron) Run(ctx context.Context) error {
 	for {
 		c.logger.Info("starting similarity computation")
+		start := time.Now()
 
 		if err := c.engine.ComputeFeedSimilarity(ctx); err != nil {
 			c.logger.Error("feed similarity failed", "error", err)
@@ -32,6 +35,8 @@ func (c *Cron) Run(ctx context.Context) error {
 			c.logger.Error("recommendations failed", "error", err)
 		}
 
+		metrics.ClusterRuns.Inc()
+		metrics.ClusterDuration.Observe(time.Since(start).Seconds())
 		c.logger.Info("similarity computation complete", "next_run", c.interval)
 
 		select {

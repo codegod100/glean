@@ -9,12 +9,14 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	oauth "github.com/bluesky-social/indigo/atproto/auth/oauth"
 	"github.com/bluesky-social/indigo/atproto/syntax"
@@ -22,6 +24,7 @@ import (
 	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/db"
 	"pkg.rbrt.fr/glean/internal/feed"
+	"pkg.rbrt.fr/glean/internal/metrics"
 	"pkg.rbrt.fr/glean/internal/sanitize"
 )
 
@@ -81,6 +84,7 @@ func (s *Server) setupMiddleware() {
 	s.router.Use(middleware.Logger)
 	s.router.Use(middleware.Recoverer)
 	s.router.Use(middleware.Compress(5))
+	s.router.Use(s.metricsMiddleware)
 	s.router.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"*"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -89,6 +93,27 @@ func (s *Server) setupMiddleware() {
 	}))
 	s.router.Use(s.sessionMiddleware)
 	s.router.Use(s.csrfMiddleware)
+}
+
+func (s *Server) metricsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+
+		next.ServeHTTP(ww, r)
+
+		path := normalizeMetricsPath(r.URL.Path)
+		status := strconv.Itoa(ww.Status())
+		metrics.HTTPRequests.WithLabelValues(r.Method, path, status).Inc()
+		metrics.HTTPRequestDuration.WithLabelValues(r.Method, path).Observe(time.Since(start).Seconds())
+	})
+}
+
+func normalizeMetricsPath(p string) string {
+	if strings.HasPrefix(p, "/static/") {
+		return "/static/*"
+	}
+	return p
 }
 
 func (s *Server) setupRoutes() {
@@ -154,6 +179,7 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/xrpc/at.glean.listFeedLists", xrpc.ListFeedLists)
 
 	s.router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	s.router.Handle("/metrics", promhttp.Handler())
 }
 
 func (s *Server) loadTemplates() {
@@ -328,8 +354,10 @@ func (s *Server) runSyncAll(ctx context.Context) {
 		client := atproto.NewClient(sess.APIClient())
 		sync := atproto.NewSync(s.db, client, s.logger)
 		if err := sync.Run(ctx, u.DID); err != nil {
+			metrics.SyncErrors.Inc()
 			s.logger.Error("periodic sync failed", "error", err, "did", u.DID)
 		}
+		metrics.SyncRuns.Inc()
 	}
 }
 
