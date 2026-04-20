@@ -1,13 +1,6 @@
 {{define "index.html"}}
 <style>
 .landing-hero { padding-top: 6rem; padding-bottom: 4rem; }
-.landing-feed { display: flex; flex-direction: column; gap: 1px; }
-.landing-item { transition: background 0.15s; }
-.landing-item:hover { background: var(--spot-hover); }
-.feed-line { height: 10px; border-radius: 5px; }
-.feed-line-short { width: 40%; }
-.feed-line-medium { width: 65%; }
-.feed-dot { width: 8px; height: 8px; border-radius: 50%; }
 @media (min-width: 768px) { .landing-hero { padding-top: 8rem; padding-bottom: 6rem; } }
 </style>
 
@@ -46,60 +39,60 @@
             <div class="hidden lg:block">
                 <div class="bg-spot-surface rounded-xl shadow-spot overflow-hidden">
                     <div class="px-5 py-3 border-b border-spot-divider flex items-center gap-2">
-                        <div class="feed-dot bg-spot-red/60"></div>
-                        <div class="feed-dot bg-spot-orange/60"></div>
-                        <div class="feed-dot bg-spot-green/60"></div>
+                        <div class="w-2 h-2 rounded-full bg-spot-red"></div>
+                        <div class="w-2 h-2 rounded-full bg-spot-orange"></div>
+                        <div class="w-2 h-2 rounded-full bg-spot-green"></div>
                         <span class="text-xs text-spot-muted ml-3">Dashboard</span>
                     </div>
-                    <div class="landing-feed p-4">
-                        <div class="landing-item rounded-lg px-4 py-3 flex items-start gap-3">
-                            <div class="w-8 h-8 rounded-full bg-spot-green/20 shrink-0 mt-0.5 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-spot-green" fill="currentColor" viewBox="0 0 20 20"><path d="M5 3a1 1 0 000 2c5.523 0 10 4.477 10 10a1 1 0 102 0C17 8.373 11.627 3 5 3z"/><path d="M4 9a1 1 0 011-1 7 7 0 017 7 1 1 0 11-2 0 5 5 0 00-5-5 1 1 0 01-1-1z"/></svg>
+                    <div class="p-4 space-y-2">
+                        <div class="rounded-lg px-4 py-3 flex items-start gap-3 hover:bg-spot-hover transition">
+                            <div class="w-8 h-8 rounded-full bg-spot-green/20 shrink-0 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-spot-green" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 0 1-2.25 2.25M16.5 7.5V18a2.25 2.25 0 0 0 2.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 0 0 2.25 2.25h13.5M6 7.5h3v3H6v-3Z"/></svg>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <div class="feed-line bg-spot-text/80 mb-2" style="width:70%"></div>
-                                <div class="feed-line bg-spot-secondary/40 feed-line-short"></div>
+                                <div class="text-sm font-bold text-spot-text leading-tight">The future of decentralized social media</div>
+                                <div class="text-xs text-spot-secondary mt-0.5">example.com &middot; 2h ago</div>
                             </div>
                             <div class="flex items-center gap-1 text-spot-green shrink-0">
-                                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"/></svg>
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z"/></svg>
                                 <span class="text-xs">12</span>
                             </div>
                         </div>
-                        <div class="landing-item rounded-lg px-4 py-3 flex items-start gap-3">
-                            <div class="w-8 h-8 rounded-full bg-spot-blue/20 shrink-0 mt-0.5 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-spot-blue" fill="currentColor" viewBox="0 0 20 20"><path d="M2 5a2 2 0 012-2h8a2 2 0 012 2v10a2 2 0 002 2H4a2 2 0 01-2-2V5z"/></svg>
+                        <div class="rounded-lg px-4 py-3 flex items-start gap-3 hover:bg-spot-hover transition">
+                            <div class="w-8 h-8 rounded-full bg-spot-blue/20 shrink-0 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-spot-blue" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z"/></svg>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <div class="feed-line bg-spot-text/80 mb-2" style="width:55%"></div>
-                                <div class="feed-line bg-spot-secondary/40" style="width:80%"></div>
+                                <div class="text-sm font-bold text-spot-text leading-tight">Building a reader for the open web</div>
+                                <div class="text-xs text-spot-secondary mt-0.5">blog.example.net &middot; 5h ago</div>
                             </div>
                         </div>
-                        <div class="landing-item rounded-lg px-4 py-3 flex items-start gap-3">
-                            <div class="w-8 h-8 rounded-full bg-spot-orange/20 shrink-0 mt-0.5 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-spot-orange" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z"/></svg>
+                        <div class="rounded-lg px-4 py-3 flex items-start gap-3 hover:bg-spot-hover transition">
+                            <div class="w-8 h-8 rounded-full bg-spot-orange/20 shrink-0 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-spot-orange" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.362 5.214A8.252 8.252 0 0 1 12 21 8.25 8.25 0 0 1 6.038 7.047 8.287 8.287 0 0 0 9 9.601a8.983 8.983 0 0 1 3.361-6.867 8.21 8.21 0 0 0 3 2.48Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 18a3.75 3.75 0 0 0 .495-7.468 5.99 5.99 0 0 0-1.925 3.547 5.975 5.975 0 0 1-2.133-1.001A3.75 3.75 0 0 0 12 18Z"/></svg>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <div class="feed-line bg-spot-text/80 mb-2" style="width:45%"></div>
-                                <div class="feed-line bg-spot-secondary/40 feed-line-medium"></div>
+                                <div class="text-sm font-bold text-spot-text leading-tight">Why RSS still matters in 2026</div>
+                                <div class="text-xs text-spot-secondary mt-0.5">wire.example.org &middot; 8h ago</div>
                             </div>
                             <div class="flex items-center gap-1 text-spot-secondary shrink-0">
-                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z"/></svg>
                                 <span class="text-xs">3</span>
                             </div>
                         </div>
-                        <div class="landing-item rounded-lg px-4 py-3 flex items-start gap-3">
-                            <div class="w-8 h-8 rounded-full bg-spot-green/20 shrink-0 mt-0.5 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-spot-green" fill="currentColor" viewBox="0 0 20 20"><path d="M5 3a1 1 0 000 2c5.523 0 10 4.477 10 10a1 1 0 102 0C17 8.373 11.627 3 5 3z"/></svg>
+                        <div class="rounded-lg px-4 py-3 flex items-start gap-3 hover:bg-spot-hover transition">
+                            <div class="w-8 h-8 rounded-full bg-spot-green/20 shrink-0 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-spot-green" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <div class="feed-line bg-spot-text/80 mb-2" style="width:60%"></div>
-                                <div class="feed-line bg-spot-secondary/40 feed-line-short"></div>
+                                <div class="text-sm font-bold text-spot-text leading-tight">Understanding AT Protocol lexicons</div>
+                                <div class="text-xs text-spot-secondary mt-0.5">docs.example.dev &middot; 1d ago</div>
                             </div>
                         </div>
                     </div>
                     <div class="px-5 py-3 border-t border-spot-divider flex items-center justify-between">
                         <div class="flex items-center gap-2 text-xs text-spot-muted">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941"/></svg>
                             4 trending in your network
                         </div>
                         <span class="text-xs text-spot-green font-bold">42 unread</span>

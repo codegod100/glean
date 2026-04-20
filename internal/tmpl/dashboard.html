@@ -1,14 +1,15 @@
 {{define "dashboard.html"}}
+<div class="flex items-center justify-between mb-2">
+    <h1 class="text-2xl font-bold text-spot-text">Dashboard</h1>
+    <div class="flex gap-4 text-sm">
+        <span class="text-spot-secondary"><strong class="text-spot-text">{{.UnreadCount}}</strong> unread</span>
+        <span class="text-spot-secondary"><strong class="text-spot-text">{{.SubscriptionCount}}</strong> feeds</span>
+    </div>
+</div>
+<p class="text-sm text-spot-secondary mb-6">Your recent unread articles and activity.</p>
+
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="lg:col-span-2">
-        <div class="flex items-center justify-between mb-6">
-            <h1 class="text-2xl font-bold text-spot-text">Dashboard</h1>
-            <div class="flex gap-4 text-sm">
-                <span class="text-spot-secondary"><strong class="text-spot-text">{{.UnreadCount}}</strong> unread</span>
-                <span class="text-spot-secondary"><strong class="text-spot-text">{{.SubscriptionCount}}</strong> feeds</span>
-            </div>
-        </div>
-
         <div class="space-y-3">
             {{range .Articles}}
             {{template "article-card.html" .}}

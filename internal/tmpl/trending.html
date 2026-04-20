@@ -1,8 +1,9 @@
 {{define "trending.html"}}
-<div class="mb-6">
+<div class="flex items-center justify-between mb-2">
     <h1 class="text-2xl font-bold text-spot-text">Trending</h1>
-    <p class="text-spot-secondary text-sm mt-1">Most liked and discussed articles across Glean.</p>
+    <div></div>
 </div>
+<p class="text-sm text-spot-secondary mb-6">Most liked and discussed articles across Glean.</p>
 
 <div class="space-y-3">
     {{range $i, $t := .Trending}}

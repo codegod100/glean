@@ -1,5 +1,5 @@
 {{define "articles.html"}}
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between mb-2">
         <h1 class="text-2xl font-bold text-spot-text">Articles</h1>
         <form hx-post="/articles/mark-all-read" hx-confirm="Mark all articles as read?">
             {{csrfInput .CSRFToken}}
@@ -7,6 +7,7 @@
             <button type="submit" class="border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:border-spot-text transition">Mark all read</button>
         </form>
     </div>
+    <p class="text-sm text-spot-secondary mb-6">All your subscribed articles, newest first.</p>
 
 <div id="article-list" class="space-y-3">
     {{range .Articles}}

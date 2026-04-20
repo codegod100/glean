@@ -1,5 +1,5 @@
 {{define "feeds.html"}}
-<div class="flex items-center justify-between mb-6">
+<div class="flex items-center justify-between mb-2">
     <h1 class="text-2xl font-bold text-spot-text">Feeds</h1>
     <div class="flex items-center gap-3">
         <button hx-post="/feeds/refresh" hx-target="#feed-list" hx-swap="innerHTML"
@@ -10,6 +10,7 @@
         <span id="refresh-indicator" class="htmx-indicator text-sm text-spot-secondary">Fetching...</span>
     </div>
 </div>
+<p class="text-sm text-spot-secondary mb-6">Manage your RSS and Atom subscriptions.</p>
 
 {{if .DeadFeeds}}
 <div class="bg-spot-red/10 border border-spot-red/30 rounded-lg p-4 mb-6">
