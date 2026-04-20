@@ -23,7 +23,7 @@ go.work.sum
 
 # database
 *.db
-*.db.journal
+*.db-journal
 
 # tailwind
 static/output.css

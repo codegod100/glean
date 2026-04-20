@@ -229,24 +229,20 @@ func (s *Server) pdsClientForUser(r *http.Request) *atproto.Client {
 		return nil
 	}
 
-	if session.SessionID != "" {
-		did, err := syntax.ParseDID(session.DID)
-		if err != nil {
-			return nil
-		}
-		sess, err := s.oauth.ResumeSession(r.Context(), did, session.SessionID)
-		if err != nil {
-			s.logger.Warn("failed to resume OAuth session", "error", err)
-			return nil
-		}
-		apiClient := sess.APIClient()
-		return &atproto.Client{APIClient: apiClient}
+	if session.SessionID == "" {
+		return nil
 	}
 
-	if session.AccessToken != "" && session.PDSURL != "" {
-		return atproto.NewClient(session.PDSURL, session.AccessToken)
+	did, err := syntax.ParseDID(session.DID)
+	if err != nil {
+		return nil
 	}
-	return nil
+	sess, err := s.oauth.ResumeSession(r.Context(), did, session.SessionID)
+	if err != nil {
+		s.logger.Warn("failed to resume OAuth session", "error", err)
+		return nil
+	}
+	return atproto.NewClient(sess.APIClient())
 }
 
 func (s *Server) syncUserInBackground(userDID string, client *atproto.Client) {
@@ -298,7 +294,7 @@ func (s *Server) runSyncAll(ctx context.Context) {
 			continue
 		}
 
-		client := &atproto.Client{APIClient: sess.APIClient()}
+		client := atproto.NewClient(sess.APIClient())
 		sync := atproto.NewSync(s.db, client, s.logger)
 		if err := sync.Run(ctx, u.DID); err != nil {
 			s.logger.Error("periodic sync failed", "error", err, "did", u.DID)

@@ -157,7 +157,7 @@ func (s *Server) pdsClientFromSession(sessData *oauth.ClientSessionData) *atprot
 		s.logger.Warn("failed to resume session for sync", "error", err)
 		return nil
 	}
-	return &atproto.Client{APIClient: session.APIClient()}
+	return atproto.NewClient(session.APIClient())
 }
 
 func (s *Server) handleOAuthClientMetadata(w http.ResponseWriter, r *http.Request) {
