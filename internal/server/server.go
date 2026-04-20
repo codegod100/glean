@@ -30,6 +30,8 @@ import (
 	"pkg.rbrt.fr/glean/internal/tmpl"
 )
 
+var oauthScopes = []string{"atproto", "transition:generic"}
+
 func splitString(s, sep string) []string {
 	return strings.Split(s, sep)
 }
@@ -58,9 +60,9 @@ func New(database *db.DB, clientID, callbackURL, addr string, scheduler *feed.Sc
 			host = "127.0.0.1" + host
 		}
 		cbURL := fmt.Sprintf("http://%s/auth/callback", host)
-		config = oauth.NewLocalhostConfig(cbURL, []string{"atproto", "transition:generic"})
+		config = oauth.NewLocalhostConfig(cbURL, oauthScopes)
 	} else {
-		config = oauth.NewPublicConfig(clientID, callbackURL, []string{"atproto", "transition:generic"})
+		config = oauth.NewPublicConfig(clientID, callbackURL, oauthScopes)
 	}
 	oauthClient := oauth.NewClientApp(&config, oauthStore)
 
