@@ -12,7 +12,10 @@
             {{if .Article.Author.Valid}}<span>{{.Article.Author.String}}</span>{{end}}
             {{if .Article.Published.Valid}}<span>{{.Article.Published.Time.Format "Jan 2, 2006 15:04"}}</span>{{end}}
             {{if .Feed}}
-            <a href="/articles?feed={{.Feed.FeedURL}}" class="hover:text-spot-purple transition">{{if .Feed.Title.Valid}}{{.Feed.Title.String}}{{else}}{{.Feed.FeedURL}}{{end}}</a>
+            <a href="/articles?feed={{.Feed.FeedURL}}" class="hover:text-spot-purple transition">
+                {{if .Feed.FaviconURL.Valid}}<img src="{{.Feed.FaviconURL.String}}" class="w-4 h-4 inline-block mr-1 align-text-bottom rounded-sm">{{end}}
+                {{if .Feed.Title.Valid}}{{.Feed.Title.String}}{{else}}{{.Feed.FeedURL}}{{end}}
+            </a>
             {{end}}
         </div>
 
@@ -26,7 +29,6 @@
             <a href="https://bsky.app/intent/compose?text={{.Article.Title}}%20{{if .Article.URL.Valid}}{{.Article.URL.String}}{{end}}"
                target="_blank" rel="noopener noreferrer"
                class="text-xs border border-spot-outline text-spot-text rounded-pill px-3 py-1 hover:border-spot-text uppercase tracking-button transition inline-flex items-center gap-1">
-                🦋
                 Share
             </a>
 
@@ -36,6 +38,11 @@
                     class="text-xs border border-spot-outline text-spot-text rounded-pill px-3 py-1 hover:border-spot-text uppercase tracking-button transition">
                 {{if .ReadState.IsRead}}Mark unread{{else}}Mark read{{end}}
             </button>
+
+            <a href="{{.Article.URL.String}}" target="_blank" rel="noopener noreferrer"
+               class="text-xs border border-spot-outline text-spot-text rounded-pill px-3 py-1 hover:border-spot-text uppercase tracking-button transition">
+                Original
+            </a>
         </div>
 
         <hr class="my-6 border-spot-divider-30">
@@ -88,15 +95,28 @@
 </div>
 
 <script>
-document.addEventListener('keydown', function(e) {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-    if (e.key === 'l') {
-        document.getElementById('like-btn') && document.getElementById('like-btn').click();
-    } else if (e.key === 'm') {
-        document.getElementById('read-btn') && document.getElementById('read-btn').click();
-    } else if (e.key === 'Escape') {
-        window.location.href = '/articles';
+(function() {
+    var readScrollPos = 0;
+    var articleBody = document.querySelector('.article-body');
+    if (articleBody) {
+        readScrollPos = window.scrollY;
     }
-});
+
+    document.addEventListener('keydown', function(e) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        if (e.key === 'l') {
+            var btn = document.getElementById('like-btn');
+            if (btn) btn.click();
+        } else if (e.key === 'm') {
+            var rbtn = document.getElementById('read-btn');
+            if (rbtn) rbtn.click();
+        } else if (e.key === 'Escape') {
+            window.location.href = '/articles';
+        } else if (e.key === 'o') {
+            var origLink = document.querySelector('a[target="_blank"]');
+            if (origLink && origLink.href) window.open(origLink.href, '_blank');
+        }
+    });
+})();
 </script>
 {{end}}

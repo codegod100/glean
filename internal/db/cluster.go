@@ -280,7 +280,7 @@ func (db *DB) GetSimilarFeeds(ctx context.Context, feedURL string, limit int) ([
 	rows, err := db.QueryContext(ctx, `
 		SELECT f.feed_url, f.title, f.site_url, f.description, f.feed_type,
 			f.last_fetched_at, f.last_error, f.subscriber_count, f.etag, f.last_modified,
-			f.fetch_interval_minutes, f.next_fetch_at, f.consecutive_empty_fetches, f.error_count
+			f.fetch_interval_minutes, f.next_fetch_at, f.consecutive_empty_fetches, f.error_count, f.favicon_url
 		FROM feed_similarity fs
 		JOIN feeds f ON f.feed_url = CASE WHEN fs.feed_a = ? THEN fs.feed_b ELSE fs.feed_a END
 		WHERE fs.feed_a = ? OR fs.feed_b = ?
@@ -297,10 +297,50 @@ func (db *DB) GetSimilarFeeds(ctx context.Context, feedURL string, limit int) ([
 		f := &Feed{}
 		if err := rows.Scan(&f.FeedURL, &f.Title, &f.SiteURL, &f.Description, &f.FeedType,
 			&f.LastFetchedAt, &f.LastError, &f.SubscriberCount, &f.Etag, &f.LastModified,
-			&f.FetchIntervalMinutes, &f.NextFetchAt, &f.ConsecutiveEmptyFetches, &f.ErrorCount); err != nil {
+			&f.FetchIntervalMinutes, &f.NextFetchAt, &f.ConsecutiveEmptyFetches, &f.ErrorCount, &f.FaviconURL); err != nil {
 			return nil, err
 		}
 		feeds = append(feeds, f)
 	}
 	return feeds, rows.Err()
+}
+
+type ArticleRecommendation struct {
+	ArticleID  int64
+	Title      string
+	URL        string
+	FeedURL    string
+	FeedTitle  string
+	Author     string
+	Summary    string
+	Published  sql.NullTime
+	Score      float64
+}
+
+func (db *DB) GetArticleRecommendations(ctx context.Context, userDID string, limit int) ([]*ArticleRecommendation, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT a.id, a.title, COALESCE(a.url, ''), r.feed_url, COALESCE(f.title, ''),
+			COALESCE(a.author, ''), COALESCE(a.summary, ''), a.published, r.score
+		FROM user_article_recommendations r
+		JOIN articles a ON a.feed_url = r.feed_url AND a.url = r.article_url
+		LEFT JOIN feeds f ON f.feed_url = r.feed_url
+		WHERE r.user_did = ?
+		ORDER BY r.score DESC
+		LIMIT ?
+	`, userDID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var recs []*ArticleRecommendation
+	for rows.Next() {
+		rec := &ArticleRecommendation{}
+		if err := rows.Scan(&rec.ArticleID, &rec.Title, &rec.URL, &rec.FeedURL, &rec.FeedTitle,
+			&rec.Author, &rec.Summary, &rec.Published, &rec.Score); err != nil {
+			return nil, err
+		}
+		recs = append(recs, rec)
+	}
+	return recs, rows.Err()
 }

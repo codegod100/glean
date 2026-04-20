@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/bluesky-social/indigo/atproto/atclient"
 	"github.com/bluesky-social/indigo/atproto/syntax"
 )
 
@@ -14,6 +15,7 @@ type Client struct {
 	httpClient  *http.Client
 	pdsURL      string
 	accessToken string
+	APIClient   *atclient.APIClient
 }
 
 func NewClient(pdsURL, accessToken string) *Client {
@@ -25,6 +27,10 @@ func NewClient(pdsURL, accessToken string) *Client {
 }
 
 func (c *Client) CreateRecord(ctx context.Context, did, collection string, record any) (string, string, error) {
+	if c.APIClient != nil {
+		return c.createRecordWithAPI(ctx, did, collection, record)
+	}
+
 	nsid, err := syntax.ParseNSID(collection)
 	if err != nil {
 		return "", "", fmt.Errorf("parsing collection NSID: %w", err)
@@ -68,6 +74,29 @@ func (c *Client) CreateRecord(ctx context.Context, did, collection string, recor
 	}
 
 	return result.URI, result.CID, nil
+}
+
+func (c *Client) createRecordWithAPI(ctx context.Context, did, collection string, record any) (string, string, error) {
+	input := map[string]any{
+		"repo":       did,
+		"collection": collection,
+		"record":     record,
+	}
+
+	var out struct {
+		URI string `json:"uri"`
+		CID string `json:"cid"`
+	}
+
+	nsid, err := syntax.ParseNSID(collection)
+	if err != nil {
+		return "", "", fmt.Errorf("parsing collection NSID: %w", err)
+	}
+
+	if err := c.APIClient.Post(ctx, nsid, input, &out); err != nil {
+		return "", "", err
+	}
+	return out.URI, out.CID, nil
 }
 
 func (c *Client) DeleteRecord(ctx context.Context, did, collection, rkey string) error {

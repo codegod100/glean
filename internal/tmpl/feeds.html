@@ -11,6 +11,23 @@
     </div>
 </div>
 
+{{if .DeadFeeds}}
+<div class="bg-spot-red/10 border border-spot-red/30 rounded-lg p-4 mb-6">
+    <h3 class="text-sm font-bold text-spot-red mb-2">Feeds with errors ({{len .DeadFeeds}})</h3>
+    <div class="space-y-2">
+        {{range .DeadFeeds}}
+        <div class="flex items-center justify-between text-sm">
+            <span class="text-spot-text">{{if .Title.Valid}}{{.Title.String}}{{else}}{{.FeedURL}}{{end}}</span>
+            <div class="flex items-center gap-2">
+                <span class="text-spot-red text-xs">{{.ErrorCount}} errors</span>
+                {{if .LastError.Valid}}<span class="text-spot-secondary text-xs truncate max-w-48" title="{{.LastError.String}}">{{.LastError.String}}</span>{{end}}
+            </div>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}
+
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="lg:col-span-2">
         {{if .Categories}}
@@ -31,6 +48,20 @@
                 </div>
                 <div class="flex items-center gap-3">
                     {{if .UnreadCount}}<span class="text-xs bg-spot-purple/20 text-spot-purple px-2.5 py-0.5 rounded-full font-bold">{{.UnreadCount}}</span>{{end}}
+                    <form hx-post="/feeds/set-interval" hx-swap="none" hx-vals='{"feed_url": "{{.FeedURL}}"}' class="inline-flex items-center gap-1">
+                        {{csrfInput $.CSRFToken}}
+                        <input type="hidden" name="feed_url" value="{{.FeedURL}}">
+                        <select name="interval" onchange="this.form.submit()"
+                                class="text-xs bg-spot-hover text-spot-secondary rounded px-2 py-1 border-none focus:outline-none focus:ring-1 focus:ring-spot-purple">
+                            <option value="15" {{if eq .FetchInterval 15}}selected{{end}}>15m</option>
+                            <option value="30" {{if eq .FetchInterval 30}}selected{{end}}>30m</option>
+                            <option value="60" {{if eq .FetchInterval 60}}selected{{end}}>1h</option>
+                            <option value="120" {{if eq .FetchInterval 120}}selected{{end}}>2h</option>
+                            <option value="360" {{if eq .FetchInterval 360}}selected{{end}}>6h</option>
+                            <option value="720" {{if eq .FetchInterval 720}}selected{{end}}>12h</option>
+                            <option value="1440" {{if eq .FetchInterval 1440}}selected{{end}}>24h</option>
+                        </select>
+                    </form>
                     <button hx-delete="/feeds/{{.FeedURL}}" hx-target="closest .px-5" hx-swap="outerHTML swap:0.3s"
                             hx-confirm="Unsubscribe from this feed?"
                             class="text-sm text-spot-secondary hover:text-spot-red transition">Unsubscribe</button>

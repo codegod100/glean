@@ -70,16 +70,3 @@ func ResolvePDSEndpoint(ctx context.Context, did string) (string, error) {
 
 	return pds, nil
 }
-
-type OAuthConfig struct {
-	ClientID    string
-	RedirectURL string
-	Scopes      []string
-}
-
-type OAuthTokens struct {
-	AccessToken  string
-	RefreshToken string
-	DID          string
-	Handle       string
-}

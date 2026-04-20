@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"html/template"
 	"log/slog"
 	"net/http"
@@ -12,6 +13,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+
+	oauth "github.com/bluesky-social/indigo/atproto/auth/oauth"
+	"github.com/bluesky-social/indigo/atproto/syntax"
 
 	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/db"
@@ -24,21 +28,35 @@ func splitString(s, sep string) []string {
 }
 
 type Server struct {
-	db        *db.DB
-	router    *chi.Mux
-	templates *template.Template
-	logger    *slog.Logger
-	oauth     *atproto.OAuthConfig
-	fetcher   *feed.Fetcher
+	db         *db.DB
+	router     *chi.Mux
+	templates  *template.Template
+	logger     *slog.Logger
+	oauth      *oauth.ClientApp
+	oauthStore *db.OAuthStore
+	fetcher    *feed.Fetcher
+	clientID   string
+	callbackURL string
 }
 
-func New(database *db.DB, oauth *atproto.OAuthConfig, logger *slog.Logger) *Server {
+func New(database *db.DB, clientID, callbackURL string, logger *slog.Logger) *Server {
+	oauthStore := db.NewOAuthStore(database)
+	if err := oauthStore.Init(context.Background()); err != nil {
+		logger.Error("failed to init oauth store", "error", err)
+	}
+
+	config := oauth.NewPublicConfig(clientID, callbackURL, []string{"atproto"})
+	oauthClient := oauth.NewClientApp(&config, oauthStore)
+
 	s := &Server{
-		db:      database,
-		router:  chi.NewRouter(),
-		logger:  logger,
-		oauth:   oauth,
-		fetcher: feed.NewFetcher(),
+		db:          database,
+		router:      chi.NewRouter(),
+		logger:      logger,
+		oauth:       oauthClient,
+		oauthStore:  oauthStore,
+		fetcher:     feed.NewFetcher(),
+		clientID:    clientID,
+		callbackURL: callbackURL,
 	}
 
 	s.setupMiddleware()
@@ -79,6 +97,8 @@ func (s *Server) setupRoutes() {
 		r.Get("/opml/download", s.handleOPMLDownload)
 		r.Post("/refresh", s.handleRefreshFeeds)
 		r.Get("/list", s.handleFeedList)
+		r.Post("/set-interval", s.handleUpdateFeedInterval)
+		r.Get("/discover-url", s.handleDiscoverFeedURL)
 	})
 
 	s.router.Route("/articles", func(r chi.Router) {
@@ -87,8 +107,6 @@ func (s *Server) setupRoutes() {
 		r.Get("/{id}", s.handleArticleDetail)
 		r.Post("/{id}/read", s.handleMarkRead)
 		r.Post("/{id}/unread", s.handleMarkUnread)
-		r.Post("/{id}/star", s.handleStar)
-		r.Post("/{id}/unstar", s.handleUnstar)
 		r.Post("/{id}/like", s.handleLikeArticle)
 		r.Post("/mark-all-read", s.handleMarkAllRead)
 	})
@@ -114,8 +132,10 @@ func (s *Server) setupRoutes() {
 	})
 
 	s.router.Get("/auth/login", s.handleAuthLogin)
+	s.router.Post("/auth/start", s.handleAuthStart)
 	s.router.Get("/auth/callback", s.handleAuthCallback)
 	s.router.Post("/auth/logout", s.handleAuthLogout)
+	s.router.Get("/oauth/client-metadata", s.handleOAuthClientMetadata)
 
 	xrpc := atproto.NewXRPCHandler(s.db.DB)
 	s.router.Get("/xrpc/at.glean.listSubscriptions", xrpc.ListSubscriptions)
@@ -200,10 +220,28 @@ func (s *Server) loadTemplates() {
 
 func (s *Server) pdsClientForUser(r *http.Request) *atproto.Client {
 	session := s.getSessionData(r)
-	if session == nil || session.AccessToken == "" || session.PDSURL == "" {
+	if session == nil {
 		return nil
 	}
-	return atproto.NewClient(session.PDSURL, session.AccessToken)
+
+	if session.SessionID != "" {
+		did, err := syntax.ParseDID(session.DID)
+		if err != nil {
+			return nil
+		}
+		sess, err := s.oauth.ResumeSession(r.Context(), did, session.SessionID)
+		if err != nil {
+			s.logger.Warn("failed to resume OAuth session", "error", err)
+			return nil
+		}
+		apiClient := sess.APIClient()
+		return &atproto.Client{APIClient: apiClient}
+	}
+
+	if session.AccessToken != "" && session.PDSURL != "" {
+		return atproto.NewClient(session.PDSURL, session.AccessToken)
+	}
+	return nil
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

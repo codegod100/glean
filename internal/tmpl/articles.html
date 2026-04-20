@@ -26,4 +26,46 @@
     </button>
 </div>
 {{end}}
+
+<script>
+(function() {
+    var articles = document.querySelectorAll('#article-list article[data-article-id]');
+    var currentIdx = -1;
+
+    function highlightArticle(idx) {
+        articles.forEach(function(a) { a.classList.remove('ring-2', 'ring-spot-purple'); });
+        if (idx >= 0 && idx < articles.length) {
+            currentIdx = idx;
+            articles[idx].classList.add('ring-2', 'ring-spot-purple');
+            articles[idx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+
+    function getReadBtn(idx) {
+        if (idx < 0 || idx >= articles.length) return null;
+        return articles[idx].querySelector('[hx-post*="/read"], [hx-post*="/unread"]');
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+        if (e.key === 'j') {
+            e.preventDefault();
+            highlightArticle(Math.min(currentIdx + 1, articles.length - 1));
+        } else if (e.key === 'k') {
+            e.preventDefault();
+            highlightArticle(Math.max(currentIdx - 1, 0));
+        } else if (e.key === 'o' && currentIdx >= 0) {
+            e.preventDefault();
+            var link = articles[currentIdx].querySelector('a[href^="/articles/"]');
+            if (link) link.click();
+        } else if (e.key === 'm' && currentIdx >= 0) {
+            e.preventDefault();
+            var rbtn = getReadBtn(currentIdx);
+            if (rbtn) rbtn.click();
+        }
+    });
+})();
+</script>
 {{end}}

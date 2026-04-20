@@ -72,9 +72,11 @@ func (s *Server) clearUserSession(w http.ResponseWriter) {
 }
 
 type sessionData struct {
-	DID         string `json:"did"`
-	PDSURL      string `json:"pds_url,omitempty"`
-	AccessToken string `json:"access_token,omitempty"`
+	DID          string `json:"did"`
+	PDSURL       string `json:"pds_url,omitempty"`
+	AccessToken  string `json:"access_token,omitempty"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	SessionID    string `json:"session_id,omitempty"`
 }
 
 func (s *Server) getSessionData(r *http.Request) *sessionData {

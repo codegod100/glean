@@ -11,6 +11,50 @@ type Engine struct {
 	logger *slog.Logger
 }
 
+func (e *Engine) ComputeArticleRecommendations(ctx context.Context) error {
+	tx, err := e.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM user_article_recommendations`); err != nil {
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO user_article_recommendations (user_did, feed_url, article_url, score)
+		SELECT target, l.feed_url, l.article_url, SUM(us.jaccard) AS score
+		FROM (
+			SELECT us.user_a AS target, s.user_did AS peer
+			FROM user_similarity us
+			WHERE us.jaccard > 0.2
+			UNION ALL
+			SELECT us.user_b AS target, s.user_did AS peer
+			FROM user_similarity us
+			WHERE us.jaccard > 0.2
+		) targets
+		JOIN likes l ON l.author_did = targets.peer
+		WHERE l.article_url NOT IN (
+			SELECT a.url FROM articles a
+			JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = targets.target
+			LEFT JOIN read_state r ON r.user_did = targets.target AND r.article_id = a.id
+		)
+		AND NOT EXISTS (
+			SELECT 1 FROM likes ul WHERE ul.author_did = targets.target AND ul.feed_url = l.feed_url AND ul.article_url = l.article_url
+		)
+		GROUP BY targets.target, l.feed_url, l.article_url
+		HAVING COUNT(*) > 0
+		ORDER BY score DESC
+	`)
+	if err != nil {
+		return err
+	}
+
+	e.logger.Info("article recommendations computed")
+	return tx.Commit()
+}
+
 func NewEngine(db *sql.DB, logger *slog.Logger) *Engine {
 	return &Engine{db: db, logger: logger}
 }
@@ -119,5 +163,10 @@ func (e *Engine) ComputeRecommendations(ctx context.Context) error {
 	}
 
 	e.logger.Info("feed recommendations computed")
-	return tx.Commit()
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	return e.ComputeArticleRecommendations(ctx)
 }

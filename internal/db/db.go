@@ -55,7 +55,8 @@ func migrate(db *sql.DB) error {
 			fetch_interval_minutes INTEGER NOT NULL DEFAULT 30,
 			next_fetch_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			consecutive_empty_fetches INTEGER NOT NULL DEFAULT 0,
-			error_count INTEGER NOT NULL DEFAULT 0
+			error_count INTEGER NOT NULL DEFAULT 0,
+			favicon_url TEXT
 		)`,
 		`CREATE TABLE IF NOT EXISTS subscriptions (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -158,6 +159,13 @@ func migrate(db *sql.DB) error {
 		if _, err := tx.Exec(s); err != nil {
 			return err
 		}
+	}
+
+	migrations := []string{
+		`ALTER TABLE feeds ADD COLUMN favicon_url TEXT`,
+	}
+	for _, m := range migrations {
+		tx.Exec(m)
 	}
 
 	return tx.Commit()

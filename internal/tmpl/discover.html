@@ -1,8 +1,26 @@
 {{define "discover.html"}}
-<div class="mb-6">
+<div class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-bold font-title text-spot-text">Discover</h1>
-    <p class="text-spot-secondary text-sm mt-1">Feeds and readers similar to you.</p>
 </div>
+
+{{if .ArticleRecommendations}}
+<div class="mb-8">
+    <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended articles</h2>
+    <div class="space-y-3">
+        {{range .ArticleRecommendations}}
+        <a href="/articles/{{.ArticleID}}" class="block bg-spot-surface rounded-lg p-4 hover:bg-spot-hover-50 transition">
+            <div class="font-bold text-sm text-spot-text leading-tight">{{.Title}}</div>
+            <div class="flex items-center gap-2 mt-1 text-xs text-spot-secondary">
+                {{if .Author}}<span>{{.Author}}</span>{{end}}
+                <span class="text-spot-muted">{{.FeedTitle}}</span>
+                {{if .Published.Valid}}<span>{{.Published.Time.Format "Jan 2"}}</span>{{end}}
+            </div>
+            {{if .Summary}}<p class="text-xs text-spot-secondary mt-2 line-clamp-2">{{.Summary}}</p>{{end}}
+        </a>
+        {{end}}
+    </div>
+</div>
+{{end}}
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
     <div>

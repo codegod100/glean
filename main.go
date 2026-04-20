@@ -33,12 +33,10 @@ func main() {
 	}
 	defer database.Close()
 
-	oauth := &atproto.OAuthConfig{
-		ClientID:    envOr("GLEAN_OAUTH_CLIENT_ID", ""),
-		RedirectURL: envOr("GLEAN_OAUTH_REDIRECT_URL", ""),
-	}
+	clientID := envOr("GLEAN_OAUTH_CLIENT_ID", "")
+	callbackURL := envOr("GLEAN_OAUTH_REDIRECT_URL", "")
 
-	srv := server.New(database, oauth, logger)
+	srv := server.New(database, clientID, callbackURL, logger)
 
 	storeAdapter := db.NewFeedStoreAdapter(database)
 	scheduler := feed.NewScheduler(storeAdapter, logger)

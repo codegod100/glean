@@ -6,12 +6,14 @@ func (s *Server) handleDiscover(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	feedRecs, _ := s.db.GetFeedRecommendations(r.Context(), user.DID, 20)
 	people, _ := s.db.GetPeopleRecommendations(r.Context(), user.DID, 20)
-	popular, _ := s.db.ListAllFeeds(r.Context(), 20, 0)
+	popular, _ := s.db.ListUnsubscribedFeeds(r.Context(), user.DID, 20, 0)
+	articleRecs, _ := s.db.GetArticleRecommendations(r.Context(), user.DID, 20)
 	s.render(w, r, "discover.html", map[string]any{
-		"User":                 user,
-		"FeedRecommendations":  feedRecs,
-		"PeopleRecommendations": people,
-		"PopularFeeds":         popular,
+		"User":                     user,
+		"FeedRecommendations":      feedRecs,
+		"PeopleRecommendations":    people,
+		"PopularFeeds":             popular,
+		"ArticleRecommendations":   articleRecs,
 	})
 }
 

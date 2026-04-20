@@ -1,9 +1,12 @@
 package server
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"pkg.rbrt.fr/glean/internal/atproto"
@@ -18,6 +21,7 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 	allSubs, _ := s.db.ListSubscriptions(r.Context(), user.DID, "", 100, 0)
 	feedRecs, _ := s.db.GetFeedRecommendations(r.Context(), user.DID, 10)
 	peopleRecs, _ := s.db.GetPeopleRecommendations(r.Context(), user.DID, 5)
+	deadFeeds, _ := s.db.ListDeadFeeds(r.Context(), user.DID, 7)
 
 	seen := make(map[string]bool)
 	var categories []string
@@ -35,6 +39,7 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 		"Category":              category,
 		"FeedRecommendations":   feedRecs,
 		"PeopleRecommendations": peopleRecs,
+		"DeadFeeds":             deadFeeds,
 	})
 }
 
@@ -67,6 +72,16 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 			s.logger.Error("failed to upsert feed", "error", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
+		}
+
+		siteURL := result.Feed.SiteURL
+		if siteURL != "" {
+			go func() {
+				discResult, err := feed.Discover(context.Background(), siteURL)
+				if err == nil && discResult.Favicon != "" {
+					_ = s.db.UpdateFeedFavicon(context.Background(), feedURL, discResult.Favicon)
+				}
+			}()
 		}
 	}
 
@@ -231,6 +246,58 @@ func (s *Server) handleRefreshFeeds(w http.ResponseWriter, r *http.Request) {
 		"User":          user,
 		"Subscriptions": subs,
 	})
+}
+
+func (s *Server) handleDiscoverFeedURL(w http.ResponseWriter, r *http.Request) {
+	siteURL := r.URL.Query().Get("url")
+	if siteURL == "" {
+		http.Error(w, "url required", http.StatusBadRequest)
+		return
+	}
+
+	result, err := feed.Discover(r.Context(), siteURL)
+	if err != nil {
+		s.logger.Error("feed discovery failed", "error", err, "url", siteURL)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	type discoveryResponse struct {
+		FeedURLs []string `json:"feed_urls"`
+		Favicon  string   `json:"favicon"`
+	}
+	json.NewEncoder(w).Encode(discoveryResponse{
+		FeedURLs: result.FeedURLs,
+		Favicon:  result.Favicon,
+	})
+}
+
+func (s *Server) handleUpdateFeedInterval(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	feedURL := r.FormValue("feed_url")
+	intervalStr := r.FormValue("interval")
+
+	if feedURL == "" {
+		http.Error(w, "feed_url required", http.StatusBadRequest)
+		return
+	}
+
+	interval, err := strconv.Atoi(intervalStr)
+	if err != nil || interval < 5 {
+		http.Error(w, "interval must be >= 5 minutes", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.db.UpdateFeedInterval(r.Context(), feedURL, interval); err != nil {
+		s.logger.Error("failed to update feed interval", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("HX-Refresh", "true")
+	w.WriteHeader(http.StatusNoContent)
+	_ = user
 }
 
 func nullString(s string) sql.NullString {

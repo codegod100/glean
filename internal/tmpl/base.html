@@ -163,18 +163,18 @@
             </a>
         </nav>
         <div class="mt-auto pt-4 border-t border-spot-divider-30">
-            <div class="flex items-center gap-3 px-3 py-2">
+            <a href="/profile/{{.User.DID}}" class="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-spot-hover-50 transition">
                 {{if .User.AvatarURL.Valid}}<img src="{{.User.AvatarURL.String}}" class="w-8 h-8 rounded-full">{{end}}
                 <div class="min-w-0 flex-1">
                     <div class="text-sm font-bold truncate text-spot-text">@{{.User.Handle}}</div>
                 </div>
-                <form method="POST" action="/auth/logout">
-                    {{csrfInput .CSRFToken}}
-                    <button type="submit" class="text-spot-secondary hover:text-spot-red transition" title="Logout">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-                    </button>
-                </form>
-            </div>
+            </a>
+            <form method="POST" action="/auth/logout">
+                {{csrfInput .CSRFToken}}
+                <button type="submit" class="text-spot-secondary hover:text-spot-red transition" title="Logout">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                </button>
+            </form>
         </div>
     </aside>
 
@@ -208,10 +208,10 @@
         {{if .User}}
         <div class="lg:hidden bg-spot-surface border-b border-spot-divider px-4 py-3 flex items-center justify-between sticky top-0 z-20">
             <a href="/" class="text-spot-purple font-bold text-lg font-title">Glean</a>
-            <div class="flex items-center gap-2">
+            <a href="/profile/{{.User.DID}}" class="flex items-center gap-2">
                 {{if .User.AvatarURL.Valid}}<img src="{{.User.AvatarURL.String}}" class="w-7 h-7 rounded-full">{{end}}
                 <span class="text-xs text-spot-secondary">@{{.User.Handle}}</span>
-            </div>
+            </a>
         </div>
         {{end}}
         <div class="max-w-6xl mx-auto px-4 lg:px-8 py-6 flex-1">
