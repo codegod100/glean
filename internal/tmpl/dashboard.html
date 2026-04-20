@@ -6,6 +6,19 @@
         <span class="text-spot-secondary"><strong class="text-spot-text">{{.SubscriptionCount}}</strong> feeds</span>
     </div>
 </div>
+{{if eq .SubscriptionCount 0}}
+<div class="bg-spot-surface rounded-xl py-16 px-6 text-center mb-6">
+    <div class="w-16 h-16 rounded-full bg-spot-hover flex items-center justify-center mb-4 mx-auto">
+        <svg class="w-8 h-8 text-spot-muted" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12.75 19.5v-15m0 0l-6.75 6.75M12.75 4.5l6.75 6.75"/></svg>
+    </div>
+    <h2 class="text-lg font-semibold text-spot-text mb-2">Add your first feed</h2>
+    <p class="text-sm text-spot-secondary mb-6">Subscribe to RSS feeds to start building your personalized reading experience.</p>
+    <a href="/feeds" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-spot-green text-white text-sm font-medium hover:opacity-90 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+        Add feeds
+    </a>
+</div>
+{{else}}
 <p class="text-sm text-spot-secondary mb-6">Your personalized feed, based on your social graph.</p>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -118,4 +131,5 @@
         {{end}}
     </div>
 </div>
+{{end}}
 {{end}}

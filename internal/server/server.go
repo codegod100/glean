@@ -85,7 +85,7 @@ func New(database *db.DB, clientID, callbackURL, addr string, scheduler *feed.Sc
 }
 
 func (s *Server) setupMiddleware() {
-	s.router.Use(middleware.Logger)
+	s.router.Use(s.realIPLogger)
 	s.router.Use(middleware.Recoverer)
 	s.router.Use(middleware.Compress(5))
 	s.router.Use(s.metricsMiddleware)

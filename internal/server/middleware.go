@@ -5,6 +5,9 @@ import (
 	"encoding/hex"
 	"net/http"
 	"strings"
+	"time"
+
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 func (s *Server) sessionMiddleware(next http.Handler) http.Handler {
@@ -80,4 +83,32 @@ func (s *Server) csrfMiddleware(next http.Handler) http.Handler {
 
 func sameOrigin(origin, host string) bool {
 	return strings.HasPrefix(origin, "http://"+host) || strings.HasPrefix(origin, "https://"+host)
+}
+
+func (s *Server) realIPLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+
+		next.ServeHTTP(ww, r)
+
+		ip := r.RemoteAddr
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			ip = strings.TrimSpace(strings.SplitN(xff, ",", 2)[0])
+		}
+
+		scheme := "http"
+		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+			scheme = "https"
+		}
+
+		s.logger.Info("request",
+			"method", r.Method,
+			"url", scheme+"://"+r.Host+r.RequestURI,
+			"from", ip,
+			"status", ww.Status(),
+			"bytes", ww.BytesWritten(),
+			"duration", time.Since(start).Round(time.Microsecond),
+		)
+	})
 }
