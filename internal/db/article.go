@@ -7,29 +7,29 @@ import (
 )
 
 type Article struct {
-	ID         int64
-	FeedURL    string
-	FeedTitle  string
-	GUID       string
-	Title      string
-	URL        sql.NullString
-	Author     sql.NullString
-	Summary    sql.NullString
-	Content    sql.NullString
-	Published  sql.NullTime
-	Updated    sql.NullTime
-	FetchedAt  sql.NullTime
-	IsRead     sql.NullBool
-	IsStarred  sql.NullBool
+	ID        int64
+	FeedURL   string
+	FeedTitle string
+	GUID      string
+	Title     string
+	URL       sql.NullString
+	Author    sql.NullString
+	Summary   sql.NullString
+	Content   sql.NullString
+	Published sql.NullTime
+	Updated   sql.NullTime
+	FetchedAt sql.NullTime
+	IsRead    sql.NullBool
+	IsStarred sql.NullBool
 }
 
 type ReadState struct {
-	UserDID    string
-	ArticleID  int64
-	IsRead     bool
-	ReadAt     sql.NullTime
-	IsStarred  bool
-	StarredAt  sql.NullTime
+	UserDID   string
+	ArticleID int64
+	IsRead    bool
+	ReadAt    sql.NullTime
+	IsStarred bool
+	StarredAt sql.NullTime
 }
 
 func (db *DB) UpsertArticle(ctx context.Context, article *Article) (int64, error) {

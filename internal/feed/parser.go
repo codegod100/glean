@@ -84,13 +84,13 @@ type jsonFeed struct {
 	HomePageURL string `json:"home_page_url"`
 	Description string `json:"description"`
 	Items       []struct {
-		ID            string `json:"id"`
-		URL           string `json:"url"`
-		Title         string `json:"title"`
-		ContentHTML   string `json:"content_html"`
-		ContentText   string `json:"content_text"`
-		Summary       string `json:"summary"`
-		Author        struct {
+		ID          string `json:"id"`
+		URL         string `json:"url"`
+		Title       string `json:"title"`
+		ContentHTML string `json:"content_html"`
+		ContentText string `json:"content_text"`
+		Summary     string `json:"summary"`
+		Author      struct {
 			Name string `json:"name"`
 		} `json:"author"`
 		DatePublished string `json:"date_published"`

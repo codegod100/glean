@@ -8,18 +8,18 @@ import (
 )
 
 type Annotation struct {
-	ID          int64
-	URI         string
-	AuthorDID   string
+	ID           int64
+	URI          string
+	AuthorDID    string
 	AuthorHandle string
-	FeedURL     string
-	ArticleURL  string
-	Quote       sql.NullString
-	Note        sql.NullString
-	Tags        sql.NullString
-	Rating      sql.NullInt64
-	CreatedAt   sql.NullTime
-	CID         sql.NullString
+	FeedURL      string
+	ArticleURL   string
+	Quote        sql.NullString
+	Note         sql.NullString
+	Tags         sql.NullString
+	Rating       sql.NullInt64
+	CreatedAt    sql.NullTime
+	CID          sql.NullString
 }
 
 type Like struct {
@@ -38,6 +38,21 @@ func (db *DB) CreateAnnotation(ctx context.Context, a *Annotation) error {
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, a.URI, a.AuthorDID, a.FeedURL, a.ArticleURL, a.Quote, a.Note, a.Tags, a.Rating, a.CreatedAt, a.CID)
 	return err
+}
+
+func (db *DB) GetAnnotation(ctx context.Context, id int64) (*Annotation, error) {
+	a := &Annotation{}
+	err := db.QueryRowContext(ctx, `
+		SELECT a.id, a.uri, a.author_did, COALESCE(u.handle, ''), a.feed_url, a.article_url, a.quote, a.note, a.tags, a.rating, a.created_at, a.cid
+		FROM annotations a
+		LEFT JOIN users u ON a.author_did = u.did
+		WHERE a.id = ?
+	`, id).Scan(&a.ID, &a.URI, &a.AuthorDID, &a.AuthorHandle, &a.FeedURL, &a.ArticleURL,
+		&a.Quote, &a.Note, &a.Tags, &a.Rating, &a.CreatedAt, &a.CID)
+	if err != nil {
+		return nil, err
+	}
+	return a, nil
 }
 
 func (db *DB) DeleteAnnotation(ctx context.Context, uri string) error {

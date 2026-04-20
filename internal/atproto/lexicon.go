@@ -51,13 +51,13 @@ type ListSubscriptionsResponse struct {
 }
 
 type FeedListEntry struct {
-	DID               string              `json:"did"`
-	SubscriptionCount int                 `json:"subscriptionCount"`
+	DID               string               `json:"did"`
+	SubscriptionCount int                  `json:"subscriptionCount"`
 	Subscriptions     []SubscriptionRecord `json:"subscriptions"`
 }
 
 type ListFeedListsResponse struct {
-	Cursor string         `json:"cursor,omitempty"`
+	Cursor string          `json:"cursor,omitempty"`
 	Feeds  []FeedListEntry `json:"feeds"`
 }
 
@@ -124,7 +124,7 @@ type RecommendedPerson struct {
 }
 
 type GetRecommendationsResponse struct {
-	Feeds  []RecommendedFeed  `json:"feeds"`
+	Feeds  []RecommendedFeed   `json:"feeds"`
 	People []RecommendedPerson `json:"people"`
 }
 

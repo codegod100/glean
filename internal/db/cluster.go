@@ -227,11 +227,11 @@ func (db *DB) GetFeedRecommendations(ctx context.Context, userDID string, limit 
 			return nil, err
 		}
 		results = append(results, map[string]any{
-			"feed_url":        feedURL,
-			"score":           score,
-			"title":           title,
-			"site_url":        siteURL,
-			"description":     description,
+			"feed_url":         feedURL,
+			"score":            score,
+			"title":            title,
+			"site_url":         siteURL,
+			"description":      description,
 			"subscriber_count": subCount,
 		})
 	}
@@ -306,15 +306,15 @@ func (db *DB) GetSimilarFeeds(ctx context.Context, feedURL string, limit int) ([
 }
 
 type ArticleRecommendation struct {
-	ArticleID  int64
-	Title      string
-	URL        string
-	FeedURL    string
-	FeedTitle  string
-	Author     string
-	Summary    string
-	Published  sql.NullTime
-	Score      float64
+	ArticleID int64
+	Title     string
+	URL       string
+	FeedURL   string
+	FeedTitle string
+	Author    string
+	Summary   string
+	Published sql.NullTime
+	Score     float64
 }
 
 func (db *DB) GetArticleRecommendations(ctx context.Context, userDID string, limit int) ([]*ArticleRecommendation, error) {

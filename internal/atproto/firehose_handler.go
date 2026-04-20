@@ -2,8 +2,8 @@ package atproto
 
 import (
 	"context"
-	"encoding/json"
 	"database/sql"
+	"encoding/json"
 	"log/slog"
 	"time"
 

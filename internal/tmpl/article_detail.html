@@ -99,7 +99,7 @@
 
         <div id="annotations-list" class="space-y-3">
             {{range .Annotations}}
-            {{template "annotation-card.html" .}}
+            {{template "annotation-card.html" dict "annotation" . "userDID" $.CurrentUserDID}}
             {{else}}
             <p class="text-sm text-spot-secondary">No annotations yet. Be the first to add one.</p>
             {{end}}

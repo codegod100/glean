@@ -91,13 +91,14 @@ func (s *Server) handleArticleDetail(w http.ResponseWriter, r *http.Request) {
 	feed, _ := s.db.GetFeed(r.Context(), article.FeedURL)
 
 	s.render(w, r, "article_detail.html", map[string]any{
-		"User":        user,
-		"Article":     article,
-		"Feed":        feed,
-		"ReadState":   readState,
-		"LikeCount":   likeCount,
-		"HasLiked":    liked,
-		"Annotations": annotations,
+		"User":           user,
+		"CurrentUserDID": user.DID,
+		"Article":        article,
+		"Feed":           feed,
+		"ReadState":      readState,
+		"LikeCount":      likeCount,
+		"HasLiked":       liked,
+		"Annotations":    annotations,
 	})
 }
 

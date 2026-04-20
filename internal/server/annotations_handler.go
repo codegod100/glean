@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/db"
 )
@@ -51,11 +53,12 @@ func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.render(w, r, "library.html", map[string]any{
-		"User":          user,
-		"Articles":      articles,
-		"Annotations":   annotations,
-		"LikedPage":     likedPage,
-		"AnnotPage":     annotPage,
+		"User":           user,
+		"CurrentUserDID": user.DID,
+		"Articles":       articles,
+		"Annotations":    annotations,
+		"LikedPage":      likedPage,
+		"AnnotPage":      annotPage,
 	})
 }
 
@@ -104,4 +107,42 @@ func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleDeleteAnnotation(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	annotation, err := s.db.GetAnnotation(r.Context(), id)
+	if err != nil {
+		http.Error(w, "annotation not found", http.StatusNotFound)
+		return
+	}
+
+	if annotation.AuthorDID != user.DID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	if annotation.URI != "" {
+		if client := s.pdsClientForUser(r); client != nil {
+			parsed, ok := atproto.ParseRecordURI(annotation.URI)
+			if ok {
+				if delErr := client.DeleteRecord(r.Context(), user.DID, parsed.Collection, parsed.RKey); delErr != nil {
+					s.logger.Error("failed to delete annotation from PDS", "error", delErr)
+				}
+			}
+		}
+	}
+
+	if err := s.db.DeleteAnnotation(r.Context(), annotation.URI); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }

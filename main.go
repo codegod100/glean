@@ -99,6 +99,7 @@ func main() {
 	cancel()
 
 	fmt.Println("glean stopped")
+	os.Exit(0)
 }
 
 func envOr(key, fallback string) string {

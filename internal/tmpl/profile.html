@@ -38,7 +38,7 @@
     <h2 class="text-lg font-semibold text-spot-text mb-3">Recent annotations</h2>
     <div class="space-y-3">
         {{range .Annotations}}
-        {{template "annotation-card.html" .}}
+        {{template "annotation-card.html" dict "annotation" . "userDID" $.CurrentUserDID}}
         {{else}}
         <p class="text-sm text-spot-secondary">No public annotations.</p>
         {{end}}

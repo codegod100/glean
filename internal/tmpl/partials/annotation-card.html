@@ -1,22 +1,36 @@
 {{define "annotation-card.html"}}
-<div class="bg-spot-surface rounded-xl p-4">
-    {{if .Quote.Valid}}
-    <blockquote class="border-l-2 border-spot-green pl-3 text-sm text-spot-body italic">{{.Quote.String}}</blockquote>
-    {{end}}
-    {{if .Note.Valid}}
-    <p class="text-sm text-spot-body mt-2">{{.Note.String}}</p>
-    {{end}}
-    {{if .Tags.Valid}}
-    <div class="flex gap-1 mt-2 flex-wrap">
-        {{range $tag := split .Tags.String ","}}<span class="text-xs bg-spot-hover text-spot-secondary px-2.5 py-0.5 rounded-full">{{$tag}}</span>{{end}}
+<div id="annotation-{{.annotation.ID}}" class="bg-spot-surface rounded-xl p-4 shadow-spot">
+    {{if .annotation.ArticleURL}}
+    <div class="text-xs text-spot-muted mb-2">
+        <a href="{{.annotation.ArticleURL}}" class="text-spot-secondary hover:text-spot-green transition truncate block">{{.annotation.ArticleURL}}</a>
     </div>
     {{end}}
-    {{if .Rating.Valid}}
-    <div class="text-sm text-spot-orange mt-1">{{repeat "&#9733;" (int .Rating.Int64)}}</div>
+    {{if .annotation.Quote.Valid}}
+    <blockquote class="border-l-2 border-spot-green pl-3 text-sm text-spot-body italic leading-relaxed">{{.annotation.Quote.String}}</blockquote>
     {{end}}
-    <div class="text-xs text-spot-muted mt-2">
-        <a href="/profile/{{.AuthorDID}}" class="hover:text-spot-green transition">{{.AuthorHandle}}</a>
-        {{if .CreatedAt.Valid}}<span class="ml-2">{{.CreatedAt.Time.Format "Jan 2, 2006 15:04"}}</span>{{end}}
+    {{if .annotation.Note.Valid}}
+    <p class="text-sm text-spot-body mt-2 leading-relaxed">{{.annotation.Note.String}}</p>
+    {{end}}
+    {{if .annotation.Tags.Valid}}
+    <div class="flex gap-1.5 mt-3 flex-wrap">
+        {{range $tag := split .annotation.Tags.String ","}}<span class="text-xs bg-spot-hover text-spot-secondary px-2.5 py-0.5 rounded-full">{{$tag}}</span>{{end}}
+    </div>
+    {{end}}
+    {{if .annotation.Rating.Valid}}
+    <div class="text-sm text-spot-orange mt-2 tracking-wide">{{repeat "&#9733;" (int .annotation.Rating.Int64)}}</div>
+    {{end}}
+    <div class="flex items-center justify-between mt-3 pt-3 border-t border-spot-divider">
+        <div class="flex items-center gap-2 text-xs text-spot-muted">
+            <a href="/profile/{{.annotation.AuthorDID}}" class="hover:text-spot-green transition">{{.annotation.AuthorHandle}}</a>
+            {{if .annotation.CreatedAt.Valid}}<span>&middot;</span><span>{{.annotation.CreatedAt.Time.Format "Jan 2, 2006 15:04"}}</span>{{end}}
+        </div>
+        {{if eq .annotation.AuthorDID .userDID}}
+        <div class="flex items-center gap-2">
+            <button class="text-xs text-spot-secondary hover:text-spot-text transition" onclick="editAnnotation(this, {{.annotation.ID}}, '{{js .annotation.FeedURL}}', '{{js .annotation.ArticleURL}}', '{{js .annotation.Quote.String}}', '{{js .annotation.Note.String}}', '{{js .annotation.Tags.String}}')">Edit</button>
+            <button hx-post="/library/{{.annotation.ID}}/delete" hx-target="#annotation-{{.annotation.ID}}" hx-swap="outerHTML swap:0.3s" hx-confirm="Delete this annotation?"
+                    class="text-xs text-spot-secondary hover:text-spot-red transition">Delete</button>
+        </div>
+        {{end}}
     </div>
 </div>
 {{end}}

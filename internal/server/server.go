@@ -135,6 +135,7 @@ func (s *Server) setupRoutes() {
 		r.Use(s.requireAuth)
 		r.Get("/", s.handleLibrary)
 		r.Post("/create", s.handleCreateAnnotation)
+		r.Post("/{id}/delete", s.handleDeleteAnnotation)
 	})
 
 	s.router.Get("/auth/login", s.handleAuthLogin)
@@ -156,6 +157,20 @@ func (s *Server) setupRoutes() {
 
 func (s *Server) loadTemplates() {
 	fm := template.FuncMap{
+		"dict": func(values ...any) (map[string]any, error) {
+			if len(values)%2 != 0 {
+				return nil, fmt.Errorf("dict requires even number of arguments")
+			}
+			m := make(map[string]any, len(values)/2)
+			for i := 0; i < len(values); i += 2 {
+				key, ok := values[i].(string)
+				if !ok {
+					return nil, fmt.Errorf("dict key must be string")
+				}
+				m[key] = values[i+1]
+			}
+			return m, nil
+		},
 		"formatDate": func(t time.Time) string {
 			return t.Format("Jan 02, 2006")
 		},

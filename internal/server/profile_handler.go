@@ -18,12 +18,15 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	annotations, _ := s.db.ListAnnotations(r.Context(), "", "", did, 50, 0)
 	subCount, _ := s.db.GetSubscriptionCount(r.Context(), did)
 
+	user := currentUser(r)
+
 	s.render(w, r, "profile.html", map[string]any{
-		"User":              currentUser(r),
+		"User":              user,
+		"CurrentUserDID":    user.DID,
 		"ProfileUser":       profileUser,
-		"Subscriptions":   subs,
-		"Annotations":     annotations,
+		"Subscriptions":     subs,
+		"Annotations":       annotations,
 		"SubscriptionCount": subCount,
-		"AnnotationCount": len(annotations),
+		"AnnotationCount":   len(annotations),
 	})
 }

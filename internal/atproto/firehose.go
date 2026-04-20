@@ -41,6 +41,7 @@ func NewFirehoseConsumer(relayURL string, handler FirehoseHandler, logger *slog.
 			"at.glean.subscription": true,
 			"at.glean.annotation":   true,
 			"at.glean.like":         true,
+			// TODO: support at.margin.annotation as well (ref: https://tangled.org/did:plc:rgvlxa3ecwx3bfyzlrzrwtrs/issues/1)
 		},
 	}
 }
@@ -127,8 +128,8 @@ func (fc *FirehoseConsumer) handleMessage(ctx context.Context, msg []byte) {
 
 func (fc *FirehoseConsumer) parseCommit(ctx context.Context, raw json.RawMessage) {
 	var commit struct {
-		Did    string `json:"did"`
-		Ops    []struct {
+		Did string `json:"did"`
+		Ops []struct {
 			Action string          `json:"action"`
 			Path   string          `json:"path"`
 			CID    json.RawMessage `json:"cid"`
