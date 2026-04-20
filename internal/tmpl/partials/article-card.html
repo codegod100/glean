@@ -15,7 +15,7 @@
             <p class="text-sm text-spot-secondary mt-2 line-clamp-2">{{plainText .Summary.String}}</p>
             {{end}}{{end}}
         </div>
-        <div class="flex flex-col items-center gap-1 shrink-0">
+        <div class="flex flex-col items-center gap-3 shrink-0 pt-1">
             {{template "like-button.html" .}}
             {{if .IsRead.Bool}}
             <span id="read-btn-{{.ID}}" class="text-[10px] text-spot-green uppercase tracking-button">Read</span>

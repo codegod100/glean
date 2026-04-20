@@ -34,8 +34,8 @@
             {{range .Articles}}
             {{template "article-card.html" .}}
             {{else}}
-            <div class="flex flex-col items-center justify-center py-12 text-center">
-                <div class="w-14 h-14 rounded-full bg-spot-hover flex items-center justify-center mb-4">
+            <div class="bg-spot-surface rounded-xl py-12 px-6 text-center">
+                <div class="w-14 h-14 rounded-full bg-spot-hover flex items-center justify-center mb-4 mx-auto">
                     <svg class="w-7 h-7 text-spot-muted" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 </div>
                 <p class="text-sm text-spot-secondary mb-1">No unread articles</p>
@@ -79,7 +79,7 @@
                         <span class="text-spot-muted">{{if .FeedTitle}}{{.FeedTitle}}{{end}}</span>
                     </div>
                     <div class="flex items-center gap-3 mt-2 text-xs text-spot-secondary">
-                        <span>&#9829; {{.LikeCount}}</span>
+                        <span class="inline-flex items-center gap-1"><svg class="w-4 h-4 text-spot-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">{{template "icon-heart"}}</svg> {{.LikeCount}}</span>
                         <span class="text-spot-muted">{{.AnnotationCount}} notes</span>
                     </div>
                 </a>

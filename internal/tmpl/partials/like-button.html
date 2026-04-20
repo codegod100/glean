@@ -1,4 +1,6 @@
 {{define "like-button.html"}}
 <button hx-post="/articles/{{.ID}}/like" hx-target="this" hx-swap="outerHTML"
-        class="text-spot-muted hover:text-spot-red text-lg transition">&#9829;</button>
+        class="text-spot-muted hover:text-spot-red transition">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">{{template "icon-heart"}}</svg>
+</button>
 {{end}}

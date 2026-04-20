@@ -1,6 +1,9 @@
 {{define "article_detail.html"}}
 <div class="max-w-3xl mx-auto">
-    <a href="/articles" class="text-sm text-spot-secondary hover:text-spot-text mb-4 inline-block transition">&larr; Back to articles</a>
+    <a href="/articles" class="text-sm text-spot-secondary hover:text-spot-text mb-6 inline-flex items-center gap-1.5 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+        Back to articles
+    </a>
 
     <article>
         <h1 class="text-2xl font-bold leading-tight">
@@ -8,55 +11,49 @@
             {{else}}<span class="text-spot-text">{{.Article.Title}}</span>{{end}}
         </h1>
 
-        <div class="flex items-center gap-3 mt-3 text-sm text-spot-secondary">
+        <div class="flex items-center gap-2.5 mt-3 text-sm text-spot-secondary flex-wrap">
             {{if .Article.Author.Valid}}<span>{{.Article.Author.String}}</span>{{end}}
             {{if .Article.Published.Valid}}<span>{{.Article.Published.Time.Format "Jan 2, 2006 15:04"}}</span>{{end}}
             {{if .Feed}}
-            <a href="/articles?feed={{.Feed.FeedURL}}" class="hover:text-spot-green transition">
-                {{if .Feed.FaviconURL.Valid}}<img src="{{.Feed.FaviconURL.String}}" class="w-4 h-4 inline-block mr-1 align-text-bottom rounded-sm">{{end}}
+            <a href="/articles?feed={{.Feed.FeedURL}}" class="inline-flex items-center gap-1 hover:text-spot-green transition">
+                {{if .Feed.FaviconURL.Valid}}<img src="{{.Feed.FaviconURL.String}}" class="w-4 h-4 rounded-sm">{{end}}
                 {{if .Feed.Title.Valid}}{{.Feed.Title.String}}{{else}}{{.Feed.FeedURL}}{{end}}
             </a>
             {{end}}
         </div>
 
-        <div class="flex items-center gap-2 mt-6 flex-wrap">
+        <div class="flex items-center gap-2 mt-6">
+            <button hx-post="/articles/{{.Article.ID}}/like" hx-target="#like-btn" hx-swap="outerHTML"
+                    id="like-btn"
+                    class="border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:border-spot-text transition inline-flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 {{if .HasLiked}}text-spot-red{{else}}text-spot-muted{{end}}" fill="{{if .HasLiked}}currentColor{{else}}none{{end}}" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">{{template "icon-heart"}}</svg>
+                <span>{{.LikeCount}}</span>
+            </button>
+
             <button hx-post="/articles/{{.Article.ID}}/{{if .ReadState.IsRead}}unread{{else}}read{{end}}"
                     hx-target="#read-btn" hx-swap="outerHTML"
                     id="read-btn"
-                    class="border border-spot-outline text-spot-text rounded-pill px-5 py-2 text-xs font-bold uppercase tracking-button hover:border-spot-text transition inline-flex items-center gap-1.5">
-                {{if .ReadState.IsRead}}
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                Mark unread
-                {{else}}
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                Mark read
-                {{end}}
-            </button>
-
-            <button hx-post="/articles/{{.Article.ID}}/like" hx-target="#like-btn" hx-swap="outerHTML"
-                    id="like-btn"
-                    class="border border-spot-outline text-spot-text rounded-pill px-5 py-2 text-xs font-bold uppercase tracking-button hover:border-spot-text transition inline-flex items-center gap-1.5">
-                <span class="{{if .HasLiked}}text-spot-red{{end}}">&#9829;</span>
-                {{.LikeCount}}
+                    class="border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:border-spot-text transition">
+                {{if .ReadState.IsRead}}Mark unread{{else}}Mark read{{end}}
             </button>
 
             {{if .Article.URL.Valid}}
             <a href="{{.Article.URL.String}}" target="_blank" rel="noopener noreferrer"
-               class="border border-spot-outline text-spot-text rounded-pill px-5 py-2 text-xs font-bold uppercase tracking-button hover:border-spot-text transition inline-flex items-center gap-1.5">
+               class="border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:border-spot-text transition inline-flex items-center gap-1.5">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-4.5-6H18m0 0v4.5m0-4.5L10.5 13.5"/></svg>
                 Original
             </a>
 
             <a href="https://bsky.app/intent/compose?text={{.Article.Title}}%20{{.Article.URL.String}}"
                target="_blank" rel="noopener noreferrer"
-               class="border border-spot-outline text-spot-text rounded-pill px-5 py-2 text-xs font-bold uppercase tracking-button hover:border-spot-text transition inline-flex items-center gap-1.5">
+               class="border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:border-spot-text transition inline-flex items-center gap-1.5">
                 <span class="w-3.5 h-3.5 inline-flex">{{template "icon-bluesky"}}</span>
                 Share
             </a>
             {{end}}
         </div>
 
-        <hr class="my-6 border-spot-divider-30">
+        <hr class="my-8 border-spot-divider">
 
         {{if .Article.Content.Valid}}
         <div class="article-body">
@@ -71,7 +68,7 @@
         {{end}}
     </article>
 
-    <hr class="my-8 border-spot-divider-30">
+    <hr class="my-8 border-spot-divider">
 
     <section>
         <h2 class="text-lg font-semibold text-spot-text mb-4">Annotations</h2>
@@ -92,7 +89,7 @@
             </div>
             <div class="flex gap-2">
                 <input type="text" name="tags" placeholder="Tags (comma separated)"
-                       class="flex-1 bg-spot-hover text-spot-text rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
+                       class="flex-1 bg-spot-hover text-spot-text rounded-pill px-5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
                 <button type="submit" class="bg-spot-green text-white rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Annotate</button>
             </div>
         </form>
