@@ -1,6 +1,6 @@
 {{define "feed-list.html"}}
 {{range .Subscriptions}}
-<div class="px-5 py-4 flex items-center justify-between hover:bg-spot-hover-50 transition rounded-lg">
+<div class="px-5 py-4 flex items-center justify-between hover:bg-spot-hover-50 transition rounded-xl">
     <div class="min-w-0">
         <div class="font-bold text-spot-text">{{.FeedURL}}</div>
         {{if .Category.Valid}}<span class="text-xs text-spot-secondary">{{.Category.String}}</span>{{end}}

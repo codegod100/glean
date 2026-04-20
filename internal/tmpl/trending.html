@@ -1,12 +1,12 @@
 {{define "trending.html"}}
 <div class="mb-6">
-    <h1 class="text-2xl font-bold font-title text-spot-text">Trending</h1>
+    <h1 class="text-2xl font-bold text-spot-text">Trending</h1>
     <p class="text-spot-secondary text-sm mt-1">Most liked and discussed articles across Glean.</p>
 </div>
 
 <div class="space-y-3">
     {{range $i, $t := .Trending}}
-    <article class="bg-spot-surface rounded-lg px-5 py-4 hover:bg-spot-hover-50 transition shadow-spot">
+    <article class="bg-spot-surface rounded-xl px-5 py-4 hover:bg-spot-hover-50 transition shadow-spot">
         <div class="flex items-start justify-between gap-4">
             <div class="min-w-0 flex-1">
                 <a href="/articles/{{$t.ArticleID}}" class="font-bold text-spot-text hover:text-spot-green transition text-lg leading-tight">{{$t.Title}}</a>

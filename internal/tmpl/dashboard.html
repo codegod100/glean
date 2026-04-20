@@ -2,7 +2,7 @@
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="lg:col-span-2">
         <div class="flex items-center justify-between mb-6">
-            <h1 class="text-2xl font-bold font-title text-spot-text">Dashboard</h1>
+            <h1 class="text-2xl font-bold text-spot-text">Dashboard</h1>
             <div class="flex gap-4 text-sm">
                 <span class="text-spot-secondary"><strong class="text-spot-text">{{.UnreadCount}}</strong> unread</span>
                 <span class="text-spot-secondary"><strong class="text-spot-text">{{.SubscriptionCount}}</strong> feeds</span>
@@ -33,7 +33,7 @@
             </div>
             <div class="space-y-3">
                 {{range .Trending}}
-                <a href="/articles/{{.ArticleID}}" class="block bg-spot-surface rounded-lg p-4 hover:bg-spot-hover-50 transition">
+                <a href="/articles/{{.ArticleID}}" class="block bg-spot-surface rounded-xl p-4 hover:bg-spot-hover-50 transition">
                     <div class="font-bold text-sm text-spot-text leading-tight">{{.Title}}</div>
                     <div class="flex items-center gap-2 mt-1 text-xs text-spot-secondary">
                         {{if .Author}}<span>{{.Author}}</span>{{end}}
@@ -57,7 +57,7 @@
             </div>
             <div class="space-y-3">
                 {{range .PeopleRecommendations}}
-                <div class="bg-spot-surface rounded-lg p-4 flex items-center gap-3 hover:bg-spot-hover-50 transition">
+                <div class="bg-spot-surface rounded-xl p-4 flex items-center gap-3 hover:bg-spot-hover-50 transition">
                     {{if .avatar_url}}<img src="{{.avatar_url}}" class="w-10 h-10 rounded-full">{{end}}
                     <div class="min-w-0 flex-1">
                         <a href="/profile/{{.handle}}" class="font-bold text-spot-text hover:text-spot-green transition">@{{.handle}}</a>
@@ -91,7 +91,7 @@
                 <input type="url" name="feed_url" placeholder="Feed URL"
                        class="flex-1 bg-spot-hover text-spot-text rounded-pill px-5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder"
                        required>
-                <button type="submit" class="bg-spot-green text-spot-bg rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Add</button>
+                <button type="submit" class="bg-spot-green text-white rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Add</button>
             </form>
         </div>
     </div>

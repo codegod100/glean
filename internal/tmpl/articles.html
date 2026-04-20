@@ -1,6 +1,6 @@
 {{define "articles.html"}}
     <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-bold font-title text-spot-text">Articles</h1>
+        <h1 class="text-2xl font-bold text-spot-text">Articles</h1>
         <form hx-post="/articles/mark-all-read" hx-confirm="Mark all articles as read?">
             {{csrfInput .CSRFToken}}
             {{if .FeedURL}}<input type="hidden" name="feed" value="{{.FeedURL}}">{{end}}
