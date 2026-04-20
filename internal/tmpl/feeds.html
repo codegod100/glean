@@ -29,6 +29,17 @@
 </div>
 {{end}}
 
+{{if .FeedRecommendations}}
+<div class="mb-6">
+    <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide mb-3">Recommended feeds</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {{range .FeedRecommendations}}
+        {{template "recommendation-card.html" .}}
+        {{end}}
+    </div>
+</div>
+{{end}}
+
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="lg:col-span-2">
         {{if .Categories}}
@@ -64,9 +75,12 @@
                             <option value="1440" {{if eq .FetchInterval 1440}}selected{{end}}>24h</option>
                         </select>
                     </form>
-                    <button hx-delete="/feeds/{{.FeedURL}}" hx-target="closest .px-5" hx-swap="outerHTML swap:0.3s"
-                            hx-confirm="Unsubscribe from this feed?"
-                            class="text-sm text-spot-secondary hover:text-spot-red transition">Unsubscribe</button>
+                    <form hx-delete="/feeds/remove" hx-target="closest .px-5" hx-swap="outerHTML swap:0.3s"
+                          hx-confirm="Unsubscribe from this feed?" class="inline">
+                        {{csrfInput $.CSRFToken}}
+                        <input type="hidden" name="url" value="{{.FeedURL}}">
+                        <button type="submit" class="text-sm text-spot-secondary hover:text-spot-red transition">Unsubscribe</button>
+                    </form>
                 </div>
             </div>
             {{else}}
@@ -75,6 +89,17 @@
             </div>
             {{end}}
         </div>
+
+        {{if .HasMore}}
+        <div class="text-center py-4">
+            <button hx-get="/feeds?offset={{.NextOffset}}{{if .Category}}&category={{.Category}}{{end}}"
+                    hx-target="#feed-list" hx-swap="beforeend"
+                    hx-select=".px-5"
+                    class="text-sm text-spot-secondary hover:text-spot-green transition">
+                Load more
+            </button>
+        </div>
+        {{end}}
     </div>
 
     <div class="space-y-6">
@@ -97,26 +122,9 @@
             </form>
         </div>
 
-        {{if .FeedRecommendations}}
-        <div>
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide">Recommended feeds</h2>
-                <a href="/discover" class="text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition">See all</a>
-            </div>
-            <div class="space-y-3">
-                {{range .FeedRecommendations}}
-                {{template "recommendation-card.html" .}}
-                {{end}}
-            </div>
-        </div>
-        {{end}}
-
         {{if .PeopleRecommendations}}
         <div>
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide">Similar readers</h2>
-                <a href="/discover" class="text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition">See all</a>
-            </div>
+            <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide mb-4">Similar readers</h2>
             <div class="space-y-3">
                 {{range .PeopleRecommendations}}
                 <div class="bg-spot-surface rounded-xl p-4 flex items-center gap-3 hover:bg-spot-hover-50 transition">

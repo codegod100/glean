@@ -124,21 +124,14 @@ func (s *Server) setupRoutes() {
 		r.Get("/", s.handleTrending)
 	})
 
-	s.router.Route("/discover", func(r chi.Router) {
-		r.Use(s.requireAuth)
-		r.Get("/", s.handleDiscover)
-		r.Get("/feeds", s.handleDiscoverFeeds)
-		r.Get("/people", s.handleDiscoverPeople)
-	})
-
 	s.router.Route("/profile", func(r chi.Router) {
 		r.Use(s.requireAuth)
 		r.Get("/{did}", s.handleProfile)
 	})
 
-	s.router.Route("/annotations", func(r chi.Router) {
+	s.router.Route("/library", func(r chi.Router) {
 		r.Use(s.requireAuth)
-		r.Get("/", s.handleAnnotations)
+		r.Get("/", s.handleLibrary)
 		r.Post("/create", s.handleCreateAnnotation)
 	})
 

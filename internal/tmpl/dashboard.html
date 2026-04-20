@@ -6,11 +6,31 @@
         <span class="text-spot-secondary"><strong class="text-spot-text">{{.SubscriptionCount}}</strong> feeds</span>
     </div>
 </div>
-<p class="text-sm text-spot-secondary mb-6">Your recent unread articles and activity.</p>
+<p class="text-sm text-spot-secondary mb-6">Your personalized feed, based on your social graph.</p>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="lg:col-span-2">
-        <div class="space-y-3">
+        {{if .ArticleRecommendations}}
+        <div class="mb-6">
+            <h2 class="text-lg font-semibold text-spot-text mb-3">Recommended for you</h2>
+            <div class="space-y-3">
+                {{range .ArticleRecommendations}}
+                <a href="/articles/{{.ArticleID}}" class="block bg-spot-surface rounded-xl p-4 hover:bg-spot-hover-50 transition">
+                    <div class="font-bold text-sm text-spot-text leading-tight">{{.Title}}</div>
+                    <div class="flex items-center gap-2 mt-1 text-xs text-spot-secondary">
+                        {{if .Author}}<span>{{.Author}}</span>{{end}}
+                        <span class="text-spot-muted">{{.FeedTitle}}</span>
+                        {{if .Published.Valid}}<span>{{.Published.Time.Format "Jan 2"}}</span>{{end}}
+                    </div>
+                    {{if .Summary}}<p class="text-xs text-spot-secondary mt-2 line-clamp-2">{{.Summary}}</p>{{end}}
+                </a>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+
+        <h2 class="text-lg font-semibold text-spot-text mb-3">Unread articles</h2>
+        <div id="article-list" class="space-y-3">
             {{range .Articles}}
             {{template "article-card.html" .}}
             {{else}}
@@ -18,22 +38,27 @@
             {{end}}
         </div>
 
-        {{if .Articles}}
-        <div class="mt-4 text-center">
-            <a href="/articles" class="text-sm text-spot-secondary hover:text-spot-green transition">View all articles &rarr;</a>
+        {{if .HasMore}}
+        <div class="text-center py-4">
+            <button hx-get="/dashboard?offset={{.NextOffset}}"
+                    hx-target="#article-list" hx-swap="beforeend"
+                    hx-select="article"
+                    class="text-sm text-spot-secondary hover:text-spot-green transition">
+                Load more
+            </button>
         </div>
         {{end}}
     </div>
 
     <div class="space-y-8">
-        {{if .Trending}}
+        {{if .PersonalTrending}}
         <div>
             <div class="flex items-center justify-between mb-4">
-                <h2 class="text-lg font-semibold text-spot-text">Trending</h2>
-                <a href="/trending" class="text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition">See all</a>
+                <h2 class="text-lg font-semibold text-spot-text">Trending in your network</h2>
+                <a href="/trending?scope=for-me" class="text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition">See all</a>
             </div>
             <div class="space-y-3">
-                {{range .Trending}}
+                {{range .PersonalTrending}}
                 <a href="/articles/{{.ArticleID}}" class="block bg-spot-surface rounded-xl p-4 hover:bg-spot-hover-50 transition">
                     <div class="font-bold text-sm text-spot-text leading-tight">{{.Title}}</div>
                     <div class="flex items-center gap-2 mt-1 text-xs text-spot-secondary">
@@ -52,10 +77,7 @@
 
         {{if .PeopleRecommendations}}
         <div>
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-lg font-semibold text-spot-text">Similar readers</h2>
-                <a href="/discover" class="text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition">See all</a>
-            </div>
+            <h2 class="text-lg font-semibold text-spot-text mb-4">Similar readers</h2>
             <div class="space-y-3">
                 {{range .PeopleRecommendations}}
                 <div class="bg-spot-surface rounded-xl p-4 flex items-center gap-3 hover:bg-spot-hover-50 transition">
@@ -73,10 +95,7 @@
 
         {{if .FeedRecommendations}}
         <div>
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-lg font-semibold text-spot-text">Recommended feeds</h2>
-                <a href="/discover" class="text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition">See all</a>
-            </div>
+            <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended feeds</h2>
             <div class="space-y-3">
                 {{range .FeedRecommendations}}
                 {{template "recommendation-card.html" .}}

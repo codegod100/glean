@@ -190,6 +190,45 @@ type TrendingItem struct {
 	AnnotationCount int
 }
 
+func (db *DB) ListTrendingArticlesForUser(ctx context.Context, userDID, since string, limit, offset int) ([]*TrendingItem, error) {
+	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT ar.id, ar.title, COALESCE(ar.url, ''), COALESCE(ar.author, ''),
+		       COALESCE(ar.summary, ''), l.feed_url, COALESCE(f.title, ''),
+		       COUNT(DISTINCT l.id) AS like_count,
+		       COUNT(DISTINCT a.id) AS annotation_count
+		FROM likes l
+		JOIN articles ar ON ar.url = l.article_url AND ar.feed_url = l.feed_url
+		LEFT JOIN feeds f ON f.feed_url = l.feed_url
+		LEFT JOIN annotations a ON a.feed_url = l.feed_url AND a.article_url = l.article_url AND a.created_at >= ?
+		WHERE l.created_at >= ?
+		  AND l.author_did IN (
+		    SELECT CASE WHEN us.user_a = ? THEN us.user_b ELSE us.user_a END
+		    FROM user_similarity us
+		    WHERE us.user_a = ? OR us.user_b = ?
+		    UNION SELECT ?
+		  )
+		GROUP BY ar.id
+		ORDER BY like_count DESC, annotation_count DESC
+		LIMIT %d OFFSET %d
+	`, limit, offset), since, since, userDID, userDID, userDID, userDID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []*TrendingItem
+	for rows.Next() {
+		item := &TrendingItem{}
+		if err := rows.Scan(&item.ArticleID, &item.Title, &item.URL, &item.Author,
+			&item.Summary, &item.FeedURL, &item.FeedTitle,
+			&item.LikeCount, &item.AnnotationCount); err != nil {
+			return nil, err
+		}
+		results = append(results, item)
+	}
+	return results, rows.Err()
+}
+
 func (db *DB) ListTrendingArticles(ctx context.Context, since string, limit, offset int) ([]*TrendingItem, error) {
 	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
 		SELECT ar.id, ar.title, COALESCE(ar.url, ''), COALESCE(ar.author, ''),
@@ -221,4 +260,34 @@ func (db *DB) ListTrendingArticles(ctx context.Context, since string, limit, off
 		results = append(results, item)
 	}
 	return results, rows.Err()
+}
+
+func (db *DB) ListLikedArticles(ctx context.Context, userDID string, limit, offset int) ([]*Article, error) {
+	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT DISTINCT a.id, a.feed_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
+			a.published, a.updated, a.fetched_at,
+			COALESCE(f.title, '')
+		FROM likes l
+		JOIN articles a ON a.url = l.article_url AND a.feed_url = l.feed_url
+		LEFT JOIN feeds f ON f.feed_url = a.feed_url
+		WHERE l.author_did = ?
+		ORDER BY l.created_at DESC
+		LIMIT %d OFFSET %d
+	`, limit, offset), userDID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var articles []*Article
+	for rows.Next() {
+		a := &Article{}
+		if err := rows.Scan(&a.ID, &a.FeedURL, &a.GUID, &a.Title, &a.URL, &a.Author,
+			&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt,
+			&a.FeedTitle); err != nil {
+			return nil, err
+		}
+		articles = append(articles, a)
+	}
+	return articles, rows.Err()
 }

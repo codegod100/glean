@@ -1,0 +1,66 @@
+{{define "library.html"}}
+<div class="flex items-center justify-between mb-2">
+    <h1 class="text-2xl font-bold text-spot-text">Library</h1>
+    <div></div>
+</div>
+<p class="text-sm text-spot-secondary mb-6">Your liked articles and annotations.</p>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div>
+        <h2 class="text-lg font-semibold text-spot-text mb-4">Liked articles</h2>
+        <div id="liked-list" class="space-y-3">
+            {{range .Articles}}
+            {{template "article-card.html" .}}
+            {{else}}
+            <div class="text-center text-spot-secondary py-12">
+                <p>No liked articles yet.</p>
+                <p class="text-sm mt-1">Like articles to save them here.</p>
+            </div>
+            {{end}}
+        </div>
+
+        {{if .LikedHasMore}}
+        <div class="text-center py-4">
+            <button hx-get="/library?liked_offset={{.NextLiked}}"
+                    hx-target="#liked-list" hx-swap="beforeend"
+                    hx-select="article"
+                    class="text-sm text-spot-secondary hover:text-spot-green transition">
+                Load more
+            </button>
+        </div>
+        {{end}}
+    </div>
+
+    <div>
+        <h2 class="text-lg font-semibold text-spot-text mb-4">Annotations</h2>
+        <div id="annotations-list" class="space-y-3">
+            {{range .Annotations}}
+            <div class="bg-spot-surface rounded-xl p-4">
+                {{if .ArticleURL}}
+                <div class="text-xs text-spot-muted mb-2">
+                    <a href="{{.ArticleURL}}" class="text-spot-secondary hover:text-spot-green transition truncate block">{{.ArticleURL}}</a>
+                </div>
+                {{end}}
+                {{template "annotation-card.html" .}}
+            </div>
+            {{else}}
+            <div class="text-center text-spot-secondary py-12">
+                <p>No annotations yet.</p>
+                <p class="text-sm mt-1">Highlight and annotate articles as you read.</p>
+            </div>
+            {{end}}
+        </div>
+
+        {{if .AnnotHasMore}}
+        <div class="text-center py-4">
+            <button hx-get="/library?annot_offset={{.NextAnnot}}"
+                    hx-target="#annotations-list" hx-swap="beforeend"
+                    hx-select=".bg-spot-surface"
+                    class="text-sm text-spot-secondary hover:text-spot-green transition">
+                Load more
+            </button>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}

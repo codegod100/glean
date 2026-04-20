@@ -37,17 +37,30 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	feedURL := r.URL.Query().Get("feed")
 
-	articles, err := s.db.ListArticles(r.Context(), user.DID, feedURL, 50, 0)
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	if offset < 0 {
+		offset = 0
+	}
+	pageLimit := 50
+
+	articles, err := s.db.ListArticles(r.Context(), user.DID, feedURL, pageLimit+1, offset)
 	if err != nil {
 		s.logger.Error("failed to list articles", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	hasMore := len(articles) > pageLimit
+	if hasMore {
+		articles = articles[:pageLimit]
+	}
+
 	s.render(w, r, "articles.html", map[string]any{
-		"User":     user,
-		"Articles": articles,
-		"FeedURL":  feedURL,
+		"User":       user,
+		"Articles":   articles,
+		"FeedURL":    feedURL,
+		"HasMore":    hasMore,
+		"NextOffset": offset + pageLimit,
 	})
 }
 

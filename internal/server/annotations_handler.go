@@ -10,17 +10,6 @@ import (
 	"pkg.rbrt.fr/glean/internal/db"
 )
 
-func (s *Server) handleAnnotations(w http.ResponseWriter, r *http.Request) {
-	user := currentUser(r)
-	articleURL := r.URL.Query().Get("article")
-	annotations, _ := s.db.ListAnnotations(r.Context(), "", articleURL, "", 50, 0)
-	s.render(w, r, "annotations.html", map[string]any{
-		"User":        user,
-		"Annotations": annotations,
-		"ArticleURL":  articleURL,
-	})
-}
-
 func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	a := &db.Annotation{
