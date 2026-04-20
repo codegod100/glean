@@ -66,23 +66,25 @@
     <section>
         <h2 class="text-lg font-semibold text-spot-text mb-4">Annotations</h2>
 
-        <form hx-post="/library/create" hx-target="#annotations-list" hx-swap="beforeend"
+        <form id="annotation-form" hx-post="/library/create" hx-target="#annotations-list" hx-swap="beforeend"
               hx-on::after-request="this.reset()"
               class="bg-spot-surface rounded-xl shadow-spot p-4 mb-4 space-y-3">
             {{csrfInput .CSRFToken}}
             <input type="hidden" name="feed_url" value="{{.Article.FeedURL}}">
             <input type="hidden" name="article_url" value="{{if .Article.URL.Valid}}{{.Article.URL.String}}{{end}}">
+            <div id="quote-highlight" class="hidden mb-2">
+                <blockquote id="quote-preview" class="border-l-2 border-spot-green pl-3 text-sm text-spot-secondary italic"></blockquote>
+            </div>
+            <input type="hidden" name="quote" id="quote-input">
             <div>
                 <textarea name="note" rows="2" placeholder="Add a note..."
                           class="w-full bg-spot-hover text-spot-text rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder resize-none"></textarea>
             </div>
             <div class="flex gap-2">
-                <input type="text" name="quote" placeholder="Quote (optional)"
-                       class="flex-1 bg-spot-hover text-spot-text rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
                 <input type="text" name="tags" placeholder="Tags (comma separated)"
                        class="flex-1 bg-spot-hover text-spot-text rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
+                <button type="submit" class="bg-spot-green text-white rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Annotate</button>
             </div>
-            <button type="submit" class="bg-spot-green text-white rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Annotate</button>
         </form>
 
         <div id="annotations-list" class="space-y-3">
@@ -97,11 +99,33 @@
 
 <script>
 (function() {
-    var readScrollPos = 0;
-    var articleBody = document.querySelector('.article-body');
-    if (articleBody) {
-        readScrollPos = window.scrollY;
-    }
+    var form = document.getElementById('annotation-form');
+    var quoteInput = document.getElementById('quote-input');
+    var quotePreview = document.getElementById('quote-preview');
+    var quoteHighlight = document.getElementById('quote-highlight');
+
+    document.addEventListener('mouseup', function(e) {
+        var sel = window.getSelection();
+        var text = sel.toString().trim();
+        if (!text) return;
+
+        var body = e.target.closest('.article-body');
+        if (!body) return;
+
+        if (text.length > 1000) text = text.substring(0, 1000);
+        quoteInput.value = text;
+        quotePreview.textContent = text;
+        quoteHighlight.classList.remove('hidden');
+        form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        form.querySelector('textarea[name="note"]').focus();
+    });
+
+    var origReset = form.reset.bind(form);
+    form.reset = function() {
+        origReset();
+        quoteInput.value = '';
+        quoteHighlight.classList.add('hidden');
+    };
 
     document.addEventListener('keydown', function(e) {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;

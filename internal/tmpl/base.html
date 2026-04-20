@@ -220,14 +220,34 @@
     }
     updateThemeIcons(document.documentElement.getAttribute('data-theme') || 'dark');
 
-    function toggleAnnotate(btn) {
-        var card = btn.closest('article');
-        var form = card.querySelector('.annotate-form');
-        form.classList.toggle('hidden');
-        if (!form.classList.contains('hidden')) {
-            form.querySelector('input[name="quote"]').focus();
-        }
+    function closeAnnotate(el) {
+        var form = el.closest('.annotate-form');
+        form.classList.add('hidden');
+        form.querySelector('form').reset();
     }
+
+    function openAnnotate(article, quote) {
+        var form = article.querySelector('.annotate-form');
+        var quoteInput = form.querySelector('input[name="quote"]');
+        if (quote) quoteInput.value = quote;
+        form.classList.remove('hidden');
+        (quote ? form.querySelector('input[name="note"]') : quoteInput).focus();
+    }
+
+    document.addEventListener('mouseup', function(e) {
+        var sel = window.getSelection();
+        var text = sel.toString().trim();
+        if (!text) return;
+
+        var article = e.target.closest('article[data-article-id]');
+        if (!article) return;
+
+        var form = article.querySelector('.annotate-form');
+        if (form && !form.classList.contains('hidden')) return;
+
+        if (text.length > 500) text = text.substring(0, 500);
+        openAnnotate(article, text);
+    });
 
     document.addEventListener('keydown', function(e) {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;

@@ -1,5 +1,5 @@
 {{define "article-card.html"}}
-<article data-article-id="{{.ID}}" class="group bg-spot-surface rounded-xl px-5 py-4 hover:bg-spot-hover-50 transition shadow-spot relative">
+<article data-article-id="{{.ID}}" data-feed-url="{{.FeedURL}}" data-article-url="{{if .URL.Valid}}{{.URL.String}}{{end}}" class="bg-spot-surface rounded-xl px-5 py-4 hover:bg-spot-hover-50 transition shadow-spot relative">
     <div class="flex items-start justify-between gap-4">
         <div class="min-w-0 flex-1">
             <a href="/articles/{{.ID}}" class="font-bold text-spot-text hover:text-spot-green transition text-lg leading-tight">{{.Title}}</a>
@@ -14,21 +14,19 @@
         </div>
         <div class="flex flex-col items-center gap-1 shrink-0">
             {{template "like-button.html" .}}
-            <button type="button" onclick="toggleAnnotate(this)" class="opacity-0 group-hover:opacity-100 text-spot-muted hover:text-spot-green text-xs transition mt-1" title="Annotate">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>
-            </button>
         </div>
     </div>
     <div class="annotate-form hidden mt-3 pt-3 border-t border-spot-divider">
-        <form hx-post="/library/create" hx-swap="none" hx-on::after-request="toggleAnnotate(this.closest('.annotate-form').previousElementSibling)">
+        <form hx-post="/library/create" hx-swap="none" hx-on::after-request="closeAnnotate(this)" class="space-y-2">
             <input type="hidden" name="feed_url" value="{{.FeedURL}}">
             <input type="hidden" name="article_url" value="{{if .URL.Valid}}{{.URL.String}}{{end}}">
+            <input type="text" name="quote" placeholder="Quote a passage..."
+                   class="w-full bg-spot-hover text-spot-text rounded-pill px-4 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
             <div class="flex gap-2">
-                <input type="text" name="quote" placeholder="Quote a passage..."
+                <input type="text" name="note" placeholder="Add a note..."
                        class="flex-1 bg-spot-hover text-spot-text rounded-pill px-4 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
-                <input type="text" name="note" placeholder="Note (optional)"
-                       class="flex-1 bg-spot-hover text-spot-text rounded-pill px-4 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
-                <button type="submit" class="bg-spot-green text-white rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:brightness-110 transition">Save</button>
+                <button type="submit" class="bg-spot-green text-white rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:brightness-110 transition">Annotate</button>
+                <button type="button" onclick="closeAnnotate(this)" class="text-spot-secondary hover:text-spot-text px-2 text-sm transition">&times;</button>
             </div>
         </form>
     </div>
