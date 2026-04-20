@@ -137,6 +137,23 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if liked {
+		existingLike, getErr := s.db.GetLike(r.Context(), user.DID, article.FeedURL, article.URL.String)
+		if getErr != nil {
+			http.Error(w, getErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		if existingLike.URI != "" {
+			if client := s.pdsClientForUser(r); client != nil {
+				parsed, ok := atproto.ParseRecordURI(existingLike.URI)
+				if ok {
+					if delErr := client.DeleteRecord(r.Context(), user.DID, parsed.Collection, parsed.RKey); delErr != nil {
+						s.logger.Error("failed to delete like from PDS", "error", delErr)
+						http.Error(w, "failed to delete like from PDS: "+delErr.Error(), http.StatusBadGateway)
+						return
+					}
+				}
+			}
+		}
 		if err := s.db.DeleteLikeByUserArticle(r.Context(), user.DID, article.FeedURL, article.URL.String); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -151,7 +168,9 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 		if client := s.pdsClientForUser(r); client != nil {
 			uri, _, err := client.CreateRecord(r.Context(), user.DID, "at.glean.like", likeRecord)
 			if err != nil {
-				s.logger.Warn("failed to write like to PDS", "error", err)
+				s.logger.Error("failed to write like to PDS", "error", err)
+				http.Error(w, "failed to write like to PDS: "+err.Error(), http.StatusBadGateway)
+				return
 			}
 
 			like := &db.Like{

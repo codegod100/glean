@@ -1,8 +1,11 @@
 {{define "login.html"}}
 <div class="max-w-md mx-auto mt-20">
     <div class="bg-spot-surface rounded-xl shadow-spot-heavy p-8">
-        <h1 class="text-2xl font-bold text-spot-text mb-2">Sign in to Glean</h1>
-        <p class="text-spot-secondary text-sm mb-6">Enter your handle.</p>
+        <div class="flex justify-center mb-6">
+            <span class="w-14 h-14">{{template "logo-icon"}}</span>
+        </div>
+        <h1 class="text-2xl font-bold text-spot-text mb-2 text-center">Sign in to Glean</h1>
+        <p class="text-spot-secondary text-sm mb-6 text-center">Enter your handle.</p>
 
         <form action="/auth/start" method="POST" id="login-form">
             {{csrfInput .CSRFToken}}

@@ -44,7 +44,8 @@
             {{range .Subscriptions}}
             <div class="px-5 py-4 flex items-center justify-between hover:bg-spot-hover-50 transition rounded-xl">
                 <div class="min-w-0">
-                    <div class="font-bold text-spot-text">{{if .FeedTitle}}{{.FeedTitle}}{{else}}{{.FeedURL}}{{end}}</div>
+                    <div class="font-bold text-spot-text truncate">{{if .FeedTitle}}{{.FeedTitle}}{{else}}{{.FeedURL}}{{end}}</div>
+                    {{if and .FeedTitle .FeedURL}}<div class="text-xs text-spot-muted truncate">{{.FeedURL}}</div>{{end}}
                     {{if .Category.Valid}}<span class="text-xs text-spot-secondary">{{.Category.String}}</span>{{end}}
                 </div>
                 <div class="flex items-center gap-3">

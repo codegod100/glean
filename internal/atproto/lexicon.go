@@ -1,6 +1,9 @@
 package atproto
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type SubscriptionRecord struct {
 	CreatedAt string `json:"createdAt"`
@@ -123,4 +126,21 @@ type RecommendedPerson struct {
 type GetRecommendationsResponse struct {
 	Feeds  []RecommendedFeed  `json:"feeds"`
 	People []RecommendedPerson `json:"people"`
+}
+
+type RecordURI struct {
+	DID        string
+	Collection string
+	RKey       string
+}
+
+func ParseRecordURI(uri string) (RecordURI, bool) {
+	if !strings.HasPrefix(uri, "at://") {
+		return RecordURI{}, false
+	}
+	parts := strings.SplitN(uri[5:], "/", 3)
+	if len(parts) != 3 {
+		return RecordURI{}, false
+	}
+	return RecordURI{DID: parts[0], Collection: parts[1], RKey: parts[2]}, true
 }

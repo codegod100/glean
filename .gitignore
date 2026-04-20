@@ -28,3 +28,6 @@ go.work.sum
 # tailwind
 static/output.css
 node_modules/
+
+# todo
+todo.md

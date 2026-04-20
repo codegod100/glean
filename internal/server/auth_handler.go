@@ -124,6 +124,8 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
+	s.syncUserInBackground(user.DID, s.pdsClientFromSession(sessData))
+
 	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }
 
@@ -147,6 +149,15 @@ func (s *Server) fetchUserProfile(ctx context.Context, sessData *oauth.ClientSes
 		return "", ""
 	}
 	return profile.DisplayName, profile.Avatar
+}
+
+func (s *Server) pdsClientFromSession(sessData *oauth.ClientSessionData) *atproto.Client {
+	session, err := s.oauth.ResumeSession(context.Background(), sessData.AccountDID, sessData.SessionID)
+	if err != nil {
+		s.logger.Warn("failed to resume session for sync", "error", err)
+		return nil
+	}
+	return &atproto.Client{APIClient: session.APIClient()}
 }
 
 func (s *Server) handleOAuthClientMetadata(w http.ResponseWriter, r *http.Request) {

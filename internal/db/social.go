@@ -152,6 +152,18 @@ func (db *DB) GetLikeCount(ctx context.Context, feedURL, articleURL string) (int
 	return count, err
 }
 
+func (db *DB) GetLike(ctx context.Context, authorDID, feedURL, articleURL string) (*Like, error) {
+	l := &Like{}
+	err := db.QueryRowContext(ctx, `
+		SELECT id, uri, author_did, feed_url, article_url, created_at, cid FROM likes
+		WHERE author_did = ? AND feed_url = ? AND article_url = ?
+	`, authorDID, feedURL, articleURL).Scan(&l.ID, &l.URI, &l.AuthorDID, &l.FeedURL, &l.ArticleURL, &l.CreatedAt, &l.CID)
+	if err != nil {
+		return nil, err
+	}
+	return l, nil
+}
+
 func (db *DB) HasLiked(ctx context.Context, authorDID, feedURL, articleURL string) (bool, error) {
 	var exists int
 	err := db.QueryRowContext(ctx, `

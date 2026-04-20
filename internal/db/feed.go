@@ -34,6 +34,8 @@ type Subscription struct {
 	AddedAt       sql.NullTime
 	UnreadCount   int
 	FetchInterval int
+	URI           sql.NullString
+	CID           sql.NullString
 }
 
 func (db *DB) UpsertFeed(ctx context.Context, feed *Feed) error {
@@ -124,15 +126,29 @@ func (db *DB) DecrementSubscriberCount(ctx context.Context, feedURL string) erro
 	return err
 }
 
-func (db *DB) CreateSubscription(ctx context.Context, userDID, feedURL, category string) error {
+func (db *DB) CreateSubscription(ctx context.Context, userDID, feedURL, category, uri, cid string) error {
 	_, err := db.ExecContext(ctx, `
-		INSERT INTO subscriptions (user_did, feed_url, category)
-		VALUES (?, ?, ?)
-	`, userDID, feedURL, category)
+		INSERT INTO subscriptions (user_did, feed_url, category, uri, cid)
+		VALUES (?, ?, ?, ?, ?)
+	`, userDID, feedURL, category, uriOrNil(category, uri), uriOrNil(category, cid))
 	if err != nil {
 		return err
 	}
 	return db.IncrementSubscriberCount(ctx, feedURL)
+}
+
+func (db *DB) UpdateSubscriptionURI(ctx context.Context, userDID, feedURL, uri, cid string) error {
+	_, err := db.ExecContext(ctx, `
+		UPDATE subscriptions SET uri = ?, cid = ? WHERE user_did = ? AND feed_url = ?
+	`, uri, cid, userDID, feedURL)
+	return err
+}
+
+func uriOrNil(category, v string) any {
+	if v == "" {
+		return nil
+	}
+	return v
 }
 
 func (db *DB) DeleteSubscription(ctx context.Context, userDID, feedURL string) error {
@@ -145,9 +161,24 @@ func (db *DB) DeleteSubscription(ctx context.Context, userDID, feedURL string) e
 	return db.DecrementSubscriberCount(ctx, feedURL)
 }
 
+func (db *DB) GetSubscription(ctx context.Context, userDID, feedURL string) (*Subscription, error) {
+	s := &Subscription{}
+	err := db.QueryRowContext(ctx, `
+		SELECT s.id, s.user_did, s.feed_url, COALESCE(f.title, ''), s.category, s.added_at,
+		COALESCE(f.fetch_interval_minutes, 30), s.uri, s.cid
+		FROM subscriptions s
+		LEFT JOIN feeds f ON s.feed_url = f.feed_url
+		WHERE s.user_did = ? AND s.feed_url = ?
+	`, userDID, feedURL).Scan(&s.ID, &s.UserDID, &s.FeedURL, &s.FeedTitle, &s.Category, &s.AddedAt, &s.FetchInterval, &s.URI, &s.CID)
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
 func (db *DB) ListSubscriptions(ctx context.Context, userDID, category string, limit, offset int) ([]*Subscription, error) {
 	query := `SELECT s.id, s.user_did, s.feed_url, COALESCE(f.title, ''), s.category, s.added_at,
-		COALESCE(f.fetch_interval_minutes, 30)
+		COALESCE(f.fetch_interval_minutes, 30), s.uri, s.cid
 		FROM subscriptions s
 		LEFT JOIN feeds f ON s.feed_url = f.feed_url
 		WHERE s.user_did = ?`
@@ -169,7 +200,7 @@ func (db *DB) ListSubscriptions(ctx context.Context, userDID, category string, l
 	var subs []*Subscription
 	for rows.Next() {
 		s := &Subscription{}
-		if err := rows.Scan(&s.ID, &s.UserDID, &s.FeedURL, &s.FeedTitle, &s.Category, &s.AddedAt, &s.FetchInterval); err != nil {
+		if err := rows.Scan(&s.ID, &s.UserDID, &s.FeedURL, &s.FeedTitle, &s.Category, &s.AddedAt, &s.FetchInterval, &s.URI, &s.CID); err != nil {
 			return nil, err
 		}
 		subs = append(subs, s)

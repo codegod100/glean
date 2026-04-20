@@ -24,7 +24,6 @@ func (s *Server) handleAnnotations(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	a := &db.Annotation{
-		URI:        fmt.Sprintf("glean:annotation:%d", time.Now().UnixNano()),
 		AuthorDID:  user.DID,
 		FeedURL:    r.FormValue("feed_url"),
 		ArticleURL: r.FormValue("article_url"),
@@ -40,11 +39,6 @@ func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	if err := s.db.CreateAnnotation(r.Context(), a); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	if client := s.pdsClientForUser(r); client != nil {
 		record := atproto.AnnotationRecord{
 			CreatedAt:  time.Now().Format(time.RFC3339),
@@ -54,9 +48,21 @@ func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) 
 			Note:       a.Note.String,
 			Rating:     int(a.Rating.Int64),
 		}
-		if _, _, err := client.CreateRecord(r.Context(), user.DID, "at.glean.annotation", record); err != nil {
-			s.logger.Warn("failed to write annotation to PDS", "error", err)
+		uri, cid, err := client.CreateRecord(r.Context(), user.DID, "at.glean.annotation", record)
+		if err != nil {
+			s.logger.Error("failed to write annotation to PDS", "error", err)
+			http.Error(w, "failed to write annotation to PDS: "+err.Error(), http.StatusBadGateway)
+			return
 		}
+		a.URI = uri
+		a.CID = sql.NullString{String: cid, Valid: true}
+	} else {
+		a.URI = fmt.Sprintf("glean:annotation:%d", time.Now().UnixNano())
+	}
+
+	if err := s.db.CreateAnnotation(r.Context(), a); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)

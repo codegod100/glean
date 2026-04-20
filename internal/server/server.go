@@ -29,22 +29,19 @@ func splitString(s, sep string) []string {
 }
 
 type Server struct {
-	db         *db.DB
-	router     *chi.Mux
-	templates  *template.Template
-	logger     *slog.Logger
-	oauth      *oauth.ClientApp
-	oauthStore *db.OAuthStore
-	fetcher    *feed.Fetcher
-	clientID   string
+	db          *db.DB
+	router      *chi.Mux
+	templates   *template.Template
+	logger      *slog.Logger
+	oauth       *oauth.ClientApp
+	oauthStore  *db.OAuthStore
+	fetcher     *feed.Fetcher
+	clientID    string
 	callbackURL string
 }
 
 func New(database *db.DB, clientID, callbackURL, addr string, logger *slog.Logger) *Server {
 	oauthStore := db.NewOAuthStore(database)
-	if err := oauthStore.Init(context.Background()); err != nil {
-		logger.Error("failed to init oauth store", "error", err)
-	}
 
 	var config oauth.ClientConfig
 	if clientID == "" {
@@ -256,6 +253,63 @@ func (s *Server) pdsClientForUser(r *http.Request) *atproto.Client {
 		return atproto.NewClient(session.PDSURL, session.AccessToken)
 	}
 	return nil
+}
+
+func (s *Server) syncUserInBackground(userDID string, client *atproto.Client) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		sync := atproto.NewSync(s.db, client, s.logger)
+		if err := sync.Run(ctx, userDID); err != nil {
+			s.logger.Error("background sync failed", "error", err, "did", userDID)
+		}
+	}()
+}
+
+func (s *Server) PeriodicSync(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.runSyncAll(ctx)
+		}
+	}
+}
+
+func (s *Server) runSyncAll(ctx context.Context) {
+	users, err := s.db.ListUsers(ctx)
+	if err != nil {
+		s.logger.Error("failed to list users for sync", "error", err)
+		return
+	}
+
+	for _, u := range users {
+		sessionIDs, err := s.oauthStore.ListSessionsForDID(ctx, u.DID)
+		if err != nil || len(sessionIDs) == 0 {
+			continue
+		}
+
+		did, err := syntax.ParseDID(u.DID)
+		if err != nil {
+			continue
+		}
+
+		sess, err := s.oauth.ResumeSession(ctx, did, sessionIDs[0])
+		if err != nil {
+			s.logger.Warn("failed to resume session for periodic sync", "error", err, "did", u.DID)
+			continue
+		}
+
+		client := &atproto.Client{APIClient: sess.APIClient()}
+		sync := atproto.NewSync(s.db, client, s.logger)
+		if err := sync.Run(ctx, u.DID); err != nil {
+			s.logger.Error("periodic sync failed", "error", err, "did", u.DID)
+		}
+	}
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

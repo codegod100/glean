@@ -44,10 +44,8 @@ func main() {
 	engine := cluster.NewEngine(database.DB, logger)
 	cron := cluster.NewCron(engine, 6*time.Hour, logger)
 
-	firehose := atproto.NewFirehoseConsumer(*relayURL, func(ctx context.Context, event *atproto.FirehoseEvent) error {
-		logger.Debug("firehose event", "type", event.Type, "collection", event.Collection, "did", event.DID)
-		return nil
-	}, logger)
+	firehoseHandler := atproto.NewFirehoseDBHandler(database, logger)
+	firehose := atproto.NewFirehoseConsumer(*relayURL, firehoseHandler.Handle, logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -61,6 +59,9 @@ func main() {
 		if err := cron.Run(ctx); err != nil && ctx.Err() == nil {
 			logger.Error("cron error", "error", err)
 		}
+	}()
+	go func() {
+		srv.PeriodicSync(ctx, 1*time.Hour)
 	}()
 	go func() {
 		if err := firehose.Start(ctx); err != nil && ctx.Err() == nil {

@@ -18,27 +18,6 @@ func NewOAuthStore(db *DB) *OAuthStore {
 	return &OAuthStore{db: db}
 }
 
-func (s *OAuthStore) Init(ctx context.Context) error {
-	stmts := []string{
-		`CREATE TABLE IF NOT EXISTS oauth_auth_requests (
-			state TEXT PRIMARY KEY,
-			data TEXT NOT NULL
-		)`,
-		`CREATE TABLE IF NOT EXISTS oauth_sessions (
-			account_did TEXT NOT NULL,
-			session_id TEXT NOT NULL,
-			data TEXT NOT NULL,
-			PRIMARY KEY (account_did, session_id)
-		)`,
-	}
-	for _, stmt := range stmts {
-		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (s *OAuthStore) GetSession(ctx context.Context, did syntax.DID, sessionID string) (*oauth.ClientSessionData, error) {
 	var data []byte
 	err := s.db.QueryRowContext(ctx, `
@@ -75,6 +54,26 @@ func (s *OAuthStore) DeleteSession(ctx context.Context, did syntax.DID, sessionI
 		DELETE FROM oauth_sessions WHERE account_did = ? AND session_id = ?
 	`, did.String(), sessionID)
 	return err
+}
+
+func (s *OAuthStore) ListSessionsForDID(ctx context.Context, did string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT session_id FROM oauth_sessions WHERE account_did = ? ORDER BY ROWID DESC
+	`, did)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 func (s *OAuthStore) GetAuthRequestInfo(ctx context.Context, state string) (*oauth.AuthRequestData, error) {

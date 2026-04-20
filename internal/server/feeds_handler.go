@@ -85,22 +85,33 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.db.CreateSubscription(r.Context(), user.DID, feedURL, category); err != nil {
-		s.logger.Error("failed to create subscription", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	var feedTitle string
+	if result != nil {
+		feedTitle = result.Feed.Title
 	}
 
+	var subURI, subCID string
 	if client := s.pdsClientForUser(r); client != nil {
 		record := atproto.SubscriptionRecord{
 			CreatedAt: time.Now().Format(time.RFC3339),
 			FeedURL:   feedURL,
-			Title:     result.Feed.Title,
+			Title:     feedTitle,
 			Category:  category,
 		}
-		if _, _, err := client.CreateRecord(r.Context(), user.DID, "at.glean.subscription", record); err != nil {
-			s.logger.Warn("failed to write subscription to PDS", "error", err)
+		uri, cid, err := client.CreateRecord(r.Context(), user.DID, "at.glean.subscription", record)
+		if err != nil {
+			s.logger.Error("failed to write subscription to PDS", "error", err)
+			http.Error(w, "failed to write subscription to PDS: "+err.Error(), http.StatusBadGateway)
+			return
 		}
+		subURI = uri
+		subCID = cid
+	}
+
+	if err := s.db.CreateSubscription(r.Context(), user.DID, feedURL, category, subURI, subCID); err != nil {
+		s.logger.Error("failed to create subscription", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	subs, _ := s.db.ListSubscriptions(r.Context(), user.DID, "", 100, 0)
@@ -117,6 +128,20 @@ func (s *Server) handleRemoveFeed(w http.ResponseWriter, r *http.Request) {
 	if feedURL == "" {
 		http.Error(w, "url required", http.StatusBadRequest)
 		return
+	}
+
+	sub, err := s.db.GetSubscription(r.Context(), user.DID, feedURL)
+	if err == nil && sub.URI.Valid {
+		if client := s.pdsClientForUser(r); client != nil {
+			parsed, ok := atproto.ParseRecordURI(sub.URI.String)
+			if ok {
+				if delErr := client.DeleteRecord(r.Context(), user.DID, parsed.Collection, parsed.RKey); delErr != nil {
+					s.logger.Error("failed to delete subscription from PDS", "error", delErr)
+					http.Error(w, "failed to delete subscription from PDS: "+delErr.Error(), http.StatusBadGateway)
+					return
+				}
+			}
+		}
 	}
 
 	if err := s.db.DeleteSubscription(r.Context(), user.DID, feedURL); err != nil {
@@ -155,10 +180,8 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 			s.logger.Error("failed to upsert feed", "error", upsertErr)
 			continue
 		}
-		if subErr := s.db.CreateSubscription(r.Context(), user.DID, fu.URL, fu.Category); subErr != nil {
-			s.logger.Error("failed to create subscription", "error", subErr)
-			continue
-		}
+
+		var subURI, subCID string
 		if client != nil {
 			record := atproto.SubscriptionRecord{
 				CreatedAt: time.Now().Format(time.RFC3339),
@@ -166,9 +189,18 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 				Title:     fu.Title,
 				Category:  fu.Category,
 			}
-			if _, _, err := client.CreateRecord(r.Context(), user.DID, "at.glean.subscription", record); err != nil {
-				s.logger.Warn("failed to write subscription to PDS", "error", err, "url", fu.URL)
+			uri, cid, err := client.CreateRecord(r.Context(), user.DID, "at.glean.subscription", record)
+			if err != nil {
+				s.logger.Error("failed to write subscription to PDS", "error", err, "url", fu.URL)
+				continue
 			}
+			subURI = uri
+			subCID = cid
+		}
+
+		if subErr := s.db.CreateSubscription(r.Context(), user.DID, fu.URL, fu.Category, subURI, subCID); subErr != nil {
+			s.logger.Error("failed to create subscription", "error", subErr)
+			continue
 		}
 		added++
 	}

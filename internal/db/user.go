@@ -53,3 +53,24 @@ func (db *DB) GetUserByHandle(ctx context.Context, handle string) (*User, error)
 	}
 	return u, nil
 }
+
+func (db *DB) ListUsers(ctx context.Context) ([]*User, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT did, handle, display_name, avatar_url, indexed_at, updated_at
+		FROM users ORDER BY updated_at DESC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []*User
+	for rows.Next() {
+		u := &User{}
+		if err := rows.Scan(&u.DID, &u.Handle, &u.DisplayName, &u.AvatarURL, &u.IndexedAt, &u.UpdatedAt); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}

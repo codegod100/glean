@@ -88,9 +88,9 @@ func (c *Client) createRecordWithAPI(ctx context.Context, did, collection string
 		CID string `json:"cid"`
 	}
 
-	nsid, err := syntax.ParseNSID(collection)
+	nsid, err := syntax.ParseNSID("com.atproto.repo.createRecord")
 	if err != nil {
-		return "", "", fmt.Errorf("parsing collection NSID: %w", err)
+		return "", "", fmt.Errorf("parsing NSID: %w", err)
 	}
 
 	if err := c.APIClient.Post(ctx, nsid, input, &out); err != nil {
@@ -100,13 +100,21 @@ func (c *Client) createRecordWithAPI(ctx context.Context, did, collection string
 }
 
 func (c *Client) DeleteRecord(ctx context.Context, did, collection, rkey string) error {
-	body := map[string]any{
+	input := map[string]any{
 		"repo":       did,
 		"collection": collection,
 		"rkey":       rkey,
 	}
 
-	data, err := json.Marshal(body)
+	if c.APIClient != nil {
+		nsid, err := syntax.ParseNSID("com.atproto.repo.deleteRecord")
+		if err != nil {
+			return fmt.Errorf("parsing NSID: %w", err)
+		}
+		return c.APIClient.Post(ctx, nsid, input, nil)
+	}
+
+	data, err := json.Marshal(input)
 	if err != nil {
 		return err
 	}
@@ -133,6 +141,10 @@ func (c *Client) DeleteRecord(ctx context.Context, did, collection, rkey string)
 }
 
 func (c *Client) ListRecords(ctx context.Context, did, collection string, limit int, cursor string) ([]Record, string, error) {
+	if c.APIClient != nil {
+		return c.listRecordsWithAPI(ctx, did, collection, limit, cursor)
+	}
+
 	url := fmt.Sprintf("%s/xrpc/com.atproto.repo.listRecords?repo=%s&collection=%s", c.pdsURL, did, collection)
 	if limit > 0 {
 		url += fmt.Sprintf("&limit=%d", limit)
@@ -177,6 +189,46 @@ func (c *Client) ListRecords(ctx context.Context, did, collection string, limit 
 			Value: r.Value,
 		}
 	}
+	return records, result.Cursor, nil
+}
 
+func (c *Client) listRecordsWithAPI(ctx context.Context, did, collection string, limit int, cursor string) ([]Record, string, error) {
+	nsid, err := syntax.ParseNSID("com.atproto.repo.listRecords")
+	if err != nil {
+		return nil, "", fmt.Errorf("parsing NSID: %w", err)
+	}
+
+	params := map[string]any{
+		"repo":       did,
+		"collection": collection,
+	}
+	if limit > 0 {
+		params["limit"] = limit
+	}
+	if cursor != "" {
+		params["cursor"] = cursor
+	}
+
+	var result struct {
+		Records []struct {
+			URI   string          `json:"uri"`
+			CID   string          `json:"cid"`
+			Value json.RawMessage `json:"value"`
+		} `json:"records"`
+		Cursor string `json:"cursor"`
+	}
+
+	if err := c.APIClient.Get(ctx, nsid, params, &result); err != nil {
+		return nil, "", err
+	}
+
+	records := make([]Record, len(result.Records))
+	for i, r := range result.Records {
+		records[i] = Record{
+			URI:   r.URI,
+			CID:   r.CID,
+			Value: r.Value,
+		}
+	}
 	return records, result.Cursor, nil
 }
