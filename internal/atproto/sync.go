@@ -31,6 +31,9 @@ func (s *Sync) Run(ctx context.Context, userDID string) error {
 	if err := s.syncCollection(ctx, userDID, "at.glean.annotation", s.reconcileAnnotation); err != nil {
 		s.logger.Error("sync annotations failed", "error", err, "did", userDID)
 	}
+	if err := s.syncFollows(ctx, userDID); err != nil {
+		s.logger.Error("sync follows failed", "error", err, "did", userDID)
+	}
 
 	return nil
 }
@@ -147,4 +150,51 @@ func (s *Sync) reconcileAnnotation(ctx context.Context, userDID, uri, cid string
 		a.Rating = db.NullInt(int64(rec.Rating))
 	}
 	return s.db.CreateAnnotation(ctx, a)
+}
+
+func (s *Sync) syncFollows(ctx context.Context, userDID string) error {
+	activeFollows := make(map[string]db.Follow)
+
+	for _, collection := range []string{"app.bsky.graph.follow", "sh.tangled.graph.follow"} {
+		cursor := ""
+		for {
+			records, next, err := s.client.ListRecords(ctx, userDID, collection, 100, cursor)
+			if err != nil {
+				return err
+			}
+
+			for _, r := range records {
+				var rec FollowRecord
+				if err := json.Unmarshal(r.Value, &rec); err != nil {
+					continue
+				}
+				if rec.Subject == "" {
+					continue
+				}
+
+				t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
+				activeFollows[rec.Subject] = db.Follow{
+					URI:        db.NullStr(r.URI),
+					CID:        db.NullStr(r.CID),
+					FollowedAt: db.NullTime(t),
+				}
+
+				var handle string
+				if rec.Subject != userDID {
+					s.db.CreateUser(ctx, rec.Subject, handle, "", "")
+				}
+			}
+
+			if next == "" || len(records) == 0 {
+				break
+			}
+			cursor = next
+		}
+	}
+
+	if len(activeFollows) == 0 {
+		return nil
+	}
+
+	return s.db.SyncFollows(ctx, userDID, activeFollows)
 }

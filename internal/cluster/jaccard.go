@@ -120,6 +120,21 @@ func (e *Engine) ComputeUserSimilarity(ctx context.Context) error {
 		return err
 	}
 
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO user_similarity (user_a, user_b, jaccard, common_feeds)
+		SELECT
+			MIN(f.user_did, f.target_did),
+			MAX(f.user_did, f.target_did),
+			0.5,
+			0
+		FROM follows f
+		ON CONFLICT(user_a, user_b) DO UPDATE SET
+			jaccard = jaccard + 0.5
+	`)
+	if err != nil {
+		return err
+	}
+
 	e.logger.Info("user similarity computed")
 	return tx.Commit()
 }

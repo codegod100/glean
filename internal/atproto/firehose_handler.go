@@ -27,6 +27,8 @@ func (h *FirehoseDBHandler) Handle(ctx context.Context, event *FirehoseEvent) er
 		return h.handleLike(ctx, event)
 	case "at.glean.annotation":
 		return h.handleAnnotation(ctx, event)
+	case "app.bsky.graph.follow", "sh.tangled.graph.follow":
+		return h.handleFollow(ctx, event)
 	}
 	return nil
 }
@@ -132,6 +134,24 @@ func (h *FirehoseDBHandler) handleAnnotation(ctx context.Context, event *Firehos
 
 	case "delete":
 		return h.db.DeleteAnnotation(ctx, event.URI)
+	}
+	return nil
+}
+
+func (h *FirehoseDBHandler) handleFollow(ctx context.Context, event *FirehoseEvent) error {
+	switch event.Type {
+	case "create":
+		var rec FollowRecord
+		if err := json.Unmarshal(event.Value, &rec); err != nil {
+			return err
+		}
+		if rec.Subject == "" {
+			return nil
+		}
+		return h.db.UpsertFollow(ctx, event.DID, rec.Subject, event.URI, event.CID)
+
+	case "delete":
+		return h.db.DeleteFollowByURI(ctx, event.URI)
 	}
 	return nil
 }

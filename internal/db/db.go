@@ -169,6 +169,14 @@ var schema = []string{
 		computed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		PRIMARY KEY (user_did, feed_url, article_url)
 	)`,
+	`CREATE TABLE IF NOT EXISTS follows (
+		user_did TEXT NOT NULL REFERENCES users(did),
+		target_did TEXT NOT NULL,
+		uri TEXT,
+		cid TEXT,
+		followed_at DATETIME,
+		PRIMARY KEY (user_did, target_did)
+	)`,
 	`CREATE TABLE IF NOT EXISTS oauth_auth_requests (
 		state TEXT PRIMARY KEY,
 		data TEXT NOT NULL
@@ -187,4 +195,6 @@ var schema = []string{
 	`CREATE INDEX IF NOT EXISTS idx_annotations_article ON annotations(article_url)`,
 	`CREATE INDEX IF NOT EXISTS idx_likes_article ON likes(feed_url, article_url)`,
 	`CREATE INDEX IF NOT EXISTS idx_likes_author ON likes(author_did)`,
+	`CREATE INDEX IF NOT EXISTS idx_follows_user ON follows(user_did)`,
+	`CREATE INDEX IF NOT EXISTS idx_follows_target ON follows(target_did)`,
 }

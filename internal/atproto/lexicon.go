@@ -28,6 +28,11 @@ type LikeRecord struct {
 	ArticleURL string `json:"articleUrl"`
 }
 
+type FollowRecord struct {
+	Subject   string `json:"subject"`
+	CreatedAt string `json:"createdAt"`
+}
+
 type Record struct {
 	URI        string
 	CID        string

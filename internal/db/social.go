@@ -223,11 +223,12 @@ func (db *DB) ListTrendingArticlesForUser(ctx context.Context, userDID, since st
 		    FROM user_similarity us
 		    WHERE us.user_a = ? OR us.user_b = ?
 		    UNION SELECT ?
+		    UNION SELECT f.target_did FROM follows f WHERE f.user_did = ?
 		  )
 		GROUP BY ar.id
 		ORDER BY like_count DESC, annotation_count DESC
 		LIMIT %d OFFSET %d
-	`, limit, offset), since, since, userDID, userDID, userDID, userDID)
+	`, limit, offset), since, since, userDID, userDID, userDID, userDID, userDID)
 	if err != nil {
 		return nil, err
 	}

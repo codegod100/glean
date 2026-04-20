@@ -40,10 +40,11 @@ func NewFirehoseConsumer(relayURL string, handler FirehoseHandler, logger *slog.
 		handler:  handler,
 		logger:   logger,
 		collections: map[string]bool{
-			"at.glean.subscription": true,
-			"at.glean.annotation":   true,
-			"at.glean.like":         true,
-			// TODO: support at.margin.annotation as well (ref: https://tangled.org/did:plc:rgvlxa3ecwx3bfyzlrzrwtrs/issues/1)
+			"at.glean.subscription":   true,
+			"at.glean.annotation":     true,
+			"at.glean.like":           true,
+			"app.bsky.graph.follow":   true,
+			"sh.tangled.graph.follow": true,
 		},
 	}
 }
