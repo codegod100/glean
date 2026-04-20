@@ -33,7 +33,13 @@
         </div>
     </article>
     {{else}}
-    <div class="text-center text-spot-secondary py-12">No trending articles yet. Start liking and annotating!</div>
+    <div class="flex flex-col items-center justify-center py-16 text-center">
+        <div class="w-14 h-14 rounded-full bg-spot-hover flex items-center justify-center mb-4">
+            <svg class="w-7 h-7 text-spot-muted" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+        </div>
+        <p class="text-sm text-spot-secondary mb-1">No trending articles yet</p>
+        <p class="text-xs text-spot-muted">Start liking and annotating to see trends.</p>
+    </div>
     {{end}}
 </div>
 

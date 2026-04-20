@@ -103,7 +103,8 @@ func (db *DB) ListArticles(ctx context.Context, userDID, feedURL string, limit, 
 func (db *DB) ListUnreadArticles(ctx context.Context, userDID, feedURL string, limit, offset int) ([]*Article, error) {
 	query := `
 		SELECT a.id, a.feed_url, COALESCE(f.title, ''), a.guid, a.title, a.url, a.author, a.summary, a.content,
-			a.published, a.updated, a.fetched_at
+			a.published, a.updated, a.fetched_at,
+			COALESCE(r.is_read, 0), COALESCE(r.is_starred, 0)
 		FROM articles a
 		JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
 		LEFT JOIN feeds f ON a.feed_url = f.feed_url
@@ -129,7 +130,47 @@ func (db *DB) ListUnreadArticles(ctx context.Context, userDID, feedURL string, l
 	for rows.Next() {
 		a := &Article{}
 		if err := rows.Scan(&a.ID, &a.FeedURL, &a.FeedTitle, &a.GUID, &a.Title, &a.URL, &a.Author,
-			&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt); err != nil {
+			&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt,
+			&a.IsRead, &a.IsStarred); err != nil {
+			return nil, err
+		}
+		articles = append(articles, a)
+	}
+	return articles, rows.Err()
+}
+
+func (db *DB) ListReadArticles(ctx context.Context, userDID, feedURL string, limit, offset int) ([]*Article, error) {
+	query := `
+		SELECT a.id, a.feed_url, COALESCE(f.title, ''), a.guid, a.title, a.url, a.author, a.summary, a.content,
+			a.published, a.updated, a.fetched_at,
+			COALESCE(r.is_read, 0), COALESCE(r.is_starred, 0)
+		FROM articles a
+		JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
+		LEFT JOIN feeds f ON a.feed_url = f.feed_url
+		JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+		WHERE r.is_read = 1
+	`
+	args := []any{userDID, userDID}
+
+	if feedURL != "" {
+		query += ` AND a.feed_url = ?`
+		args = append(args, feedURL)
+	}
+
+	query += fmt.Sprintf(` ORDER BY a.published DESC LIMIT %d OFFSET %d`, limit, offset)
+
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var articles []*Article
+	for rows.Next() {
+		a := &Article{}
+		if err := rows.Scan(&a.ID, &a.FeedURL, &a.FeedTitle, &a.GUID, &a.Title, &a.URL, &a.Author,
+			&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt,
+			&a.IsRead, &a.IsStarred); err != nil {
 			return nil, err
 		}
 		articles = append(articles, a)

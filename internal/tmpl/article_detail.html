@@ -3,7 +3,7 @@
     <a href="/articles" class="text-sm text-spot-secondary hover:text-spot-text mb-4 inline-block transition">&larr; Back to articles</a>
 
     <article>
-        <h1 class="text-3xl font-bold leading-tight">
+        <h1 class="text-2xl font-bold leading-tight">
             {{if .Article.URL.Valid}}<a href="{{.Article.URL.String}}" target="_blank" rel="noopener noreferrer" class="text-spot-text hover:text-spot-green transition">{{.Article.Title}}</a>
             {{else}}<span class="text-spot-text">{{.Article.Title}}</span>{{end}}
         </h1>
@@ -19,31 +19,41 @@
             {{end}}
         </div>
 
-        <div class="flex items-center gap-3 mt-4">
-            <button hx-post="/articles/{{.Article.ID}}/like" hx-target="#like-btn" hx-swap="outerHTML"
-                    id="like-btn"
-                    class="text-lg {{if .HasLiked}}text-spot-red{{else}}text-spot-muted hover:text-spot-red{{end}} transition">
-                &#9829; <span class="text-sm text-spot-secondary">{{.LikeCount}}</span>
-            </button>
-
-            <a href="https://bsky.app/intent/compose?text={{.Article.Title}}%20{{if .Article.URL.Valid}}{{.Article.URL.String}}{{end}}"
-               target="_blank" rel="noopener noreferrer"
-               class="text-xs border border-spot-outline text-spot-text rounded-pill px-3 py-1 hover:border-spot-text uppercase tracking-button transition inline-flex items-center gap-1">
-                <span class="w-3.5 h-3.5 inline-flex">{{template "icon-bluesky"}}</span>
-                Share
-            </a>
-
+        <div class="flex items-center gap-2 mt-6 flex-wrap">
             <button hx-post="/articles/{{.Article.ID}}/{{if .ReadState.IsRead}}unread{{else}}read{{end}}"
                     hx-target="#read-btn" hx-swap="outerHTML"
                     id="read-btn"
-                    class="text-xs border border-spot-outline text-spot-text rounded-pill px-3 py-1 hover:border-spot-text uppercase tracking-button transition">
-                {{if .ReadState.IsRead}}Mark unread{{else}}Mark read{{end}}
+                    class="border border-spot-outline text-spot-text rounded-pill px-5 py-2 text-xs font-bold uppercase tracking-button hover:border-spot-text transition inline-flex items-center gap-1.5">
+                {{if .ReadState.IsRead}}
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                Mark unread
+                {{else}}
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                Mark read
+                {{end}}
             </button>
 
+            <button hx-post="/articles/{{.Article.ID}}/like" hx-target="#like-btn" hx-swap="outerHTML"
+                    id="like-btn"
+                    class="border border-spot-outline text-spot-text rounded-pill px-5 py-2 text-xs font-bold uppercase tracking-button hover:border-spot-text transition inline-flex items-center gap-1.5">
+                <span class="{{if .HasLiked}}text-spot-red{{end}}">&#9829;</span>
+                {{.LikeCount}}
+            </button>
+
+            {{if .Article.URL.Valid}}
             <a href="{{.Article.URL.String}}" target="_blank" rel="noopener noreferrer"
-               class="text-xs border border-spot-outline text-spot-text rounded-pill px-3 py-1 hover:border-spot-text uppercase tracking-button transition">
+               class="border border-spot-outline text-spot-text rounded-pill px-5 py-2 text-xs font-bold uppercase tracking-button hover:border-spot-text transition inline-flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-4.5-6H18m0 0v4.5m0-4.5L10.5 13.5"/></svg>
                 Original
             </a>
+
+            <a href="https://bsky.app/intent/compose?text={{.Article.Title}}%20{{.Article.URL.String}}"
+               target="_blank" rel="noopener noreferrer"
+               class="border border-spot-outline text-spot-text rounded-pill px-5 py-2 text-xs font-bold uppercase tracking-button hover:border-spot-text transition inline-flex items-center gap-1.5">
+                <span class="w-3.5 h-3.5 inline-flex">{{template "icon-bluesky"}}</span>
+                Share
+            </a>
+            {{end}}
         </div>
 
         <hr class="my-6 border-spot-divider-30">

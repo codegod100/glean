@@ -34,7 +34,13 @@
             {{range .Articles}}
             {{template "article-card.html" .}}
             {{else}}
-            <div class="text-center text-spot-secondary py-12">No unread articles. You're all caught up!</div>
+            <div class="flex flex-col items-center justify-center py-12 text-center">
+                <div class="w-14 h-14 rounded-full bg-spot-hover flex items-center justify-center mb-4">
+                    <svg class="w-7 h-7 text-spot-muted" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+                <p class="text-sm text-spot-secondary mb-1">No unread articles</p>
+                <p class="text-xs text-spot-muted">You're all caught up!</p>
+            </div>
             {{end}}
         </div>
 

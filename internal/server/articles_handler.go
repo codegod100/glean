@@ -22,23 +22,25 @@ func writeLikeButton(w http.ResponseWriter, articleID int64, liked bool, count i
 	_, _ = fmt.Fprintf(w, `<button hx-post="/articles/%d/like" hx-target="#like-btn" hx-swap="outerHTML" id="like-btn" class="text-lg %s">&#9829; <span class="text-sm text-gray-600">%d</span></button>`, articleID, cls, count)
 }
 
-func writeReadButton(w http.ResponseWriter, articleID int64, isRead bool) {
-	label := "Mark read"
-	action := "read"
-	if isRead {
-		label = "Mark unread"
-		action = "unread"
-	}
-	w.Header().Set("Content-Type", "text/html")
-	_, _ = fmt.Fprintf(w, `<button hx-post="/articles/%d/%s" hx-target="#read-btn" hx-swap="outerHTML" id="read-btn" class="text-xs border border-gray-300 rounded px-2 py-1 hover:bg-gray-50">%s</button>`, articleID, action, label)
-}
-
 func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	feedURL := r.URL.Query().Get("feed")
+	status := r.URL.Query().Get("status")
 
 	page := pageFromRequest(r, 50)
-	articles, err := s.db.ListArticles(r.Context(), user.DID, feedURL, page.Limit()+1, page.Offset())
+
+	var articles []*db.Article
+	var err error
+
+	switch status {
+	case "unread":
+		articles, err = s.db.ListUnreadArticles(r.Context(), user.DID, feedURL, page.Limit()+1, page.Offset())
+	case "read":
+		articles, err = s.db.ListReadArticles(r.Context(), user.DID, feedURL, page.Limit()+1, page.Offset())
+	default:
+		articles, err = s.db.ListArticles(r.Context(), user.DID, feedURL, page.Limit()+1, page.Offset())
+	}
+
 	if err != nil {
 		s.logger.Error("failed to list articles", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -55,9 +57,10 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 		"User":        user,
 		"Articles":    articles,
 		"FeedURL":     feedURL,
+		"Status":      status,
 		"Page":        page,
 		"BaseURL":     "/articles",
-		"QueryParams": buildQueryParams(map[string]string{"feed": feedURL}),
+		"QueryParams": buildQueryParams(map[string]string{"feed": feedURL, "status": status}),
 	})
 }
 
@@ -109,7 +112,8 @@ func (s *Server) handleMarkRead(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeReadButton(w, id, true)
+	w.Header().Set("Content-Type", "text/html")
+	_, _ = fmt.Fprintf(w, `<span id="read-btn-%d" class="text-xs text-spot-green uppercase tracking-button">Read</span>`, id)
 }
 
 func (s *Server) handleMarkUnread(w http.ResponseWriter, r *http.Request) {
@@ -123,7 +127,8 @@ func (s *Server) handleMarkUnread(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeReadButton(w, id, false)
+	w.Header().Set("Content-Type", "text/html")
+	_, _ = fmt.Fprintf(w, `<span id="read-btn-%d" class="text-xs text-spot-muted uppercase tracking-button"></span>`, id)
 }
 
 func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
