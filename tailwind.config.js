@@ -5,8 +5,11 @@ module.exports = {
     extend: {
       colors: {
         spot: {
-          purple: '#a855f7',
-          'purple-border': '#9333ea',
+          green: '#00754A',
+          'green-dark': '#006241',
+          'green-house': '#1E3932',
+          'green-uplift': '#2b5148',
+          'green-light': '#d4e9e2',
           bg: 'var(--spot-bg)',
           surface: 'var(--spot-surface)',
           hover: 'var(--spot-hover)',
@@ -21,14 +24,10 @@ module.exports = {
           placeholder: 'var(--spot-placeholder)',
           'active-pill-bg': 'var(--spot-active-bg)',
           'active-pill-text': 'var(--spot-active-text)',
-          red: '#f3727f',
+          red: '#c82014',
           orange: '#ffa42b',
           blue: '#539df5',
         }
-      },
-      fontFamily: {
-        ui: ['SpotifyMixUI', 'CircularSp-Arab', 'CircularSp-Hebr', 'CircularSp-Cyrl', 'CircularSp-Grek', 'CircularSp-Deva', 'Helvetica Neue', 'helvetica', 'arial', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Meiryo', 'MS Gothic', 'sans-serif'],
-        title: ['SpotifyMixUITitle', 'CircularSp-Arab', 'CircularSp-Hebr', 'CircularSp-Cyrl', 'CircularSp-Grek', 'CircularSp-Deva', 'Helvetica Neue', 'helvetica', 'arial', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Meiryo', 'MS Gothic', 'sans-serif'],
       },
       borderRadius: {
         pill: '9999px',

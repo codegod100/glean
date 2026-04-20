@@ -25,5 +25,6 @@ go.work.sum
 *.db
 *.db.journal
 
-# tailwind output
+# tailwind
 static/output.css
+node_modules/

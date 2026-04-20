@@ -6,7 +6,7 @@
 {{if .ArticleURL}}
 <div class="mb-4 text-sm text-spot-secondary">
     Filtering by: <strong class="text-spot-text">{{.ArticleURL}}</strong>
-    <a href="/annotations" class="text-spot-purple ml-2 hover:brightness-110">Clear</a>
+    <a href="/annotations" class="text-spot-green ml-2 hover:brightness-110">Clear</a>
 </div>
 {{end}}
 
@@ -26,7 +26,7 @@
     <button hx-get="/annotations?offset={{.NextOffset}}{{if .ArticleURL}}&article={{.ArticleURL}}{{end}}"
             hx-target="#annotations-list" hx-swap="beforeend"
             hx-select=".annotation-card"
-            class="text-sm text-spot-secondary hover:text-spot-purple transition">Load more</button>
+            class="text-sm text-spot-secondary hover:text-spot-green transition">Load more</button>
 </div>
 {{end}}
 {{end}}

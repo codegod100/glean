@@ -1,35 +1,177 @@
 {{define "index.html"}}
-<div class="max-w-2xl mx-auto mt-20 lg:mt-32 text-center">
-    <h1 class="text-5xl font-bold font-title mb-6 text-spot-text">Glean</h1>
-    <p class="text-lg text-spot-secondary mb-10 max-w-lg mx-auto leading-relaxed">A social RSS reader. Follow feeds, share what you read, discover new sources through your network.</p>
-    <div class="flex flex-col sm:flex-row justify-center gap-3">
-        <a href="/auth/login" class="bg-spot-purple text-spot-bg rounded-pill px-8 py-3 text-sm font-bold uppercase tracking-button hover:brightness-110 transition inline-flex items-center gap-2">
-            Sign in
+<style>
+.landing-hero { padding-top: 6rem; padding-bottom: 4rem; }
+.landing-feed { display: flex; flex-direction: column; gap: 1px; }
+.landing-item { transition: background 0.15s; }
+.landing-item:hover { background: var(--spot-hover); }
+.feed-line { height: 10px; border-radius: 5px; }
+.feed-line-short { width: 40%; }
+.feed-line-medium { width: 65%; }
+.feed-dot { width: 8px; height: 8px; border-radius: 50%; }
+@media (min-width: 768px) { .landing-hero { padding-top: 8rem; padding-bottom: 6rem; } }
+</style>
+
+<section class="landing-hero">
+    <div class="max-w-6xl mx-auto px-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            <div>
+                <div class="flex items-center gap-3 mb-8">
+                    <svg class="w-10 h-10" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="32" height="32" rx="8" fill="#00754A"/>
+                        <path d="M16 8 L16 22" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+                        <path d="M16 11 Q11 9 9 13" stroke="#fff" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+                        <path d="M16 11 Q21 9 23 13" stroke="#fff" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+                        <path d="M16 15 Q10 13 8 18" stroke="#fff" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+                        <path d="M16 15 Q22 13 24 18" stroke="#fff" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+                        <circle cx="16" cy="24" r="1.5" fill="#fff"/>
+                    </svg>
+                    <span class="font-bold text-xl text-spot-text" style="letter-spacing: -0.02em;">Glean</span>
+                </div>
+                <h1 class="text-3xl md:text-5xl font-bold mb-6 leading-[1.1] text-spot-text" style="letter-spacing: -0.03em;">
+                    Your feeds,<br>your network,<br>your rules.
+                </h1>
+                <p class="text-lg text-spot-secondary mb-8 max-w-md leading-relaxed">
+                    Follow RSS feeds from around the web. See what your network is reading. All tied to your AT Protocol identity.
+                </p>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <a href="/auth/login" class="bg-spot-green text-white rounded-pill px-7 py-3 text-sm font-bold uppercase tracking-button hover:brightness-110 transition active:scale-95 inline-flex items-center justify-center gap-2">
+                        Sign in
+                    </a>
+                    <a href="/trending" class="border border-spot-outline text-spot-text rounded-pill px-7 py-3 text-sm font-bold uppercase tracking-button hover:border-spot-text transition active:scale-95">
+                        See what's trending
+                    </a>
+                </div>
+            </div>
+
+            <div class="hidden lg:block">
+                <div class="bg-spot-surface rounded-xl shadow-spot overflow-hidden">
+                    <div class="px-5 py-3 border-b border-spot-divider flex items-center gap-2">
+                        <div class="feed-dot bg-spot-red/60"></div>
+                        <div class="feed-dot bg-spot-orange/60"></div>
+                        <div class="feed-dot bg-spot-green/60"></div>
+                        <span class="text-xs text-spot-muted ml-3">Dashboard</span>
+                    </div>
+                    <div class="landing-feed p-4">
+                        <div class="landing-item rounded-lg px-4 py-3 flex items-start gap-3">
+                            <div class="w-8 h-8 rounded-full bg-spot-green/20 shrink-0 mt-0.5 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-spot-green" fill="currentColor" viewBox="0 0 20 20"><path d="M5 3a1 1 0 000 2c5.523 0 10 4.477 10 10a1 1 0 102 0C17 8.373 11.627 3 5 3z"/><path d="M4 9a1 1 0 011-1 7 7 0 017 7 1 1 0 11-2 0 5 5 0 00-5-5 1 1 0 01-1-1z"/></svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="feed-line bg-spot-text/80 mb-2" style="width:70%"></div>
+                                <div class="feed-line bg-spot-secondary/40 feed-line-short"></div>
+                            </div>
+                            <div class="flex items-center gap-1 text-spot-green shrink-0">
+                                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"/></svg>
+                                <span class="text-xs">12</span>
+                            </div>
+                        </div>
+                        <div class="landing-item rounded-lg px-4 py-3 flex items-start gap-3">
+                            <div class="w-8 h-8 rounded-full bg-spot-blue/20 shrink-0 mt-0.5 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-spot-blue" fill="currentColor" viewBox="0 0 20 20"><path d="M2 5a2 2 0 012-2h8a2 2 0 012 2v10a2 2 0 002 2H4a2 2 0 01-2-2V5z"/></svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="feed-line bg-spot-text/80 mb-2" style="width:55%"></div>
+                                <div class="feed-line bg-spot-secondary/40" style="width:80%"></div>
+                            </div>
+                        </div>
+                        <div class="landing-item rounded-lg px-4 py-3 flex items-start gap-3">
+                            <div class="w-8 h-8 rounded-full bg-spot-orange/20 shrink-0 mt-0.5 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-spot-orange" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z"/></svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="feed-line bg-spot-text/80 mb-2" style="width:45%"></div>
+                                <div class="feed-line bg-spot-secondary/40 feed-line-medium"></div>
+                            </div>
+                            <div class="flex items-center gap-1 text-spot-secondary shrink-0">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>
+                                <span class="text-xs">3</span>
+                            </div>
+                        </div>
+                        <div class="landing-item rounded-lg px-4 py-3 flex items-start gap-3">
+                            <div class="w-8 h-8 rounded-full bg-spot-green/20 shrink-0 mt-0.5 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-spot-green" fill="currentColor" viewBox="0 0 20 20"><path d="M5 3a1 1 0 000 2c5.523 0 10 4.477 10 10a1 1 0 102 0C17 8.373 11.627 3 5 3z"/></svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="feed-line bg-spot-text/80 mb-2" style="width:60%"></div>
+                                <div class="feed-line bg-spot-secondary/40 feed-line-short"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="px-5 py-3 border-t border-spot-divider flex items-center justify-between">
+                        <div class="flex items-center gap-2 text-xs text-spot-muted">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                            4 trending in your network
+                        </div>
+                        <span class="text-xs text-spot-green font-bold">42 unread</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="max-w-6xl mx-auto px-6 py-16">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
+        <div>
+            <div class="flex items-center gap-2 mb-3">
+                <svg class="w-5 h-5 text-spot-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7m-7-1a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
+                <h3 class="font-bold text-spot-text">Subscribe</h3>
+            </div>
+            <p class="text-sm text-spot-secondary leading-relaxed">Add any RSS or Atom feed. Import your existing subscriptions from another reader via OPML. Group feeds by category.</p>
+        </div>
+        <div>
+            <div class="flex items-center gap-2 mb-3">
+                <svg class="w-5 h-5 text-spot-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                <h3 class="font-bold text-spot-text">Connect</h3>
+            </div>
+            <p class="text-sm text-spot-secondary leading-relaxed">Follow people on the AT Protocol. See what they read and share. Get recommendations from readers with similar tastes.</p>
+        </div>
+        <div>
+            <div class="flex items-center gap-2 mb-3">
+                <svg class="w-5 h-5 text-spot-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>
+                <h3 class="font-bold text-spot-text">Annotate</h3>
+            </div>
+            <p class="text-sm text-spot-secondary leading-relaxed">Leave notes on any article. Quote passages that matter. Keep private annotations or share them with your network.</p>
+        </div>
+    </div>
+</section>
+
+<section class="bg-spot-green-house">
+    <div class="max-w-6xl mx-auto px-6 py-16">
+        <div class="max-w-2xl">
+            <h2 class="text-2xl md:text-3xl font-bold text-white mb-4" style="letter-spacing: -0.02em;">Owned by you, not by us.</h2>
+            <p class="text-[rgba(255,255,255,0.70)] leading-relaxed mb-8">
+                Glean stores subscriptions, annotations, and your social graph in your personal data repository on the AT Protocol. Bring your own PDS. Take your data anywhere. No lock-in, no ads, no tracking.
+            </p>
+            <div class="flex flex-wrap gap-x-8 gap-y-4 text-sm">
+                <div class="flex items-center gap-2 text-[rgba(255,255,255,0.70)]">
+                    <svg class="w-4 h-4 text-spot-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    AT Protocol identity
+                </div>
+                <div class="flex items-center gap-2 text-[rgba(255,255,255,0.70)]">
+                    <svg class="w-4 h-4 text-spot-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    Portable data
+                </div>
+                <div class="flex items-center gap-2 text-[rgba(255,255,255,0.70)]">
+                    <svg class="w-4 h-4 text-spot-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    Open source
+                </div>
+                <div class="flex items-center gap-2 text-[rgba(255,255,255,0.70)]">
+                    <svg class="w-4 h-4 text-spot-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    Self-hostable
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="py-16 text-center">
+    <div class="max-w-md mx-auto px-6">
+        <h2 class="text-2xl font-bold text-spot-text mb-3" style="letter-spacing: -0.02em;">Start reading</h2>
+        <p class="text-spot-secondary mb-6 text-sm leading-relaxed">Sign in with your Bluesky handle or any AT Protocol account. Your feeds are waiting.</p>
+        <a href="/auth/login" class="bg-spot-green text-white rounded-pill px-8 py-3 text-sm font-bold uppercase tracking-button hover:brightness-110 transition active:scale-95 inline-flex items-center justify-center gap-2">
+            Get started
         </a>
-        <a href="/trending" class="border border-spot-outline text-spot-text rounded-pill px-8 py-3 text-sm font-bold uppercase tracking-button hover:border-spot-text transition">Browse trending</a>
     </div>
-    <div class="mt-24 grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
-        <div class="bg-spot-surface hover:bg-spot-hover rounded-lg p-6 transition shadow-spot">
-            <div class="text-spot-purple text-2xl mb-3">
-                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7m-7-1a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
-            </div>
-            <h3 class="font-bold text-spot-text mb-1">Follow any feed</h3>
-            <p class="text-sm text-spot-secondary">Subscribe to RSS and Atom feeds. Organize with categories. Import via OPML.</p>
-        </div>
-        <div class="bg-spot-surface hover:bg-spot-hover rounded-lg p-6 transition shadow-spot">
-            <div class="text-spot-purple text-2xl mb-3">
-                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-            </div>
-            <h3 class="font-bold text-spot-text mb-1">Read together</h3>
-            <p class="text-sm text-spot-secondary">See what your network reads. Like and annotate articles. Share discoveries.</p>
-        </div>
-        <div class="bg-spot-surface hover:bg-spot-hover rounded-lg p-6 transition shadow-spot">
-            <div class="text-spot-purple text-2xl mb-3">
-                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-            </div>
-            <h3 class="font-bold text-spot-text mb-1">Find new sources</h3>
-            <p class="text-sm text-spot-secondary">Get recommendations based on your reading. Find people with similar tastes.</p>
-        </div>
-    </div>
-</div>
+</section>
 {{end}}

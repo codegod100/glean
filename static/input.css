@@ -2,9 +2,95 @@
 @tailwind components;
 @tailwind utilities;
 
-.line-clamp-2 {
+@layer base {
+  :root {
+    --spot-bg: #0f1f1a;
+    --spot-surface: #152b24;
+    --spot-hover: #1a362e;
+    --spot-hover-50: rgba(26,54,46,0.5);
+    --spot-text: #ffffff;
+    --spot-secondary: rgba(255,255,255,0.70);
+    --spot-body: rgba(255,255,255,0.87);
+    --spot-muted: rgba(255,255,255,0.25);
+    --spot-divider: rgba(255,255,255,0.08);
+    --spot-divider-30: rgba(255,255,255,0.12);
+    --spot-outline: rgba(255,255,255,0.20);
+    --spot-placeholder: rgba(255,255,255,0.30);
+    --spot-active-bg: #ffffff;
+    --spot-active-text: #1E3932;
+    --spot-shadow: 0 0 0.5px rgba(0,0,0,0.14), 0 1px 1px rgba(0,0,0,0.24);
+    --spot-shadow-heavy: 0 0 6px rgba(0,0,0,0.24), 0 8px 12px rgba(0,0,0,0.14);
+  }
+
+  [data-theme="light"] {
+    --spot-bg: #f2f0eb;
+    --spot-surface: #ffffff;
+    --spot-hover: #edebe9;
+    --spot-hover-50: rgba(237,235,233,0.5);
+    --spot-text: rgba(0,0,0,0.87);
+    --spot-secondary: rgba(0,0,0,0.58);
+    --spot-body: rgba(0,0,0,0.70);
+    --spot-muted: rgba(0,0,0,0.25);
+    --spot-divider: rgba(0,0,0,0.08);
+    --spot-divider-30: rgba(0,0,0,0.12);
+    --spot-outline: rgba(0,0,0,0.15);
+    --spot-placeholder: rgba(0,0,0,0.30);
+    --spot-active-bg: #1E3932;
+    --spot-active-text: #ffffff;
+    --spot-shadow: 0 0 0.5px rgba(0,0,0,0.14), 0 1px 1px rgba(0,0,0,0.24);
+    --spot-shadow-heavy: 0 0 6px rgba(0,0,0,0.14), 0 8px 12px rgba(0,0,0,0.08);
+  }
+}
+
+@layer components {
+  .article-body h1 { @apply text-2xl font-bold mt-8 mb-3 text-spot-text }
+  .article-body h2 { @apply text-xl font-semibold mt-6 mb-2 text-spot-text }
+  .article-body h3 { @apply text-lg font-semibold mt-5 mb-2 text-spot-text }
+  .article-body h4 { @apply text-base font-semibold mt-4 mb-1 text-spot-text }
+  .article-body p { @apply my-3 leading-7 text-spot-body }
+  .article-body ul { @apply list-disc pl-6 my-3 text-spot-body }
+  .article-body ol { @apply list-decimal pl-6 my-3 text-spot-body }
+  .article-body li { @apply my-1 leading-7 }
+  .article-body blockquote { @apply border-l-4 border-spot-divider pl-4 italic text-spot-secondary my-4 }
+  .article-body pre { @apply bg-spot-bg text-spot-body rounded-lg p-4 overflow-x-auto my-4 text-sm leading-6 }
+  .article-body code { @apply bg-spot-surface text-spot-body px-1.5 py-0.5 rounded text-sm font-mono }
+  .article-body pre code { @apply bg-transparent text-spot-body p-0 }
+  .article-body img { @apply rounded-lg max-w-full h-auto my-4 }
+  .article-body figure { @apply my-4 }
+  .article-body figcaption { @apply text-sm text-spot-secondary text-center mt-2 }
+  .article-body a { @apply text-spot-green underline hover:brightness-110 }
+  .article-body table { @apply w-full border-collapse my-4 }
+  .article-body th { @apply border border-spot-divider px-3 py-2 bg-spot-surface font-semibold text-left text-spot-text }
+  .article-body td { @apply border border-spot-divider px-3 py-2 text-spot-body }
+  .article-body hr { @apply border-spot-divider my-6 }
+  .article-body iframe, .article-body video { @apply rounded-lg my-4 max-w-full }
+  .article-body iframe[src*="youtube.com"], .article-body iframe[src*="youtube-nocookie.com"], .article-body iframe[src*="vimeo.com"], .article-body iframe[src*="spotify.com"], .article-body iframe[src*="soundcloud.com"], .article-body iframe[src*="bandcamp.com"] { @apply w-full aspect-video }
+  .article-body del { @apply line-through text-spot-secondary }
+  .article-body mark { @apply bg-spot-orange/30 px-1 rounded }
+}
+
+@layer utilities {
+  .line-clamp-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
 }
+
+body {
+  font-family: 'Inter', 'Helvetica Neue', helvetica, arial, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+.sidebar-link {
+  transition: color 0.15s;
+}
+.sidebar-link:hover {
+  color: var(--spot-text);
+}
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--spot-bg); }
+::-webkit-scrollbar-thumb { background: var(--spot-muted); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--spot-outline); }

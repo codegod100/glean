@@ -47,12 +47,12 @@
                     {{if .Category.Valid}}<span class="text-xs text-spot-secondary">{{.Category.String}}</span>{{end}}
                 </div>
                 <div class="flex items-center gap-3">
-                    {{if .UnreadCount}}<span class="text-xs bg-spot-purple/20 text-spot-purple px-2.5 py-0.5 rounded-full font-bold">{{.UnreadCount}}</span>{{end}}
+                    {{if .UnreadCount}}<span class="text-xs bg-spot-green/20 text-spot-green px-2.5 py-0.5 rounded-full font-bold">{{.UnreadCount}}</span>{{end}}
                     <form hx-post="/feeds/set-interval" hx-swap="none" hx-vals='{"feed_url": "{{.FeedURL}}"}' class="inline-flex items-center gap-1">
                         {{csrfInput $.CSRFToken}}
                         <input type="hidden" name="feed_url" value="{{.FeedURL}}">
                         <select name="interval" onchange="this.form.submit()"
-                                class="text-xs bg-spot-hover text-spot-secondary rounded px-2 py-1 border-none focus:outline-none focus:ring-1 focus:ring-spot-purple">
+                                class="text-xs bg-spot-hover text-spot-secondary rounded px-2 py-1 border-none focus:outline-none focus:ring-1 focus:ring-spot-green">
                             <option value="15" {{if eq .FetchInterval 15}}selected{{end}}>15m</option>
                             <option value="30" {{if eq .FetchInterval 30}}selected{{end}}>30m</option>
                             <option value="60" {{if eq .FetchInterval 60}}selected{{end}}>1h</option>
@@ -81,11 +81,11 @@
             <form hx-post="/feeds/add" hx-target="#feed-list" hx-swap="beforeend" class="space-y-3">
                 {{csrfInput .CSRFToken}}
                 <input type="url" name="feed_url" placeholder="https://example.com/feed.xml"
-                       class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-purple placeholder:text-spot-placeholder"
+                       class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder"
                        required>
                 <input type="text" name="category" placeholder="Category (optional)"
-                       class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-purple placeholder:text-spot-placeholder">
-                <button type="submit" class="w-full bg-spot-purple text-spot-bg rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Add</button>
+                       class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
+                <button type="submit" class="w-full bg-spot-green text-spot-bg rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Add</button>
             </form>
             <form hx-post="/feeds/opml/upload" hx-encoding="multipart/form-data" class="flex flex-col gap-2">
                 {{csrfInput .CSRFToken}}
@@ -99,7 +99,7 @@
         <div>
             <div class="flex items-center justify-between mb-4">
                 <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide">Recommended feeds</h2>
-                <a href="/discover" class="text-xs text-spot-secondary hover:text-spot-purple uppercase tracking-button transition">See all</a>
+                <a href="/discover" class="text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition">See all</a>
             </div>
             <div class="space-y-3">
                 {{range .FeedRecommendations}}
@@ -113,14 +113,14 @@
         <div>
             <div class="flex items-center justify-between mb-4">
                 <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide">Similar readers</h2>
-                <a href="/discover" class="text-xs text-spot-secondary hover:text-spot-purple uppercase tracking-button transition">See all</a>
+                <a href="/discover" class="text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition">See all</a>
             </div>
             <div class="space-y-3">
                 {{range .PeopleRecommendations}}
                 <div class="bg-spot-surface rounded-lg p-4 flex items-center gap-3 hover:bg-spot-hover-50 transition">
                     {{if .avatar_url}}<img src="{{.avatar_url}}" class="w-10 h-10 rounded-full">{{end}}
                     <div class="min-w-0 flex-1">
-                        <a href="/profile/{{.handle}}" class="font-bold text-spot-text hover:text-spot-purple transition">@{{.handle}}</a>
+                        <a href="/profile/{{.handle}}" class="font-bold text-spot-text hover:text-spot-green transition">@{{.handle}}</a>
                         {{if .display_name}}<div class="text-sm text-spot-secondary">{{.display_name}}</div>{{end}}
                     </div>
                     <span class="text-xs text-spot-secondary">{{.common_feeds}} shared</span>

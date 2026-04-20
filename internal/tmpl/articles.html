@@ -21,7 +21,7 @@
     <button hx-get="/articles?offset={{.NextOffset}}{{if .FeedURL}}&feed={{.FeedURL}}{{end}}{{if .Starred}}&starred=1{{end}}"
             hx-target="#article-list" hx-swap="beforeend"
             hx-select="article"
-            class="text-sm text-spot-secondary hover:text-spot-purple transition">
+            class="text-sm text-spot-secondary hover:text-spot-green transition">
         Load more
     </button>
 </div>
@@ -33,10 +33,10 @@
     var currentIdx = -1;
 
     function highlightArticle(idx) {
-        articles.forEach(function(a) { a.classList.remove('ring-2', 'ring-spot-purple'); });
+        articles.forEach(function(a) { a.classList.remove('ring-2', 'ring-spot-green'); });
         if (idx >= 0 && idx < articles.length) {
             currentIdx = idx;
-            articles[idx].classList.add('ring-2', 'ring-spot-purple');
+            articles[idx].classList.add('ring-2', 'ring-spot-green');
             articles[idx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
     }

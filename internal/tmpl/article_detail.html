@@ -4,7 +4,7 @@
 
     <article>
         <h1 class="text-3xl font-bold font-title leading-tight">
-            {{if .Article.URL.Valid}}<a href="{{.Article.URL.String}}" target="_blank" rel="noopener noreferrer" class="text-spot-text hover:text-spot-purple transition">{{.Article.Title}}</a>
+            {{if .Article.URL.Valid}}<a href="{{.Article.URL.String}}" target="_blank" rel="noopener noreferrer" class="text-spot-text hover:text-spot-green transition">{{.Article.Title}}</a>
             {{else}}<span class="text-spot-text">{{.Article.Title}}</span>{{end}}
         </h1>
 
@@ -12,7 +12,7 @@
             {{if .Article.Author.Valid}}<span>{{.Article.Author.String}}</span>{{end}}
             {{if .Article.Published.Valid}}<span>{{.Article.Published.Time.Format "Jan 2, 2006 15:04"}}</span>{{end}}
             {{if .Feed}}
-            <a href="/articles?feed={{.Feed.FeedURL}}" class="hover:text-spot-purple transition">
+            <a href="/articles?feed={{.Feed.FeedURL}}" class="hover:text-spot-green transition">
                 {{if .Feed.FaviconURL.Valid}}<img src="{{.Feed.FaviconURL.String}}" class="w-4 h-4 inline-block mr-1 align-text-bottom rounded-sm">{{end}}
                 {{if .Feed.Title.Valid}}{{.Feed.Title.String}}{{else}}{{.Feed.FeedURL}}{{end}}
             </a>
@@ -57,7 +57,7 @@
             {{sanitizeHTML .Article.Summary.String}}
         </div>
         {{else}}
-        <p class="text-spot-secondary">No content available. <a href="{{.Article.URL.String}}" class="text-spot-purple hover:underline">Read the original article.</a></p>
+        <p class="text-spot-secondary">No content available. <a href="{{.Article.URL.String}}" class="text-spot-green hover:underline">Read the original article.</a></p>
         {{end}}
     </article>
 
@@ -74,15 +74,15 @@
             <input type="hidden" name="article_url" value="{{if .Article.URL.Valid}}{{.Article.URL.String}}{{end}}">
             <div>
                 <textarea name="note" rows="2" placeholder="Add a note..."
-                          class="w-full bg-spot-hover text-spot-text rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-purple placeholder:text-spot-placeholder resize-none"></textarea>
+                          class="w-full bg-spot-hover text-spot-text rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder resize-none"></textarea>
             </div>
             <div class="flex gap-2">
                 <input type="text" name="quote" placeholder="Quote (optional)"
-                       class="flex-1 bg-spot-hover text-spot-text rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-purple placeholder:text-spot-placeholder">
+                       class="flex-1 bg-spot-hover text-spot-text rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
                 <input type="text" name="tags" placeholder="Tags (comma separated)"
-                       class="flex-1 bg-spot-hover text-spot-text rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-purple placeholder:text-spot-placeholder">
+                       class="flex-1 bg-spot-hover text-spot-text rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
             </div>
-            <button type="submit" class="bg-spot-purple text-spot-bg rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Annotate</button>
+            <button type="submit" class="bg-spot-green text-spot-bg rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Annotate</button>
         </form>
 
         <div id="annotations-list" class="space-y-3">
