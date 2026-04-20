@@ -4,9 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"log/slog"
 	"net/http"
-	"strconv"
 	"time"
 
 	"pkg.rbrt.fr/glean/internal/atproto"
@@ -284,11 +282,15 @@ func (s *Server) handleFeedList(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleRefreshFeeds(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
-	store := db.NewFeedStoreAdapter(s.db)
-	scheduler := feed.NewScheduler(store, slog.Default())
 
 	subs, _ := s.db.ListSubscriptions(r.Context(), user.DID, "", 100, 0)
+	seen := make(map[string]bool)
 	for _, sub := range subs {
+		if seen[sub.FeedURL] {
+			continue
+		}
+		seen[sub.FeedURL] = true
+
 		f, err := s.db.GetFeed(r.Context(), sub.FeedURL)
 		if err != nil {
 			continue
@@ -302,7 +304,7 @@ func (s *Server) handleRefreshFeeds(w http.ResponseWriter, r *http.Request) {
 			ETag:         f.Etag.String,
 			LastModified: f.LastModified.String,
 		}
-		scheduler.FetchFeed(r.Context(), ff)
+		s.scheduler.FetchFeed(r.Context(), ff)
 	}
 
 	subs, _ = s.db.ListSubscriptions(r.Context(), user.DID, "", 100, 0)
@@ -335,33 +337,6 @@ func (s *Server) handleDiscoverFeedURL(w http.ResponseWriter, r *http.Request) {
 		FeedURLs: result.FeedURLs,
 		Favicon:  result.Favicon,
 	})
-}
-
-func (s *Server) handleUpdateFeedInterval(w http.ResponseWriter, r *http.Request) {
-	user := currentUser(r)
-	feedURL := r.FormValue("feed_url")
-	intervalStr := r.FormValue("interval")
-
-	if feedURL == "" {
-		http.Error(w, "feed_url required", http.StatusBadRequest)
-		return
-	}
-
-	interval, err := strconv.Atoi(intervalStr)
-	if err != nil || interval < 5 {
-		http.Error(w, "interval must be >= 5 minutes", http.StatusBadRequest)
-		return
-	}
-
-	if err := s.db.UpdateFeedInterval(r.Context(), feedURL, interval); err != nil {
-		s.logger.Error("failed to update feed interval", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("HX-Refresh", "true")
-	w.WriteHeader(http.StatusNoContent)
-	_ = user
 }
 
 func nullString(s string) sql.NullString {

@@ -37,11 +37,12 @@ type Server struct {
 	oauth       *oauth.ClientApp
 	oauthStore  *db.OAuthStore
 	fetcher     *feed.Fetcher
+	scheduler   *feed.Scheduler
 	clientID    string
 	callbackURL string
 }
 
-func New(database *db.DB, clientID, callbackURL, addr string, logger *slog.Logger) *Server {
+func New(database *db.DB, clientID, callbackURL, addr string, scheduler *feed.Scheduler, logger *slog.Logger) *Server {
 	oauthStore := db.NewOAuthStore(database)
 
 	var config oauth.ClientConfig
@@ -64,6 +65,7 @@ func New(database *db.DB, clientID, callbackURL, addr string, logger *slog.Logge
 		oauth:       oauthClient,
 		oauthStore:  oauthStore,
 		fetcher:     feed.NewFetcher(),
+		scheduler:   scheduler,
 		clientID:    clientID,
 		callbackURL: callbackURL,
 	}
@@ -106,7 +108,6 @@ func (s *Server) setupRoutes() {
 		r.Get("/opml/download", s.handleOPMLDownload)
 		r.Post("/refresh", s.handleRefreshFeeds)
 		r.Get("/list", s.handleFeedList)
-		r.Post("/set-interval", s.handleUpdateFeedInterval)
 		r.Get("/discover-url", s.handleDiscoverFeedURL)
 		r.Post("/clear", s.handleClearAllSubscriptions)
 	})

@@ -36,10 +36,10 @@ func main() {
 	clientID := envOr("GLEAN_OAUTH_CLIENT_ID", "")
 	callbackURL := envOr("GLEAN_OAUTH_REDIRECT_URL", "")
 
-	srv := server.New(database, clientID, callbackURL, *addr, logger)
-
 	storeAdapter := db.NewFeedStoreAdapter(database)
 	scheduler := feed.NewScheduler(storeAdapter, logger)
+
+	srv := server.New(database, clientID, callbackURL, *addr, scheduler, logger)
 
 	engine := cluster.NewEngine(database.DB, logger)
 	cron := cluster.NewCron(engine, 6*time.Hour, logger)

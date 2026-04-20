@@ -26,16 +26,15 @@ type Feed struct {
 }
 
 type Subscription struct {
-	ID            int64
-	UserDID       string
-	FeedURL       string
-	FeedTitle     string
-	Category      sql.NullString
-	AddedAt       sql.NullTime
-	UnreadCount   int
-	FetchInterval int
-	URI           sql.NullString
-	CID           sql.NullString
+	ID          int64
+	UserDID     string
+	FeedURL     string
+	FeedTitle   string
+	Category    sql.NullString
+	AddedAt     sql.NullTime
+	UnreadCount int
+	URI         sql.NullString
+	CID         sql.NullString
 }
 
 func (db *DB) UpsertFeed(ctx context.Context, feed *Feed) error {
@@ -67,16 +66,17 @@ func (db *DB) GetFeed(ctx context.Context, feedURL string) (*Feed, error) {
 	return f, nil
 }
 
-func (db *DB) GetFeedsToFetch(ctx context.Context, limit int) ([]*Feed, error) {
+func (db *DB) GetFeedsToFetch(ctx context.Context, olderThan time.Duration, limit int) ([]*Feed, error) {
+	cutoff := time.Now().Add(-olderThan)
 	rows, err := db.QueryContext(ctx, `
 		SELECT feed_url, title, site_url, description, feed_type,
 			last_fetched_at, last_error, subscriber_count, etag, last_modified,
 			fetch_interval_minutes, next_fetch_at, consecutive_empty_fetches, error_count, favicon_url
 		FROM feeds
-		WHERE next_fetch_at <= CURRENT_TIMESTAMP
-		ORDER BY next_fetch_at
+		WHERE subscriber_count > 0 AND (last_fetched_at IS NULL OR last_fetched_at <= ?)
+		ORDER BY last_fetched_at ASC NULLS FIRST
 		LIMIT ?
-	`, limit)
+	`, cutoff, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -95,20 +95,27 @@ func (db *DB) GetFeedsToFetch(ctx context.Context, limit int) ([]*Feed, error) {
 	return feeds, rows.Err()
 }
 
-func (db *DB) UpdateFeedFetchResult(ctx context.Context, feedURL, etag, lastModified string, intervalMinutes, consecutiveEmpty, errorCount int, lastError string) error {
-	nextFetch := time.Now().Add(time.Duration(intervalMinutes) * time.Minute)
+func (db *DB) MarkFeedFetched(ctx context.Context, feedURL, etag, lastModified string) error {
 	_, err := db.ExecContext(ctx, `
 		UPDATE feeds SET
 			etag = ?,
 			last_modified = ?,
-			fetch_interval_minutes = ?,
-			next_fetch_at = ?,
-			consecutive_empty_fetches = ?,
-			error_count = ?,
+			error_count = 0,
+			last_error = '',
+			last_fetched_at = CURRENT_TIMESTAMP
+		WHERE feed_url = ?
+	`, etag, lastModified, feedURL)
+	return err
+}
+
+func (db *DB) MarkFeedFetchError(ctx context.Context, feedURL, lastError string) error {
+	_, err := db.ExecContext(ctx, `
+		UPDATE feeds SET
+			error_count = error_count + 1,
 			last_error = ?,
 			last_fetched_at = CURRENT_TIMESTAMP
 		WHERE feed_url = ?
-	`, etag, lastModified, intervalMinutes, nextFetch, consecutiveEmpty, errorCount, lastError, feedURL)
+	`, lastError, feedURL)
 	return err
 }
 
@@ -208,11 +215,11 @@ func (db *DB) GetSubscription(ctx context.Context, userDID, feedURL string) (*Su
 	s := &Subscription{}
 	err := db.QueryRowContext(ctx, `
 		SELECT s.id, s.user_did, s.feed_url, COALESCE(s.title, f.title, ''), s.category, s.added_at,
-		COALESCE(f.fetch_interval_minutes, 30), s.uri, s.cid
+		s.uri, s.cid
 		FROM subscriptions s
 		LEFT JOIN feeds f ON s.feed_url = f.feed_url
 		WHERE s.user_did = ? AND s.feed_url = ?
-	`, userDID, feedURL).Scan(&s.ID, &s.UserDID, &s.FeedURL, &s.FeedTitle, &s.Category, &s.AddedAt, &s.FetchInterval, &s.URI, &s.CID)
+	`, userDID, feedURL).Scan(&s.ID, &s.UserDID, &s.FeedURL, &s.FeedTitle, &s.Category, &s.AddedAt, &s.URI, &s.CID)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +228,7 @@ func (db *DB) GetSubscription(ctx context.Context, userDID, feedURL string) (*Su
 
 func (db *DB) ListSubscriptions(ctx context.Context, userDID, category string, limit, offset int) ([]*Subscription, error) {
 	query := `SELECT s.id, s.user_did, s.feed_url, COALESCE(s.title, f.title, ''), s.category, s.added_at,
-		COALESCE(f.fetch_interval_minutes, 30), s.uri, s.cid
+		s.uri, s.cid
 		FROM subscriptions s
 		LEFT JOIN feeds f ON s.feed_url = f.feed_url
 		WHERE s.user_did = ?`
@@ -243,7 +250,7 @@ func (db *DB) ListSubscriptions(ctx context.Context, userDID, category string, l
 	var subs []*Subscription
 	for rows.Next() {
 		s := &Subscription{}
-		if err := rows.Scan(&s.ID, &s.UserDID, &s.FeedURL, &s.FeedTitle, &s.Category, &s.AddedAt, &s.FetchInterval, &s.URI, &s.CID); err != nil {
+		if err := rows.Scan(&s.ID, &s.UserDID, &s.FeedURL, &s.FeedTitle, &s.Category, &s.AddedAt, &s.URI, &s.CID); err != nil {
 			return nil, err
 		}
 		subs = append(subs, s)
@@ -261,17 +268,6 @@ func (db *DB) GetSubscriptionCount(ctx context.Context, userDID string) (int, er
 
 func (db *DB) UpdateFeedFavicon(ctx context.Context, feedURL, faviconURL string) error {
 	_, err := db.ExecContext(ctx, `UPDATE feeds SET favicon_url = ? WHERE feed_url = ?`, faviconURL, feedURL)
-	return err
-}
-
-func (db *DB) UpdateFeedInterval(ctx context.Context, feedURL string, intervalMinutes int) error {
-	nextFetch := time.Now().Add(time.Duration(intervalMinutes) * time.Minute)
-	_, err := db.ExecContext(ctx, `
-		UPDATE feeds SET
-			fetch_interval_minutes = ?,
-			next_fetch_at = ?
-		WHERE feed_url = ?
-	`, intervalMinutes, nextFetch, feedURL)
 	return err
 }
 

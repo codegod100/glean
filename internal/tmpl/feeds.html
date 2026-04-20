@@ -63,20 +63,6 @@
                 </div>
                 <div class="flex items-center gap-3">
                     {{if .UnreadCount}}<span class="text-xs bg-spot-green/20 text-spot-green px-2.5 py-0.5 rounded-full font-bold">{{.UnreadCount}}</span>{{end}}
-                    <form hx-post="/feeds/set-interval" hx-swap="none" class="inline-flex items-center gap-1">
-                        {{csrfInput $.CSRFToken}}
-                        <input type="hidden" name="feed_url" value="{{.FeedURL}}">
-                        <select name="interval" onchange="this.form.submit()"
-                                class="text-xs bg-spot-hover text-spot-secondary rounded px-2 py-1 border-none focus:outline-none focus:ring-1 focus:ring-spot-green">
-                            <option value="15" {{if eq .FetchInterval 15}}selected{{end}}>15m</option>
-                            <option value="30" {{if eq .FetchInterval 30}}selected{{end}}>30m</option>
-                            <option value="60" {{if eq .FetchInterval 60}}selected{{end}}>1h</option>
-                            <option value="120" {{if eq .FetchInterval 120}}selected{{end}}>2h</option>
-                            <option value="360" {{if eq .FetchInterval 360}}selected{{end}}>6h</option>
-                            <option value="720" {{if eq .FetchInterval 720}}selected{{end}}>12h</option>
-                            <option value="1440" {{if eq .FetchInterval 1440}}selected{{end}}>24h</option>
-                        </select>
-                    </form>
                     <form hx-delete="/feeds/remove" hx-target="closest .feed-item" hx-swap="outerHTML swap:0.3s"
                           hx-confirm="Unsubscribe from this feed?" class="inline">
                         {{csrfInput $.CSRFToken}}

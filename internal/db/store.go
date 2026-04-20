@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"pkg.rbrt.fr/glean/internal/feed"
 )
@@ -15,8 +16,8 @@ func NewFeedStoreAdapter(db *DB) *FeedStoreAdapter {
 	return &FeedStoreAdapter{db: db}
 }
 
-func (a *FeedStoreAdapter) GetFeedsToFetch(ctx context.Context, limit int) ([]*feed.Feed, error) {
-	dbFeeds, err := a.db.GetFeedsToFetch(ctx, limit)
+func (a *FeedStoreAdapter) GetFeedsToFetch(ctx context.Context, olderThan time.Duration, limit int) ([]*feed.Feed, error) {
+	dbFeeds, err := a.db.GetFeedsToFetch(ctx, olderThan, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -54,6 +55,10 @@ func (a *FeedStoreAdapter) UpsertArticle(ctx context.Context, article *feed.Arti
 	return a.db.UpsertArticle(ctx, dbArticle)
 }
 
-func (a *FeedStoreAdapter) UpdateFeedFetchResult(ctx context.Context, feedURL, etag, lastModified string, intervalMinutes, consecutiveEmpty, errorCount int, lastError string) error {
-	return a.db.UpdateFeedFetchResult(ctx, feedURL, etag, lastModified, intervalMinutes, consecutiveEmpty, errorCount, lastError)
+func (a *FeedStoreAdapter) MarkFeedFetched(ctx context.Context, feedURL, etag, lastModified string) error {
+	return a.db.MarkFeedFetched(ctx, feedURL, etag, lastModified)
+}
+
+func (a *FeedStoreAdapter) MarkFeedFetchError(ctx context.Context, feedURL, lastError string) error {
+	return a.db.MarkFeedFetchError(ctx, feedURL, lastError)
 }

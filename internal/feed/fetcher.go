@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -65,15 +66,14 @@ func (f *Fetcher) Fetch(ctx context.Context, feedURL, etag, lastModified string)
 }
 
 type FeedStore interface {
-	GetFeedsToFetch(ctx context.Context, limit int) ([]*Feed, error)
+	GetFeedsToFetch(ctx context.Context, olderThan time.Duration, limit int) ([]*Feed, error)
 	UpsertArticle(ctx context.Context, article *Article) (int64, error)
-	UpdateFeedFetchResult(ctx context.Context, feedURL string, etag, lastModified string, intervalMinutes, consecutiveEmpty, errorCount int, lastError string) error
+	MarkFeedFetched(ctx context.Context, feedURL, etag, lastModified string) error
+	MarkFeedFetchError(ctx context.Context, feedURL, lastError string) error
 }
 
-type feedState struct {
-	interval         time.Duration
-	consecutiveEmpty int
-	errorCount       int
+type fetchCall struct {
+	done chan struct{}
 }
 
 type Scheduler struct {
@@ -81,7 +81,7 @@ type Scheduler struct {
 	store    FeedStore
 	logger   *slog.Logger
 	interval time.Duration
-	states   map[string]*feedState
+	inFlight sync.Map
 }
 
 func NewScheduler(store FeedStore, logger *slog.Logger) *Scheduler {
@@ -89,99 +89,73 @@ func NewScheduler(store FeedStore, logger *slog.Logger) *Scheduler {
 		fetcher:  NewFetcher(),
 		store:    store,
 		logger:   logger,
-		interval: 5 * time.Minute,
-		states:   make(map[string]*feedState),
+		interval: 30 * time.Minute,
+		inFlight: sync.Map{},
 	}
 }
 
 func (s *Scheduler) Run(ctx context.Context) error {
-	ticker := time.NewTicker(s.interval)
+	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
+
+	s.fetchAll(ctx)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			feeds, err := s.store.GetFeedsToFetch(ctx, 100)
-			if err != nil {
-				s.logger.Error("failed to get feeds", "error", err)
-				continue
-			}
-			for _, feed := range feeds {
-				s.FetchFeed(ctx, feed)
-			}
+			s.fetchAll(ctx)
 		}
 	}
 }
 
-func (s *Scheduler) FetchFeed(ctx context.Context, feed *Feed) {
-	state, ok := s.states[feed.URL]
-	if !ok {
-		state = &feedState{
-			interval: 30 * time.Minute,
-		}
-		s.states[feed.URL] = state
+func (s *Scheduler) fetchAll(ctx context.Context) {
+	feeds, err := s.store.GetFeedsToFetch(ctx, s.interval, 200)
+	if err != nil {
+		s.logger.Error("failed to get feeds", "error", err)
+		return
 	}
+	for _, f := range feeds {
+		s.FetchFeed(ctx, f)
+	}
+}
+
+func (s *Scheduler) FetchFeed(ctx context.Context, feed *Feed) {
+	call := &fetchCall{done: make(chan struct{})}
+	if actual, loaded := s.inFlight.LoadOrStore(feed.URL, call); loaded {
+		<-actual.(*fetchCall).done
+		return
+	}
+	defer func() {
+		s.inFlight.Delete(feed.URL)
+		close(call.done)
+	}()
 
 	result, newEtag, newLastModified, err := s.fetcher.Fetch(ctx, feed.URL, feed.ETag, feed.LastModified)
 	if err != nil {
-		state.errorCount++
-		state.interval *= 2
-		if state.interval > 24*time.Hour {
-			state.interval = 24 * time.Hour
-		}
-
-		updErr := s.store.UpdateFeedFetchResult(
-			ctx, feed.URL,
-			feed.ETag, feed.LastModified,
-			int(state.interval.Minutes()), state.consecutiveEmpty, state.errorCount,
-			err.Error(),
-		)
-		if updErr != nil {
-			s.logger.Error("failed to update feed fetch result", "error", updErr, "feed", feed.URL)
+		s.logger.Error("failed to fetch feed", "error", err, "feed", feed.URL)
+		if updErr := s.store.MarkFeedFetchError(ctx, feed.URL, err.Error()); updErr != nil {
+			s.logger.Error("failed to update feed fetch error", "error", updErr, "feed", feed.URL)
 		}
 		return
 	}
 
 	if result == nil {
+		if updErr := s.store.MarkFeedFetched(ctx, feed.URL, feed.ETag, feed.LastModified); updErr != nil {
+			s.logger.Error("failed to update feed fetch result", "error", updErr, "feed", feed.URL)
+		}
 		return
 	}
 
-	newCount := 0
 	for i := range result.Articles {
 		result.Articles[i].FeedURL = feed.URL
-		id, upsertErr := s.store.UpsertArticle(ctx, &result.Articles[i])
-		if upsertErr != nil {
+		if _, upsertErr := s.store.UpsertArticle(ctx, &result.Articles[i]); upsertErr != nil {
 			s.logger.Error("failed to upsert article", "error", upsertErr, "url", result.Articles[i].URL)
-			continue
-		}
-		if id > 0 {
-			newCount++
 		}
 	}
 
-	if newCount > 0 {
-		state.errorCount = 0
-		state.consecutiveEmpty = 0
-		state.interval = 30 * time.Minute
-	} else {
-		state.consecutiveEmpty++
-		if state.consecutiveEmpty > 3 {
-			state.interval *= 2
-			if state.interval > 6*time.Hour {
-				state.interval = 6 * time.Hour
-			}
-		}
-	}
-
-	updErr := s.store.UpdateFeedFetchResult(
-		ctx, feed.URL,
-		newEtag, newLastModified,
-		int(state.interval.Minutes()), state.consecutiveEmpty, state.errorCount,
-		"",
-	)
-	if updErr != nil {
-		s.logger.Error("failed to update feed fetch result", "error", updErr, "feed", feed.URL)
+	if err := s.store.MarkFeedFetched(ctx, feed.URL, newEtag, newLastModified); err != nil {
+		s.logger.Error("failed to update feed fetch result", "error", err, "feed", feed.URL)
 	}
 }
