@@ -8,29 +8,51 @@ import (
 const defaultPageSize = 25
 
 type Pagination struct {
-	Offset    int
-	Limit     int
-	HasMore   bool
-	NextOffset int
+	Page     int
+	PageSize int
+	HasPrev  bool
+	HasNext  bool
+	PrevPage int
+	NextPage int
 }
 
-func pageFromRequest(r *http.Request, limit int) Pagination {
-	if limit <= 0 {
-		limit = defaultPageSize
+func pageFromRequest(r *http.Request, pageSize int) Pagination {
+	if pageSize <= 0 {
+		pageSize = defaultPageSize
 	}
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
-	if offset < 0 {
-		offset = 0
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
 	}
-	return Pagination{Offset: offset, Limit: limit}
+	return Pagination{Page: page, PageSize: pageSize}
 }
 
-func (p Pagination) Paginate(count int) Pagination {
-	p.HasMore = count > p.Limit
-	p.NextOffset = p.Offset + p.Limit
+func (p Pagination) Paginate(totalFetched int) Pagination {
+	if totalFetched > p.PageSize {
+		p.HasNext = true
+		p.NextPage = p.Page + 1
+	}
+	if p.Page > 1 {
+		p.HasPrev = true
+		p.PrevPage = p.Page - 1
+	}
 	return p
 }
 
-func (p Pagination) FetchLimit() int {
-	return p.Limit + 1
+func (p Pagination) Offset() int {
+	return (p.Page - 1) * p.PageSize
+}
+
+func (p Pagination) Limit() int {
+	return p.PageSize
+}
+
+func buildQueryParams(params map[string]string) map[string]string {
+	result := make(map[string]string)
+	for k, v := range params {
+		if v != "" {
+			result[k] = v
+		}
+	}
+	return result
 }

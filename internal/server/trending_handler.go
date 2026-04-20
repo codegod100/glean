@@ -20,20 +20,23 @@ func (s *Server) handleTrending(w http.ResponseWriter, r *http.Request) {
 
 	var trending []*db.TrendingItem
 	if scope == "for-me" {
-		trending, _ = s.db.ListTrendingArticlesForUser(r.Context(), user.DID, since, page.FetchLimit(), page.Offset)
+		trending, _ = s.db.ListTrendingArticlesForUser(r.Context(), user.DID, since, page.Limit()+1, page.Offset())
 	} else {
-		trending, _ = s.db.ListTrendingArticles(r.Context(), since, page.FetchLimit(), page.Offset)
+		trending, _ = s.db.ListTrendingArticles(r.Context(), since, page.Limit()+1, page.Offset())
 	}
 
-	page = page.Paginate(len(trending))
-	if page.HasMore {
-		trending = trending[:page.Limit]
+	totalFetched := len(trending)
+	page = page.Paginate(totalFetched)
+	if page.HasNext {
+		trending = trending[:page.PageSize]
 	}
 
 	s.render(w, r, "trending.html", map[string]any{
-		"User":     user,
-		"Trending": trending,
-		"Scope":    scope,
-		"Page":     page,
+		"User":        user,
+		"Trending":    trending,
+		"Scope":       scope,
+		"Page":        page,
+		"BaseURL":     "/trending",
+		"QueryParams": buildQueryParams(map[string]string{"scope": scope}),
 	})
 }

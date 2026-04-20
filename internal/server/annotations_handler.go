@@ -14,36 +14,48 @@ import (
 func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 
-	likedOffset, _ := strconv.Atoi(r.URL.Query().Get("liked_offset"))
-	if likedOffset < 0 {
-		likedOffset = 0
-	}
-	annotOffset, _ := strconv.Atoi(r.URL.Query().Get("annot_offset"))
-	if annotOffset < 0 {
-		annotOffset = 0
-	}
 	limit := 20
 
-	articles, _ := s.db.ListLikedArticles(r.Context(), user.DID, limit+1, likedOffset)
+	likedPageNum, _ := strconv.Atoi(r.URL.Query().Get("liked_page"))
+	if likedPageNum < 1 {
+		likedPageNum = 1
+	}
+	annotPageNum, _ := strconv.Atoi(r.URL.Query().Get("annot_page"))
+	if annotPageNum < 1 {
+		annotPageNum = 1
+	}
+
+	likedPage := Pagination{Page: likedPageNum, PageSize: limit}
+	annotPage := Pagination{Page: annotPageNum, PageSize: limit}
+
+	articles, _ := s.db.ListLikedArticles(r.Context(), user.DID, limit+1, likedPage.Offset())
 	likedHasMore := len(articles) > limit
 	if likedHasMore {
 		articles = articles[:limit]
 	}
+	likedPage = likedPage.Paginate(len(articles))
+	if likedHasMore {
+		likedPage.HasNext = true
+		likedPage.NextPage = likedPage.Page + 1
+	}
 
-	annotations, _ := s.db.ListAnnotations(r.Context(), "", "", user.DID, limit+1, annotOffset)
+	annotations, _ := s.db.ListAnnotations(r.Context(), "", "", user.DID, limit+1, annotPage.Offset())
 	annotHasMore := len(annotations) > limit
 	if annotHasMore {
 		annotations = annotations[:limit]
+	}
+	annotPage = annotPage.Paginate(len(annotations))
+	if annotHasMore {
+		annotPage.HasNext = true
+		annotPage.NextPage = annotPage.Page + 1
 	}
 
 	s.render(w, r, "library.html", map[string]any{
 		"User":          user,
 		"Articles":      articles,
 		"Annotations":   annotations,
-		"LikedHasMore":  likedHasMore,
-		"AnnotHasMore":  annotHasMore,
-		"NextLiked":     likedOffset + limit,
-		"NextAnnot":     annotOffset + limit,
+		"LikedPage":     likedPage,
+		"AnnotPage":     annotPage,
 	})
 }
 

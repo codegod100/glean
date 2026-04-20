@@ -38,14 +38,21 @@
             {{end}}
         </div>
 
-        {{if .Page.HasMore}}
-        <div class="text-center py-4">
-            <button hx-get="/dashboard?offset={{.Page.NextOffset}}"
-                    hx-target="#article-list" hx-swap="beforeend"
-                    hx-select="article"
-                    class="text-sm text-spot-secondary hover:text-spot-green transition">
-                Load more
-            </button>
+        {{if or .Page.HasPrev .Page.HasNext}}
+        <div class="flex items-center justify-center gap-3 py-6">
+            {{if .Page.HasPrev}}
+            <a href="{{paginationURL .BaseURL .Page.PrevPage .QueryParams}}" class="px-3 py-1.5 rounded-lg text-sm bg-spot-hover text-spot-text hover:bg-spot-hover-50 transition">&laquo; Prev</a>
+            {{else}}
+            <span class="px-3 py-1.5 rounded-lg text-sm bg-spot-hover text-spot-muted cursor-not-allowed">&laquo; Prev</span>
+            {{end}}
+
+            <span class="text-sm text-spot-secondary">Page {{.Page.Page}}</span>
+
+            {{if .Page.HasNext}}
+            <a href="{{paginationURL .BaseURL .Page.NextPage .QueryParams}}" class="px-3 py-1.5 rounded-lg text-sm bg-spot-hover text-spot-text hover:bg-spot-hover-50 transition">Next &raquo;</a>
+            {{else}}
+            <span class="px-3 py-1.5 rounded-lg text-sm bg-spot-hover text-spot-muted cursor-not-allowed">Next &raquo;</span>
+            {{end}}
         </div>
         {{end}}
     </div>

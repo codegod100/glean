@@ -19,10 +19,11 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 	category := r.URL.Query().Get("category")
 
 	page := pageFromRequest(r, 50)
-	subs, _ := s.db.ListSubscriptions(r.Context(), user.DID, category, page.FetchLimit(), page.Offset)
-	page = page.Paginate(len(subs))
-	if page.HasMore {
-		subs = subs[:page.Limit]
+	subs, _ := s.db.ListSubscriptions(r.Context(), user.DID, category, page.Limit()+1, page.Offset())
+	totalFetched := len(subs)
+	page = page.Paginate(totalFetched)
+	if page.HasNext {
+		subs = subs[:page.PageSize]
 	}
 
 	allSubs, _ := s.db.ListSubscriptions(r.Context(), user.DID, "", 1000, 0)
@@ -49,6 +50,8 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 		"PeopleRecommendations": peopleRecs,
 		"DeadFeeds":             deadFeeds,
 		"Page":                  page,
+		"BaseURL":               "/feeds",
+		"QueryParams":           buildQueryParams(map[string]string{"category": category}),
 	})
 }
 

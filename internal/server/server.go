@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -207,6 +208,20 @@ func (s *Server) loadTemplates() {
 				return ""
 			}
 			return template.HTML(`<input type="hidden" name="csrf_token" value="` + s + `">`)
+		},
+		"paginationURL": func(baseURL string, page int, queryParams map[string]string) string {
+			u, _ := url.Parse(baseURL)
+			q := u.Query()
+			for k, v := range queryParams {
+				q.Set(k, v)
+			}
+			if page > 1 {
+				q.Set("page", fmt.Sprintf("%d", page))
+			} else {
+				q.Del("page")
+			}
+			u.RawQuery = q.Encode()
+			return u.String()
 		},
 	}
 

@@ -12,10 +12,11 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	subCount, _ := s.db.GetSubscriptionCount(r.Context(), user.DID)
 
 	page := pageFromRequest(r, 25)
-	articles, _ := s.db.ListUnreadArticles(r.Context(), user.DID, "", page.FetchLimit(), page.Offset)
-	page = page.Paginate(len(articles))
-	if page.HasMore {
-		articles = articles[:page.Limit]
+	articles, _ := s.db.ListUnreadArticles(r.Context(), user.DID, "", page.Limit()+1, page.Offset())
+	totalFetched := len(articles)
+	page = page.Paginate(totalFetched)
+	if page.HasNext {
+		articles = articles[:page.PageSize]
 	}
 
 	articleRecs, _ := s.db.GetArticleRecommendations(r.Context(), user.DID, 5)
@@ -35,5 +36,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"PeopleRecommendations":  peopleRecs,
 		"PersonalTrending":       personalTrending,
 		"Page":                   page,
+		"BaseURL":                "/dashboard",
+		"QueryParams":            map[string]string{},
 	})
 }

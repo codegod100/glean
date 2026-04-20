@@ -38,23 +38,26 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 	feedURL := r.URL.Query().Get("feed")
 
 	page := pageFromRequest(r, 50)
-	articles, err := s.db.ListArticles(r.Context(), user.DID, feedURL, page.FetchLimit(), page.Offset)
+	articles, err := s.db.ListArticles(r.Context(), user.DID, feedURL, page.Limit()+1, page.Offset())
 	if err != nil {
 		s.logger.Error("failed to list articles", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	page = page.Paginate(len(articles))
-	if page.HasMore {
-		articles = articles[:page.Limit]
+	totalFetched := len(articles)
+	page = page.Paginate(totalFetched)
+	if page.HasNext {
+		articles = articles[:page.PageSize]
 	}
 
 	s.render(w, r, "articles.html", map[string]any{
-		"User":     user,
-		"Articles": articles,
-		"FeedURL":  feedURL,
-		"Page":     page,
+		"User":        user,
+		"Articles":    articles,
+		"FeedURL":     feedURL,
+		"Page":        page,
+		"BaseURL":     "/articles",
+		"QueryParams": buildQueryParams(map[string]string{"feed": feedURL}),
 	})
 }
 

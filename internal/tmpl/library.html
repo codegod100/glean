@@ -19,14 +19,21 @@
             {{end}}
         </div>
 
-        {{if .LikedHasMore}}
-        <div class="text-center py-4">
-            <button hx-get="/library?liked_offset={{.NextLiked}}"
-                    hx-target="#liked-list" hx-swap="beforeend"
-                    hx-select="article"
-                    class="text-sm text-spot-secondary hover:text-spot-green transition">
-                Load more
-            </button>
+        {{if or .LikedPage.HasPrev .LikedPage.HasNext}}
+        <div class="flex items-center justify-center gap-3 py-6">
+            {{if .LikedPage.HasPrev}}
+            <a href="/library?liked_page={{.LikedPage.PrevPage}}{{if gt .AnnotPage.Page 1}}&annot_page={{.AnnotPage.Page}}{{end}}" class="px-3 py-1.5 rounded-lg text-sm bg-spot-hover text-spot-text hover:bg-spot-hover-50 transition">&laquo; Prev</a>
+            {{else}}
+            <span class="px-3 py-1.5 rounded-lg text-sm bg-spot-hover text-spot-muted cursor-not-allowed">&laquo; Prev</span>
+            {{end}}
+
+            <span class="text-sm text-spot-secondary">Page {{.LikedPage.Page}}</span>
+
+            {{if .LikedPage.HasNext}}
+            <a href="/library?liked_page={{.LikedPage.NextPage}}{{if gt .AnnotPage.Page 1}}&annot_page={{.AnnotPage.Page}}{{end}}" class="px-3 py-1.5 rounded-lg text-sm bg-spot-hover text-spot-text hover:bg-spot-hover-50 transition">Next &raquo;</a>
+            {{else}}
+            <span class="px-3 py-1.5 rounded-lg text-sm bg-spot-hover text-spot-muted cursor-not-allowed">Next &raquo;</span>
+            {{end}}
         </div>
         {{end}}
     </div>
@@ -51,14 +58,21 @@
             {{end}}
         </div>
 
-        {{if .AnnotHasMore}}
-        <div class="text-center py-4">
-            <button hx-get="/library?annot_offset={{.NextAnnot}}"
-                    hx-target="#annotations-list" hx-swap="beforeend"
-                    hx-select=".bg-spot-surface"
-                    class="text-sm text-spot-secondary hover:text-spot-green transition">
-                Load more
-            </button>
+        {{if or .AnnotPage.HasPrev .AnnotPage.HasNext}}
+        <div class="flex items-center justify-center gap-3 py-6">
+            {{if .AnnotPage.HasPrev}}
+            <a href="/library?annot_page={{.AnnotPage.PrevPage}}{{if gt .LikedPage.Page 1}}&liked_page={{.LikedPage.Page}}{{end}}" class="px-3 py-1.5 rounded-lg text-sm bg-spot-hover text-spot-text hover:bg-spot-hover-50 transition">&laquo; Prev</a>
+            {{else}}
+            <span class="px-3 py-1.5 rounded-lg text-sm bg-spot-hover text-spot-muted cursor-not-allowed">&laquo; Prev</span>
+            {{end}}
+
+            <span class="text-sm text-spot-secondary">Page {{.AnnotPage.Page}}</span>
+
+            {{if .AnnotPage.HasNext}}
+            <a href="/library?annot_page={{.AnnotPage.NextPage}}{{if gt .LikedPage.Page 1}}&liked_page={{.LikedPage.Page}}{{end}}" class="px-3 py-1.5 rounded-lg text-sm bg-spot-hover text-spot-text hover:bg-spot-hover-50 transition">Next &raquo;</a>
+            {{else}}
+            <span class="px-3 py-1.5 rounded-lg text-sm bg-spot-hover text-spot-muted cursor-not-allowed">Next &raquo;</span>
+            {{end}}
         </div>
         {{end}}
     </div>
