@@ -161,3 +161,27 @@ func TestGetUnreadCount(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, count, 1)
 }
+
+func TestUpdateArticleFullContent(t *testing.T) {
+	ctx := context.Background()
+	db := setupTestDB(t)
+	_, _, _, articleID := seedArticleReadState(t, ctx, db)
+
+	err := db.UpdateArticleFullContent(ctx, articleID, "<p>Scraped content</p>")
+	assert.NilError(t, err)
+
+	article, err := db.GetArticle(ctx, articleID)
+	assert.NilError(t, err)
+	assert.Equal(t, article.FullContent.String, "<p>Scraped content</p>")
+	assert.Assert(t, article.FullContent.Valid)
+}
+
+func TestGetArticle_IncludesFullContent(t *testing.T) {
+	ctx := context.Background()
+	db := setupTestDB(t)
+	_, _, _, articleID := seedArticleReadState(t, ctx, db)
+
+	article, err := db.GetArticle(ctx, articleID)
+	assert.NilError(t, err)
+	assert.Assert(t, !article.FullContent.Valid)
+}

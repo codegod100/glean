@@ -11,6 +11,7 @@ import (
 
 	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/db"
+	"pkg.rbrt.fr/glean/internal/sanitize"
 )
 
 func writeLikeButton(w http.ResponseWriter, articleID int64, liked bool, count int) {
@@ -237,4 +238,48 @@ func (s *Server) handleMarkAllRead(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("HX-Refresh", "true")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleFetchContent(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	article, err := s.db.GetArticle(r.Context(), id)
+	if err != nil {
+		http.Error(w, "article not found", http.StatusNotFound)
+		return
+	}
+
+	if !article.URL.Valid {
+		s.logger.Warn("cannot fetch content: article has no URL", "id", id)
+		http.Error(w, "article has no URL", http.StatusBadRequest)
+		return
+	}
+
+	content, err := s.scraper.Scrape(r.Context(), article.URL.String)
+	if err != nil {
+		s.logger.Error("failed to scrape article", "error", err, "url", article.URL.String)
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = fmt.Fprintf(w, `<div id="article-content" class="text-spot-secondary text-sm">Failed to fetch content. <button hx-post="/articles/%d/fetch-content" hx-target="#article-content" hx-swap="outerHTML" class="text-spot-green underline">Retry</button></div>`, id)
+		return
+	}
+
+	if content == "" {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = fmt.Fprintf(w, `<div id="article-content" class="text-spot-secondary text-sm">No readable content found. <a href="%s" target="_blank" rel="noopener noreferrer" class="text-spot-green underline">Read on original site</a></div>`, article.URL.String)
+		return
+	}
+
+	cleaned := sanitize.HTML(content)
+
+	if err := s.db.UpdateArticleFullContent(r.Context(), id, cleaned); err != nil {
+		s.logger.Error("failed to save full content", "error", err, "id", id)
+	}
+
+	w.Header().Set("Content-Type", "text/html")
+	_, _ = fmt.Fprintf(w, `<div id="article-content" class="article-body">%s</div>`, cleaned)
+	s.logger.Info("scraped article content", "id", id, "url", article.URL.String, "content_len", len(cleaned))
 }

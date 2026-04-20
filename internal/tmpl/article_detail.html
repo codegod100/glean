@@ -61,15 +61,31 @@
         {{end}}
         {{end}}
 
+        {{if or .Article.Content.Valid .Article.FullContent.Valid .Article.Summary.Valid}}
         <hr class="my-8 border-spot-divider">
+        {{end}}
 
         {{if .Article.Content.Valid}}
         <div class="article-body">
             {{sanitizeHTML .Article.Content.String}}
         </div>
+        {{else if .Article.FullContent.Valid}}
+        <div class="article-body">
+            {{sanitizeHTML .Article.FullContent.String}}
+        </div>
         {{else if .Article.Summary.Valid}}
         <div class="article-body">
             {{sanitizeHTML .Article.Summary.String}}
+        </div>
+        {{end}}
+
+        {{if and (not .Article.Content.Valid) (not .Article.FullContent.Valid) .Article.URL.Valid (not (isEmbedURL .Article.URL.String))}}
+        <div id="article-content" class="mt-6">
+            <button hx-post="/articles/{{.Article.ID}}/fetch-content" hx-target="#article-content" hx-swap="outerHTML"
+                    class="border border-spot-outline text-spot-text rounded-pill px-2.5 py-1.5 text-xs font-bold uppercase tracking-button hover:border-spot-text transition inline-flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+                Fetch full content
+            </button>
         </div>
         {{else if not .Article.URL.Valid}}
         <p class="text-spot-secondary">No content available.</p>
@@ -110,6 +126,11 @@
             {{end}}
         </div>
     </section>
+
+    <a href="/articles" class="text-sm text-spot-secondary hover:text-spot-text mt-8 inline-flex items-center gap-1.5 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+        Back to articles
+    </a>
 </div>
 
 <script>

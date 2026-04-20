@@ -7,20 +7,20 @@ import (
 )
 
 type Article struct {
-	ID        int64
-	FeedURL   string
-	FeedTitle string
-	GUID      string
-	Title     string
-	URL       sql.NullString
-	Author    sql.NullString
-	Summary   sql.NullString
-	Content   sql.NullString
-	Published sql.NullTime
-	Updated   sql.NullTime
-	FetchedAt sql.NullTime
-	IsRead    sql.NullBool
-	IsStarred sql.NullBool
+	ID          int64
+	FeedURL     string
+	FeedTitle   string
+	GUID        string
+	Title       string
+	URL         sql.NullString
+	Author      sql.NullString
+	Summary     sql.NullString
+	Content     sql.NullString
+	FullContent sql.NullString
+	Published   sql.NullTime
+	Updated     sql.NullTime
+	FetchedAt   sql.NullTime
+	IsRead      sql.NullBool
 }
 
 type ReadState struct {
@@ -28,8 +28,6 @@ type ReadState struct {
 	ArticleID int64
 	IsRead    bool
 	ReadAt    sql.NullTime
-	IsStarred bool
-	StarredAt sql.NullTime
 }
 
 func (db *DB) UpsertArticle(ctx context.Context, article *Article) (int64, error) {
@@ -52,10 +50,10 @@ func (db *DB) UpsertArticle(ctx context.Context, article *Article) (int64, error
 func (db *DB) GetArticle(ctx context.Context, id int64) (*Article, error) {
 	a := &Article{}
 	err := db.QueryRowContext(ctx, `
-		SELECT id, feed_url, guid, title, url, author, summary, content, published, updated, fetched_at
+		SELECT id, feed_url, guid, title, url, author, summary, content, full_content, published, updated, fetched_at
 		FROM articles WHERE id = ?
 	`, id).Scan(&a.ID, &a.FeedURL, &a.GUID, &a.Title, &a.URL, &a.Author,
-		&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt)
+		&a.Summary, &a.Content, &a.FullContent, &a.Published, &a.Updated, &a.FetchedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +64,7 @@ func (db *DB) ListArticles(ctx context.Context, userDID, feedURL string, limit, 
 	query := `
 		SELECT a.id, a.feed_url, COALESCE(f.title, ''), a.guid, a.title, a.url, a.author, a.summary, a.content,
 			a.published, a.updated, a.fetched_at,
-			COALESCE(r.is_read, 0), COALESCE(r.is_starred, 0)
+			COALESCE(r.is_read, 0)
 		FROM articles a
 		JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
 		LEFT JOIN feeds f ON a.feed_url = f.feed_url
@@ -92,7 +90,7 @@ func (db *DB) ListArticles(ctx context.Context, userDID, feedURL string, limit, 
 		a := &Article{}
 		if err := rows.Scan(&a.ID, &a.FeedURL, &a.FeedTitle, &a.GUID, &a.Title, &a.URL, &a.Author,
 			&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt,
-			&a.IsRead, &a.IsStarred); err != nil {
+			&a.IsRead); err != nil {
 			return nil, err
 		}
 		articles = append(articles, a)
@@ -104,7 +102,7 @@ func (db *DB) ListUnreadArticles(ctx context.Context, userDID, feedURL string, l
 	query := `
 		SELECT a.id, a.feed_url, COALESCE(f.title, ''), a.guid, a.title, a.url, a.author, a.summary, a.content,
 			a.published, a.updated, a.fetched_at,
-			COALESCE(r.is_read, 0), COALESCE(r.is_starred, 0)
+			COALESCE(r.is_read, 0)
 		FROM articles a
 		JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
 		LEFT JOIN feeds f ON a.feed_url = f.feed_url
@@ -131,7 +129,7 @@ func (db *DB) ListUnreadArticles(ctx context.Context, userDID, feedURL string, l
 		a := &Article{}
 		if err := rows.Scan(&a.ID, &a.FeedURL, &a.FeedTitle, &a.GUID, &a.Title, &a.URL, &a.Author,
 			&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt,
-			&a.IsRead, &a.IsStarred); err != nil {
+			&a.IsRead); err != nil {
 			return nil, err
 		}
 		articles = append(articles, a)
@@ -143,7 +141,7 @@ func (db *DB) ListReadArticles(ctx context.Context, userDID, feedURL string, lim
 	query := `
 		SELECT a.id, a.feed_url, COALESCE(f.title, ''), a.guid, a.title, a.url, a.author, a.summary, a.content,
 			a.published, a.updated, a.fetched_at,
-			COALESCE(r.is_read, 0), COALESCE(r.is_starred, 0)
+			COALESCE(r.is_read, 0)
 		FROM articles a
 		JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
 		LEFT JOIN feeds f ON a.feed_url = f.feed_url
@@ -170,35 +168,7 @@ func (db *DB) ListReadArticles(ctx context.Context, userDID, feedURL string, lim
 		a := &Article{}
 		if err := rows.Scan(&a.ID, &a.FeedURL, &a.FeedTitle, &a.GUID, &a.Title, &a.URL, &a.Author,
 			&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt,
-			&a.IsRead, &a.IsStarred); err != nil {
-			return nil, err
-		}
-		articles = append(articles, a)
-	}
-	return articles, rows.Err()
-}
-
-func (db *DB) ListStarredArticles(ctx context.Context, userDID string, limit, offset int) ([]*Article, error) {
-	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT a.id, a.feed_url, COALESCE(f.title, ''), a.guid, a.title, a.url, a.author, a.summary, a.content,
-			a.published, a.updated, a.fetched_at
-		FROM articles a
-		JOIN read_state r ON r.article_id = a.id AND r.user_did = ?
-		LEFT JOIN feeds f ON a.feed_url = f.feed_url
-		WHERE r.is_starred = 1
-		ORDER BY r.starred_at DESC
-		LIMIT %d OFFSET %d
-	`, limit, offset), userDID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var articles []*Article
-	for rows.Next() {
-		a := &Article{}
-		if err := rows.Scan(&a.ID, &a.FeedURL, &a.FeedTitle, &a.GUID, &a.Title, &a.URL, &a.Author,
-			&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt); err != nil {
+			&a.IsRead); err != nil {
 			return nil, err
 		}
 		articles = append(articles, a)
@@ -251,30 +221,12 @@ func (db *DB) MarkAllSubscribedRead(ctx context.Context, userDID string) error {
 	return err
 }
 
-func (db *DB) StarArticle(ctx context.Context, userDID string, articleID int64) error {
-	_, err := db.ExecContext(ctx, `
-		INSERT INTO read_state (user_did, article_id, is_starred, starred_at)
-		VALUES (?, ?, 1, CURRENT_TIMESTAMP)
-		ON CONFLICT(user_did, article_id) DO UPDATE SET
-			is_starred = 1, starred_at = CURRENT_TIMESTAMP
-	`, userDID, articleID)
-	return err
-}
-
-func (db *DB) UnstarArticle(ctx context.Context, userDID string, articleID int64) error {
-	_, err := db.ExecContext(ctx, `
-		UPDATE read_state SET is_starred = 0, starred_at = NULL
-		WHERE user_did = ? AND article_id = ?
-	`, userDID, articleID)
-	return err
-}
-
 func (db *DB) GetReadState(ctx context.Context, userDID string, articleID int64) (*ReadState, error) {
 	rs := &ReadState{}
 	err := db.QueryRowContext(ctx, `
-		SELECT user_did, article_id, is_read, read_at, is_starred, starred_at
+		SELECT user_did, article_id, is_read, read_at
 		FROM read_state WHERE user_did = ? AND article_id = ?
-	`, userDID, articleID).Scan(&rs.UserDID, &rs.ArticleID, &rs.IsRead, &rs.ReadAt, &rs.IsStarred, &rs.StarredAt)
+	`, userDID, articleID).Scan(&rs.UserDID, &rs.ArticleID, &rs.IsRead, &rs.ReadAt)
 	if err == sql.ErrNoRows {
 		return &ReadState{UserDID: userDID, ArticleID: articleID}, nil
 	}
@@ -304,4 +256,11 @@ func (db *DB) GetUnreadCount(ctx context.Context, userDID, feedURL string) (int,
 		WHERE r.is_read = 0 OR r.is_read IS NULL
 	`, userDID, userDID).Scan(&count)
 	return count, err
+}
+
+func (db *DB) UpdateArticleFullContent(ctx context.Context, id int64, fullContent string) error {
+	_, err := db.ExecContext(ctx, `
+		UPDATE articles SET full_content = ? WHERE id = ?
+	`, fullContent, id)
+	return err
 }

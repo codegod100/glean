@@ -101,6 +101,7 @@ var schema = []string{
 		author TEXT,
 		summary TEXT,
 		content TEXT,
+		full_content TEXT,
 		published DATETIME,
 		updated DATETIME,
 		fetched_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -111,8 +112,6 @@ var schema = []string{
 		article_id INTEGER NOT NULL REFERENCES articles(id),
 		is_read BOOLEAN NOT NULL DEFAULT 0,
 		read_at DATETIME,
-		is_starred BOOLEAN NOT NULL DEFAULT 0,
-		starred_at DATETIME,
 		PRIMARY KEY (user_did, article_id)
 	)`,
 	`CREATE TABLE IF NOT EXISTS annotations (
@@ -185,7 +184,6 @@ var schema = []string{
 	`CREATE INDEX IF NOT EXISTS idx_articles_feed ON articles(feed_url)`,
 	`CREATE INDEX IF NOT EXISTS idx_articles_published ON articles(published DESC)`,
 	`CREATE INDEX IF NOT EXISTS idx_read_state_unread ON read_state(user_did, is_read) WHERE is_read = 0`,
-	`CREATE INDEX IF NOT EXISTS idx_read_state_starred ON read_state(user_did, is_starred) WHERE is_starred = 1`,
 	`CREATE INDEX IF NOT EXISTS idx_annotations_article ON annotations(article_url)`,
 	`CREATE INDEX IF NOT EXISTS idx_likes_article ON likes(feed_url, article_url)`,
 	`CREATE INDEX IF NOT EXISTS idx_likes_author ON likes(author_did)`,

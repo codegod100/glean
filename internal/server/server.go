@@ -26,6 +26,7 @@ import (
 	"pkg.rbrt.fr/glean/internal/feed"
 	"pkg.rbrt.fr/glean/internal/metrics"
 	"pkg.rbrt.fr/glean/internal/sanitize"
+	"pkg.rbrt.fr/glean/internal/scraper"
 )
 
 func splitString(s, sep string) []string {
@@ -41,6 +42,7 @@ type Server struct {
 	oauthStore  *db.OAuthStore
 	fetcher     *feed.Fetcher
 	scheduler   *feed.Scheduler
+	scraper     *scraper.Scraper
 	clientID    string
 	callbackURL string
 }
@@ -69,6 +71,7 @@ func New(database *db.DB, clientID, callbackURL, addr string, scheduler *feed.Sc
 		oauthStore:  oauthStore,
 		fetcher:     feed.NewFetcher(),
 		scheduler:   scheduler,
+		scraper:     scraper.New(logger),
 		clientID:    clientID,
 		callbackURL: callbackURL,
 	}
@@ -144,6 +147,7 @@ func (s *Server) setupRoutes() {
 		r.Post("/{id}/read", s.handleMarkRead)
 		r.Post("/{id}/unread", s.handleMarkUnread)
 		r.Post("/{id}/like", s.handleLikeArticle)
+		r.Post("/{id}/fetch-content", s.handleFetchContent)
 		r.Post("/mark-all-read", s.handleMarkAllRead)
 	})
 
@@ -263,6 +267,25 @@ func (s *Server) loadTemplates() {
 				}
 			}
 			return ""
+		},
+		"isEmbedURL": func(rawURL string) bool {
+			u, err := url.Parse(rawURL)
+			if err != nil {
+				return false
+			}
+			host := strings.ToLower(u.Hostname())
+			for _, h := range []string{
+				"www.youtube.com", "youtube.com", "m.youtube.com", "youtu.be",
+				"vimeo.com", "player.vimeo.com",
+				"open.spotify.com", "embed.spotify.com",
+				"w.soundcloud.com",
+				"bandcamp.com",
+			} {
+				if host == h {
+					return true
+				}
+			}
+			return false
 		},
 		"sanitizeHTML": func(input string) template.HTML {
 			return template.HTML(sanitize.HTML(input))
