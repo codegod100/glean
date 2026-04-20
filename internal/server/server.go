@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +26,8 @@ import (
 	"pkg.rbrt.fr/glean/internal/metrics"
 	"pkg.rbrt.fr/glean/internal/sanitize"
 	"pkg.rbrt.fr/glean/internal/scraper"
+	"pkg.rbrt.fr/glean/static"
+	"pkg.rbrt.fr/glean/internal/tmpl"
 )
 
 func splitString(s, sep string) []string {
@@ -182,7 +183,7 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/xrpc/at.glean.getRecommendations", xrpc.GetRecommendations)
 	s.router.Get("/xrpc/at.glean.listFeedLists", xrpc.ListFeedLists)
 
-	s.router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	s.router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(static.Files))))
 	s.router.Handle("/metrics", promhttp.Handler())
 }
 
@@ -325,14 +326,8 @@ func (s *Server) loadTemplates() {
 		},
 	}
 
-	var allFiles []string
-	matches, _ := filepath.Glob("internal/tmpl/*.html")
-	allFiles = append(allFiles, matches...)
-	partials, _ := filepath.Glob("internal/tmpl/partials/*.html")
-	allFiles = append(allFiles, partials...)
-
 	var err error
-	s.templates, err = template.New("").Funcs(fm).ParseFiles(allFiles...)
+	s.templates, err = template.New("").Funcs(fm).ParseFS(tmpl.Files, "*.html", "partials/*.html")
 	if err != nil {
 		s.logger.Error("failed to load templates", "error", err)
 	}
