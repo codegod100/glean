@@ -7,20 +7,21 @@ import (
 )
 
 type Article struct {
-	ID          int64
-	FeedURL     string
-	FeedTitle   string
-	GUID        string
-	Title       string
-	URL         sql.NullString
-	Author      sql.NullString
-	Summary     sql.NullString
-	Content     sql.NullString
-	FullContent sql.NullString
-	Published   sql.NullTime
-	Updated     sql.NullTime
-	FetchedAt   sql.NullTime
-	IsRead      sql.NullBool
+	ID             int64
+	FeedURL        string
+	FeedTitle      string
+	FeedFaviconURL sql.NullString
+	GUID           string
+	Title          string
+	URL            sql.NullString
+	Author         sql.NullString
+	Summary        sql.NullString
+	Content        sql.NullString
+	FullContent    sql.NullString
+	Published      sql.NullTime
+	Updated        sql.NullTime
+	FetchedAt      sql.NullTime
+	IsRead         sql.NullBool
 }
 
 type ReadState struct {
@@ -62,7 +63,7 @@ func (db *DB) GetArticle(ctx context.Context, id int64) (*Article, error) {
 
 func (db *DB) ListArticles(ctx context.Context, userDID, feedURL string, limit, offset int) ([]*Article, error) {
 	query := `
-		SELECT a.id, a.feed_url, COALESCE(f.title, ''), a.guid, a.title, a.url, a.author, a.summary, a.content,
+		SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 			a.published, a.updated, a.fetched_at,
 			COALESCE(r.is_read, 0)
 		FROM articles a
@@ -88,7 +89,7 @@ func (db *DB) ListArticles(ctx context.Context, userDID, feedURL string, limit, 
 	var articles []*Article
 	for rows.Next() {
 		a := &Article{}
-		if err := rows.Scan(&a.ID, &a.FeedURL, &a.FeedTitle, &a.GUID, &a.Title, &a.URL, &a.Author,
+		if err := rows.Scan(&a.ID, &a.FeedURL, &a.FeedTitle, &a.FeedFaviconURL, &a.GUID, &a.Title, &a.URL, &a.Author,
 			&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt,
 			&a.IsRead); err != nil {
 			return nil, err
@@ -100,7 +101,7 @@ func (db *DB) ListArticles(ctx context.Context, userDID, feedURL string, limit, 
 
 func (db *DB) ListUnreadArticles(ctx context.Context, userDID, feedURL string, limit, offset int) ([]*Article, error) {
 	query := `
-		SELECT a.id, a.feed_url, COALESCE(f.title, ''), a.guid, a.title, a.url, a.author, a.summary, a.content,
+		SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 			a.published, a.updated, a.fetched_at,
 			COALESCE(r.is_read, 0)
 		FROM articles a
@@ -127,7 +128,7 @@ func (db *DB) ListUnreadArticles(ctx context.Context, userDID, feedURL string, l
 	var articles []*Article
 	for rows.Next() {
 		a := &Article{}
-		if err := rows.Scan(&a.ID, &a.FeedURL, &a.FeedTitle, &a.GUID, &a.Title, &a.URL, &a.Author,
+		if err := rows.Scan(&a.ID, &a.FeedURL, &a.FeedTitle, &a.FeedFaviconURL, &a.GUID, &a.Title, &a.URL, &a.Author,
 			&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt,
 			&a.IsRead); err != nil {
 			return nil, err
@@ -139,7 +140,7 @@ func (db *DB) ListUnreadArticles(ctx context.Context, userDID, feedURL string, l
 
 func (db *DB) ListReadArticles(ctx context.Context, userDID, feedURL string, limit, offset int) ([]*Article, error) {
 	query := `
-		SELECT a.id, a.feed_url, COALESCE(f.title, ''), a.guid, a.title, a.url, a.author, a.summary, a.content,
+		SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 			a.published, a.updated, a.fetched_at,
 			COALESCE(r.is_read, 0)
 		FROM articles a
@@ -166,7 +167,7 @@ func (db *DB) ListReadArticles(ctx context.Context, userDID, feedURL string, lim
 	var articles []*Article
 	for rows.Next() {
 		a := &Article{}
-		if err := rows.Scan(&a.ID, &a.FeedURL, &a.FeedTitle, &a.GUID, &a.Title, &a.URL, &a.Author,
+		if err := rows.Scan(&a.ID, &a.FeedURL, &a.FeedTitle, &a.FeedFaviconURL, &a.GUID, &a.Title, &a.URL, &a.Author,
 			&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt,
 			&a.IsRead); err != nil {
 			return nil, err

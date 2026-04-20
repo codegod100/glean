@@ -205,7 +205,7 @@ func (db *DB) ComputeFeedRecommendations(ctx context.Context, userDID string) er
 
 func (db *DB) GetFeedRecommendations(ctx context.Context, userDID string, limit int) ([]map[string]any, error) {
 	rows, err := db.QueryContext(ctx, `
-		SELECT r.feed_url, r.score, f.title, f.site_url, f.description, f.subscriber_count
+		SELECT r.feed_url, r.score, f.title, f.site_url, f.description, f.subscriber_count, f.favicon_url
 		FROM user_feed_recommendations r
 		JOIN feeds f ON f.feed_url = r.feed_url
 		WHERE r.user_did = ?
@@ -222,8 +222,9 @@ func (db *DB) GetFeedRecommendations(ctx context.Context, userDID string, limit 
 		var feedURL string
 		var score float64
 		var title, siteURL, description sql.NullString
+		var faviconURL sql.NullString
 		var subCount int
-		if err := rows.Scan(&feedURL, &score, &title, &siteURL, &description, &subCount); err != nil {
+		if err := rows.Scan(&feedURL, &score, &title, &siteURL, &description, &subCount, &faviconURL); err != nil {
 			return nil, err
 		}
 		results = append(results, map[string]any{
@@ -233,6 +234,7 @@ func (db *DB) GetFeedRecommendations(ctx context.Context, userDID string, limit 
 			"site_url":         siteURL,
 			"description":      description,
 			"subscriber_count": subCount,
+			"favicon_url":      faviconURL,
 		})
 	}
 	return results, rows.Err()

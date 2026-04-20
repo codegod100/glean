@@ -19,6 +19,7 @@
             <div class="min-w-0 flex-1">
                 <a href="/articles/{{$t.ArticleID}}" class="font-bold text-spot-text hover:text-spot-green transition text-lg leading-tight">{{$t.Title}}</a>
                 <div class="text-sm text-spot-secondary mt-1 flex items-center gap-2">
+                    {{if $t.FaviconURL}}<img src="{{$t.FaviconURL}}" class="w-4 h-4 rounded shrink-0" loading="lazy">{{end}}
                     {{if $t.Author}}<span>{{$t.Author}}</span>{{end}}
                     <span class="text-spot-muted">{{if $t.FeedTitle}}{{$t.FeedTitle}}{{else}}{{$t.FeedURL}}{{end}}</span>
                 </div>

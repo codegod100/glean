@@ -35,6 +35,7 @@ type Subscription struct {
 	UnreadCount int
 	URI         sql.NullString
 	CID         sql.NullString
+	FaviconURL  sql.NullString
 }
 
 func (db *DB) UpsertFeed(ctx context.Context, feed *Feed) error {
@@ -228,7 +229,7 @@ func (db *DB) GetSubscription(ctx context.Context, userDID, feedURL string) (*Su
 
 func (db *DB) ListSubscriptions(ctx context.Context, userDID, category string, limit, offset int) ([]*Subscription, error) {
 	query := `SELECT s.id, s.user_did, s.feed_url, COALESCE(s.title, f.title, ''), s.category, s.added_at,
-		s.uri, s.cid
+		s.uri, s.cid, f.favicon_url
 		FROM subscriptions s
 		LEFT JOIN feeds f ON s.feed_url = f.feed_url
 		WHERE s.user_did = ?`
@@ -250,7 +251,7 @@ func (db *DB) ListSubscriptions(ctx context.Context, userDID, category string, l
 	var subs []*Subscription
 	for rows.Next() {
 		s := &Subscription{}
-		if err := rows.Scan(&s.ID, &s.UserDID, &s.FeedURL, &s.FeedTitle, &s.Category, &s.AddedAt, &s.URI, &s.CID); err != nil {
+		if err := rows.Scan(&s.ID, &s.UserDID, &s.FeedURL, &s.FeedTitle, &s.Category, &s.AddedAt, &s.URI, &s.CID, &s.FaviconURL); err != nil {
 			return nil, err
 		}
 		subs = append(subs, s)

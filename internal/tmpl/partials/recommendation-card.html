@@ -1,11 +1,14 @@
 {{define "recommendation-card.html"}}
 <div class="bg-spot-surface rounded-xl p-3 hover:bg-spot-hover-50 transition">
-    <div class="flex items-center justify-between">
-        <div class="min-w-0">
-            <div class="font-bold text-sm text-spot-text">{{if .title}}{{.title}}{{else}}{{.feed_url}}{{end}}</div>
-            {{if .description}}<p class="text-xs text-spot-secondary truncate mt-0.5">{{.description}}</p>{{end}}
+    <div class="flex items-center justify-between gap-2">
+        <div class="min-w-0 flex items-center gap-2">
+            {{if .favicon_url}}{{if .favicon_url.Valid}}<img src="{{.favicon_url.String}}" class="w-4 h-4 rounded shrink-0" loading="lazy">{{end}}{{end}}
+            <div class="min-w-0">
+                <div class="font-bold text-sm text-spot-text truncate">{{if .title}}{{.title}}{{else}}{{.feed_url}}{{end}}</div>
+                {{if .description}}<p class="text-xs text-spot-secondary truncate mt-0.5">{{.description}}</p>{{end}}
+            </div>
         </div>
-        <span class="text-xs text-spot-secondary shrink-0 ml-2">{{.subscriber_count}} subs</span>
+        <span class="text-xs text-spot-secondary shrink-0">{{.subscriber_count}} subs</span>
     </div>
 </div>
 {{end}}

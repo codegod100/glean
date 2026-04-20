@@ -201,6 +201,7 @@ type TrendingItem struct {
 	Summary         string
 	FeedURL         string
 	FeedTitle       string
+	FaviconURL      string
 	LikeCount       int
 	AnnotationCount int
 }
@@ -209,6 +210,7 @@ func (db *DB) ListTrendingArticlesForUser(ctx context.Context, userDID, since st
 	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
 		SELECT ar.id, ar.title, COALESCE(ar.url, ''), COALESCE(ar.author, ''),
 		       COALESCE(ar.summary, ''), l.feed_url, COALESCE(f.title, ''),
+		       COALESCE(f.favicon_url, ''),
 		       COUNT(DISTINCT l.id) AS like_count,
 		       COUNT(DISTINCT a.id) AS annotation_count
 		FROM likes l
@@ -235,7 +237,7 @@ func (db *DB) ListTrendingArticlesForUser(ctx context.Context, userDID, since st
 	for rows.Next() {
 		item := &TrendingItem{}
 		if err := rows.Scan(&item.ArticleID, &item.Title, &item.URL, &item.Author,
-			&item.Summary, &item.FeedURL, &item.FeedTitle,
+			&item.Summary, &item.FeedURL, &item.FeedTitle, &item.FaviconURL,
 			&item.LikeCount, &item.AnnotationCount); err != nil {
 			return nil, err
 		}
@@ -248,6 +250,7 @@ func (db *DB) ListTrendingArticles(ctx context.Context, since string, limit, off
 	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
 		SELECT ar.id, ar.title, COALESCE(ar.url, ''), COALESCE(ar.author, ''),
 		       COALESCE(ar.summary, ''), l.feed_url, COALESCE(f.title, ''),
+		       COALESCE(f.favicon_url, ''),
 		       COUNT(DISTINCT l.id) AS like_count,
 		       COUNT(DISTINCT a.id) AS annotation_count
 		FROM likes l
@@ -268,7 +271,7 @@ func (db *DB) ListTrendingArticles(ctx context.Context, since string, limit, off
 	for rows.Next() {
 		item := &TrendingItem{}
 		if err := rows.Scan(&item.ArticleID, &item.Title, &item.URL, &item.Author,
-			&item.Summary, &item.FeedURL, &item.FeedTitle,
+			&item.Summary, &item.FeedURL, &item.FeedTitle, &item.FaviconURL,
 			&item.LikeCount, &item.AnnotationCount); err != nil {
 			return nil, err
 		}

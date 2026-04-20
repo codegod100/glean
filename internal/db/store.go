@@ -62,3 +62,7 @@ func (a *FeedStoreAdapter) MarkFeedFetched(ctx context.Context, feedURL, etag, l
 func (a *FeedStoreAdapter) MarkFeedFetchError(ctx context.Context, feedURL, lastError string) error {
 	return a.db.MarkFeedFetchError(ctx, feedURL, lastError)
 }
+
+func (a *FeedStoreAdapter) UpdateFeedFavicon(ctx context.Context, feedURL, faviconURL string) error {
+	return a.db.UpdateFeedFavicon(ctx, feedURL, faviconURL)
+}

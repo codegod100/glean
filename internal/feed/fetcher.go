@@ -72,6 +72,7 @@ type FeedStore interface {
 	UpsertArticle(ctx context.Context, article *Article) (int64, error)
 	MarkFeedFetched(ctx context.Context, feedURL, etag, lastModified string) error
 	MarkFeedFetchError(ctx context.Context, feedURL, lastError string) error
+	UpdateFeedFavicon(ctx context.Context, feedURL, faviconURL string) error
 }
 
 type fetchCall struct {
@@ -167,5 +168,14 @@ func (s *Scheduler) FetchFeed(ctx context.Context, feed *Feed) {
 
 	if err := s.store.MarkFeedFetched(ctx, feed.URL, newEtag, newLastModified); err != nil {
 		s.logger.Error("failed to update feed fetch result", "error", err, "feed", feed.URL)
+	}
+
+	if feed.SiteURL != "" {
+		go func() {
+			discResult, err := Discover(context.Background(), feed.SiteURL)
+			if err == nil && discResult.Favicon != "" {
+				_ = s.store.UpdateFeedFavicon(context.Background(), feed.URL, discResult.Favicon)
+			}
+		}()
 	}
 }
