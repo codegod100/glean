@@ -8,17 +8,18 @@ import (
 )
 
 type Annotation struct {
-	ID         int64
-	URI        string
-	AuthorDID  string
-	FeedURL    string
-	ArticleURL string
-	Quote      sql.NullString
-	Note       sql.NullString
-	Tags       sql.NullString
-	Rating     sql.NullInt64
-	CreatedAt  sql.NullTime
-	CID        sql.NullString
+	ID          int64
+	URI         string
+	AuthorDID   string
+	AuthorHandle string
+	FeedURL     string
+	ArticleURL  string
+	Quote       sql.NullString
+	Note        sql.NullString
+	Tags        sql.NullString
+	Rating      sql.NullInt64
+	CreatedAt   sql.NullTime
+	CID         sql.NullString
 }
 
 type Like struct {
@@ -61,12 +62,13 @@ func (db *DB) ListAnnotations(ctx context.Context, feedURL, articleURL, authorDI
 		args = append(args, authorDID)
 	}
 
-	query := `SELECT id, uri, author_did, feed_url, article_url, quote, note, tags, rating, created_at, cid
-		FROM annotations`
+	query := `SELECT a.id, a.uri, a.author_did, COALESCE(u.handle, ''), a.feed_url, a.article_url, a.quote, a.note, a.tags, a.rating, a.created_at, a.cid
+		FROM annotations a
+		LEFT JOIN users u ON a.author_did = u.did`
 	if len(conds) > 0 {
 		query += ` WHERE ` + strings.Join(conds, " AND ")
 	}
-	query += fmt.Sprintf(` ORDER BY created_at DESC LIMIT %d OFFSET %d`, limit, offset)
+	query += fmt.Sprintf(` ORDER BY a.created_at DESC LIMIT %d OFFSET %d`, limit, offset)
 
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -77,7 +79,7 @@ func (db *DB) ListAnnotations(ctx context.Context, feedURL, articleURL, authorDI
 	var annotations []*Annotation
 	for rows.Next() {
 		a := &Annotation{}
-		if err := rows.Scan(&a.ID, &a.URI, &a.AuthorDID, &a.FeedURL, &a.ArticleURL,
+		if err := rows.Scan(&a.ID, &a.URI, &a.AuthorDID, &a.AuthorHandle, &a.FeedURL, &a.ArticleURL,
 			&a.Quote, &a.Note, &a.Tags, &a.Rating, &a.CreatedAt, &a.CID); err != nil {
 			return nil, err
 		}

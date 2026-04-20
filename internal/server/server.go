@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"html/template"
 	"log/slog"
 	"net/http"
@@ -39,13 +40,23 @@ type Server struct {
 	callbackURL string
 }
 
-func New(database *db.DB, clientID, callbackURL string, logger *slog.Logger) *Server {
+func New(database *db.DB, clientID, callbackURL, addr string, logger *slog.Logger) *Server {
 	oauthStore := db.NewOAuthStore(database)
 	if err := oauthStore.Init(context.Background()); err != nil {
 		logger.Error("failed to init oauth store", "error", err)
 	}
 
-	config := oauth.NewPublicConfig(clientID, callbackURL, []string{"atproto"})
+	var config oauth.ClientConfig
+	if clientID == "" {
+		host := addr
+		if strings.HasPrefix(host, ":") {
+			host = "127.0.0.1" + host
+		}
+		cbURL := fmt.Sprintf("http://%s/auth/callback", host)
+		config = oauth.NewLocalhostConfig(cbURL, []string{"atproto", "transition:generic"})
+	} else {
+		config = oauth.NewPublicConfig(clientID, callbackURL, []string{"atproto", "transition:generic"})
+	}
 	oauthClient := oauth.NewClientApp(&config, oauthStore)
 
 	s := &Server{
@@ -123,7 +134,10 @@ func (s *Server) setupRoutes() {
 		r.Get("/people", s.handleDiscoverPeople)
 	})
 
-	s.router.Get("/profile/{did}", s.handleProfile)
+	s.router.Route("/profile", func(r chi.Router) {
+		r.Use(s.requireAuth)
+		r.Get("/{did}", s.handleProfile)
+	})
 
 	s.router.Route("/annotations", func(r chi.Router) {
 		r.Use(s.requireAuth)

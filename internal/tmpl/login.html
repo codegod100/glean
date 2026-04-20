@@ -1,18 +1,29 @@
 {{define "login.html"}}
 <div class="max-w-md mx-auto mt-20">
     <div class="bg-spot-surface rounded-lg shadow-spot-heavy p-8">
-        <h1 class="text-2xl font-bold font-title text-spot-text mb-6">Sign in to Glean</h1>
-        <form action="/auth/start" method="POST">
+        <h1 class="text-2xl font-bold font-title text-spot-text mb-2">Sign in to Glean</h1>
+        <p class="text-spot-secondary text-sm mb-6">Enter your handle.</p>
+
+        <form action="/auth/start" method="POST" id="login-form">
             {{csrfInput .CSRFToken}}
-            <label class="block text-sm font-bold text-spot-secondary mb-2 uppercase tracking-button">Bluesky Handle</label>
             <input type="text" name="handle" placeholder="you.bsky.social"
-                   class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-3 mb-5 focus:outline-none focus:ring-2 focus:ring-spot-purple placeholder:text-spot-placeholder"
+                   class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-3 mb-5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-purple placeholder:text-spot-placeholder"
                    required>
-            <button type="submit" class="w-full bg-spot-purple text-spot-bg rounded-pill px-4 py-3 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">
+        </form>
+
+        <div class="space-y-3">
+            <button type="submit" form="login-form"
+                    class="w-full flex items-center justify-center gap-3 bg-[#0284FF] text-white rounded-pill px-4 py-3 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">
+                {{template "icon-bluesky"}}
                 Sign in with Bluesky
             </button>
-        </form>
-        <p class="mt-5 text-sm text-spot-secondary">We'll authenticate you via your Bluesky account using AT Protocol OAuth.</p>
+
+            <button type="submit" form="login-form"
+                    class="w-full flex items-center justify-center gap-3 border border-spot-outline text-spot-text rounded-pill px-4 py-3 text-sm font-bold uppercase tracking-button hover:bg-spot-hover-50 transition">
+                {{template "icon-globe"}}
+                Sign in with Atmosphere
+            </button>
+        </div>
     </div>
 </div>
 {{end}}

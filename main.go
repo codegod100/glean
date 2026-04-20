@@ -36,7 +36,7 @@ func main() {
 	clientID := envOr("GLEAN_OAUTH_CLIENT_ID", "")
 	callbackURL := envOr("GLEAN_OAUTH_REDIRECT_URL", "")
 
-	srv := server.New(database, clientID, callbackURL, logger)
+	srv := server.New(database, clientID, callbackURL, *addr, logger)
 
 	storeAdapter := db.NewFeedStoreAdapter(database)
 	scheduler := feed.NewScheduler(storeAdapter, logger)

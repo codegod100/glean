@@ -1,14 +1,16 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"os"
 
-	oauth "github.com/bluesky-social/indigo/atproto/auth/oauth"
 	"github.com/bluesky-social/indigo/atproto/syntax"
+
+	oauth "github.com/bluesky-social/indigo/atproto/auth/oauth"
 
 	"pkg.rbrt.fr/glean/internal/atproto"
 )
@@ -92,7 +94,9 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		handle = ident.Handle.String()
 	}
 
-	user, err := s.db.CreateUser(r.Context(), did, handle, "", "")
+	displayName, avatarURL := s.fetchUserProfile(r.Context(), sessData)
+
+	user, err := s.db.CreateUser(r.Context(), did, handle, displayName, avatarURL)
 	if err != nil {
 		s.logger.Error("failed to create user", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -123,35 +127,38 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }
 
+func (s *Server) fetchUserProfile(ctx context.Context, sessData *oauth.ClientSessionData) (string, string) {
+	did := sessData.AccountDID.String()
+
+	session, err := s.oauth.ResumeSession(ctx, sessData.AccountDID, sessData.SessionID)
+	if err != nil {
+		s.logger.Warn("failed to resume session for profile fetch", "error", err)
+		return "", ""
+	}
+
+	var profile struct {
+		DisplayName string `json:"displayName"`
+		Avatar      string `json:"avatar"`
+	}
+
+	nsid, _ := syntax.ParseNSID("app.bsky.actor.getProfile")
+	if err := session.APIClient().Get(ctx, nsid, map[string]any{"actor": did}, &profile); err != nil {
+		s.logger.Warn("failed to fetch profile from PDS", "error", err, "did", did)
+		return "", ""
+	}
+	return profile.DisplayName, profile.Avatar
+}
+
 func (s *Server) handleOAuthClientMetadata(w http.ResponseWriter, r *http.Request) {
-	clientID := s.clientID
-	if clientID == "" {
-		scheme := "http"
-		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
-			scheme = "https"
-		}
-		clientID = fmt.Sprintf("%s://%s/oauth/client-metadata", scheme, r.Host)
+	if s.clientID == "" {
+		http.Error(w, "localhost client", http.StatusNotFound)
+		return
 	}
 
-	redirectURL := s.callbackURL
-	if redirectURL == "" {
-		scheme := "http"
-		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
-			scheme = "https"
-		}
-		redirectURL = fmt.Sprintf("%s://%s/auth/callback", scheme, r.Host)
-	}
-
-	config := oauth.NewPublicConfig(clientID, redirectURL, []string{"atproto"})
-	meta := config.ClientMetadata()
-
+	meta := s.oauth.Config.ClientMetadata()
 	name := "Glean"
 	meta.ClientName = &name
-
-	uri := clientID
-	if idx := len(uri); idx > 0 && uri[idx-1] == '/' {
-		uri = uri[:idx-1]
-	}
+	uri := s.clientID
 	meta.ClientURI = &uri
 
 	w.Header().Set("Content-Type", "application/json")

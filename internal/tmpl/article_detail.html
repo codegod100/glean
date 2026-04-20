@@ -29,6 +29,7 @@
             <a href="https://bsky.app/intent/compose?text={{.Article.Title}}%20{{if .Article.URL.Valid}}{{.Article.URL.String}}{{end}}"
                target="_blank" rel="noopener noreferrer"
                class="text-xs border border-spot-outline text-spot-text rounded-pill px-3 py-1 hover:border-spot-text uppercase tracking-button transition inline-flex items-center gap-1">
+                <span class="w-3.5 h-3.5 inline-flex">{{template "icon-bluesky"}}</span>
                 Share
             </a>
 

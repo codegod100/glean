@@ -19,8 +19,8 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	subCount, _ := s.db.GetSubscriptionCount(r.Context(), did)
 
 	s.render(w, r, "profile.html", map[string]any{
-		"User":            s.getUserFromSession(r),
-		"ProfileUser":     profileUser,
+		"User":              currentUser(r),
+		"ProfileUser":       profileUser,
 		"Subscriptions":   subs,
 		"Annotations":     annotations,
 		"SubscriptionCount": subCount,

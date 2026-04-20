@@ -15,7 +15,7 @@
     <div class="text-sm text-spot-orange mt-1">{{repeat "&#9733;" (int .Rating.Int64)}}</div>
     {{end}}
     <div class="text-xs text-spot-muted mt-2">
-        <a href="/profile/{{.AuthorDID}}" class="hover:text-spot-purple transition">{{.AuthorDID}}</a>
+        <a href="/profile/{{.AuthorDID}}" class="hover:text-spot-purple transition">{{.AuthorHandle}}</a>
         {{if .CreatedAt.Valid}}<span class="ml-2">{{.CreatedAt.Time.Format "Jan 2, 2006 15:04"}}</span>{{end}}
     </div>
 </div>
