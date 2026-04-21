@@ -1,0 +1,21 @@
+{{define "trending-card.html"}}
+<div class="bg-spot-surface rounded-xl px-5 py-4 hover:bg-spot-hover-50 transition shadow-spot">
+    <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0 flex-1">
+            <a href="/articles/{{.ArticleID}}" class="font-bold text-spot-text hover:text-spot-green transition text-lg leading-tight">{{.Title}}</a>
+            <div class="text-sm text-spot-secondary mt-1 flex items-center gap-2">
+                {{if .FaviconURL}}<img src="{{.FaviconURL}}" class="w-4 h-4 rounded shrink-0" loading="lazy">{{end}}
+                {{if .Author}}<span>{{.Author}}</span>{{end}}
+                <span class="text-spot-muted"><a href="/articles?feed={{.FeedURL}}" class="hover:text-spot-green transition">{{if .FeedTitle}}{{.FeedTitle}}{{else}}{{.FeedURL}}{{end}}</a></span>
+            </div>
+            {{if .Summary}}
+            <p class="text-sm text-spot-secondary mt-2 line-clamp-2">{{.Summary}}</p>
+            {{end}}
+        </div>
+        <div class="flex flex-col items-end gap-1 shrink-0 text-sm text-spot-secondary">
+            <span class="inline-flex items-center gap-1"><svg class="w-4 h-4 text-spot-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">{{template "icon-heart"}}</svg> {{.LikeCount}}</span>
+            <span class="text-spot-muted">{{.AnnotationCount}} notes</span>
+        </div>
+    </div>
+</div>
+{{end}}
