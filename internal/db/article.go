@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 )
 
@@ -292,4 +293,40 @@ func (db *DB) CountNewArticles(ctx context.Context, userDID string, since time.T
 		WHERE a.fetched_at > ?
 	`, userDID, since).Scan(&count)
 	return count, err
+}
+
+func (db *DB) SearchArticles(ctx context.Context, userDID, query string, limit, offset int) ([]*Article, error) {
+	if strings.TrimSpace(query) == "" {
+		return nil, nil
+	}
+
+	rows, err := db.QueryContext(ctx, `
+		SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
+			a.published, a.updated, a.fetched_at,
+			COALESCE(r.is_read, 0)
+		FROM articles_fts ft
+		JOIN articles a ON a.id = ft.rowid
+		JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
+		LEFT JOIN feeds f ON a.feed_url = f.feed_url
+		LEFT JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+		WHERE articles_fts MATCH ?
+		ORDER BY ft.rank
+		LIMIT ? OFFSET ?
+	`, userDID, userDID, query, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var articles []*Article
+	for rows.Next() {
+		a := &Article{}
+		if err := rows.Scan(&a.ID, &a.FeedURL, &a.FeedTitle, &a.FeedFaviconURL, &a.GUID, &a.Title, &a.URL, &a.Author,
+			&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt,
+			&a.IsRead); err != nil {
+			return nil, err
+		}
+		articles = append(articles, a)
+	}
+	return articles, rows.Err()
 }

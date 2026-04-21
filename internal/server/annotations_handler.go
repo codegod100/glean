@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -81,12 +82,17 @@ func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if client := s.pdsClientForUser(r); client != nil {
+		var tags []string
+		if a.Tags.Valid && a.Tags.String != "" {
+			tags = strings.Split(a.Tags.String, ",")
+		}
 		record := atproto.AnnotationRecord{
 			CreatedAt:  time.Now().Format(time.RFC3339),
 			FeedURL:    a.FeedURL,
 			ArticleURL: a.ArticleURL,
 			Quote:      a.Quote.String,
 			Note:       a.Note.String,
+			Tags:       tags,
 			Rating:     int(a.Rating.Int64),
 		}
 		uri, cid, err := client.CreateRecord(r.Context(), user.DID, atproto.CollectionAnnotation, record)

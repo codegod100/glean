@@ -30,19 +30,24 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	feedURL := r.URL.Query().Get("feed")
 	status := r.URL.Query().Get("status")
+	searchQuery := r.URL.Query().Get("q")
 
 	page := pageFromRequest(r, 50)
 
 	var articles []*db.Article
 	var err error
 
-	switch status {
-	case "unread":
-		articles, err = s.db.ListUnreadArticles(r.Context(), user.DID, feedURL, page.Limit()+1, page.Offset())
-	case "read":
-		articles, err = s.db.ListReadArticles(r.Context(), user.DID, feedURL, page.Limit()+1, page.Offset())
-	default:
-		articles, err = s.db.ListArticles(r.Context(), user.DID, feedURL, page.Limit()+1, page.Offset())
+	if searchQuery != "" {
+		articles, err = s.db.SearchArticles(r.Context(), user.DID, searchQuery, page.Limit()+1, page.Offset())
+	} else {
+		switch status {
+		case "unread":
+			articles, err = s.db.ListUnreadArticles(r.Context(), user.DID, feedURL, page.Limit()+1, page.Offset())
+		case "read":
+			articles, err = s.db.ListReadArticles(r.Context(), user.DID, feedURL, page.Limit()+1, page.Offset())
+		default:
+			articles, err = s.db.ListArticles(r.Context(), user.DID, feedURL, page.Limit()+1, page.Offset())
+		}
 	}
 
 	if err != nil {
@@ -57,16 +62,24 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 		articles = articles[:page.PageSize]
 	}
 
-	s.render(w, r, "articles.html", map[string]any{
+	data := map[string]any{
 		"User":        user,
 		"Articles":    articles,
 		"FeedURL":     feedURL,
 		"Status":      status,
+		"SearchQuery": searchQuery,
 		"Page":        page,
 		"BaseURL":     "/articles",
-		"QueryParams": buildQueryParams(map[string]string{"feed": feedURL, "status": status}),
+		"QueryParams": buildQueryParams(map[string]string{"feed": feedURL, "status": status, "q": searchQuery}),
 		"Now":         time.Now(),
-	})
+	}
+
+	if r.Header.Get("HX-Request") == "true" {
+		s.render(w, r, "articles-content.html", data)
+		return
+	}
+
+	s.render(w, r, "articles.html", data)
 }
 
 func (s *Server) handleNewArticleCount(w http.ResponseWriter, r *http.Request) {

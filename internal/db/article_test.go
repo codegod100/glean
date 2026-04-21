@@ -185,3 +185,142 @@ func TestGetArticle_IncludesFullContent(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Assert(t, !article.FullContent.Valid)
 }
+
+func seedSearchData(t *testing.T, ctx context.Context, database *DB) (userDID, feedURL string) {
+	t.Helper()
+
+	userDID = "did:test:searcher"
+	feedURL = "https://search.example.com/feed.xml"
+
+	_, err := database.ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, userDID, "searcher")
+	assert.NilError(t, err)
+
+	_, err = database.ExecContext(ctx, `INSERT INTO feeds (feed_url, title) VALUES (?, ?)`, feedURL, "Tech Blog")
+	assert.NilError(t, err)
+
+	_, err = database.ExecContext(ctx, `INSERT INTO subscriptions (user_did, feed_url) VALUES (?, ?)`, userDID, feedURL)
+	assert.NilError(t, err)
+
+	articles := []struct {
+		guid, title, summary, content string
+	}{
+		{"g1", "Go Programming Basics", "Learn Go fundamentals", "Go is a statically typed compiled language"},
+		{"g2", "Rust Memory Safety", "Understanding ownership in Rust", "Rust provides memory safety without garbage collection"},
+		{"g3", "Python Data Science", "NumPy and Pandas tutorial", "Python is popular for data analysis"},
+	}
+	for _, a := range articles {
+		_, err := database.ExecContext(ctx, `
+			INSERT INTO articles (feed_url, guid, title, summary, content) VALUES (?, ?, ?, ?, ?)
+		`, feedURL, a.guid, a.title, a.summary, a.content)
+		assert.NilError(t, err)
+	}
+
+	return userDID, feedURL
+}
+
+func TestSearchArticles_FindsByTitle(t *testing.T) {
+	ctx := context.Background()
+	db := setupTestDB(t)
+	userDID, _ := seedSearchData(t, ctx, db)
+
+	results, err := db.SearchArticles(ctx, userDID, "Go Programming", 10, 0)
+	assert.NilError(t, err)
+	assert.Equal(t, len(results), 1)
+	assert.Equal(t, results[0].Title, "Go Programming Basics")
+}
+
+func TestSearchArticles_FindsBySummary(t *testing.T) {
+	ctx := context.Background()
+	db := setupTestDB(t)
+	userDID, _ := seedSearchData(t, ctx, db)
+
+	results, err := db.SearchArticles(ctx, userDID, "ownership", 10, 0)
+	assert.NilError(t, err)
+	assert.Equal(t, len(results), 1)
+	assert.Equal(t, results[0].Title, "Rust Memory Safety")
+}
+
+func TestSearchArticles_FindsByContent(t *testing.T) {
+	ctx := context.Background()
+	db := setupTestDB(t)
+	userDID, _ := seedSearchData(t, ctx, db)
+
+	results, err := db.SearchArticles(ctx, userDID, "garbage collection", 10, 0)
+	assert.NilError(t, err)
+	assert.Equal(t, len(results), 1)
+	assert.Equal(t, results[0].Title, "Rust Memory Safety")
+}
+
+func TestSearchArticles_NoResults(t *testing.T) {
+	ctx := context.Background()
+	db := setupTestDB(t)
+	userDID, _ := seedSearchData(t, ctx, db)
+
+	results, err := db.SearchArticles(ctx, userDID, "nonexistent_xyz", 10, 0)
+	assert.NilError(t, err)
+	assert.Equal(t, len(results), 0)
+}
+
+func TestSearchArticles_MultipleMatches(t *testing.T) {
+	ctx := context.Background()
+	db := setupTestDB(t)
+	userDID, _ := seedSearchData(t, ctx, db)
+
+	results, err := db.SearchArticles(ctx, userDID, "Python", 10, 0)
+	assert.NilError(t, err)
+	assert.Assert(t, len(results) >= 1)
+
+	var found bool
+	for _, a := range results {
+		if a.Title == "Python Data Science" {
+			found = true
+			break
+		}
+	}
+	assert.Assert(t, found, "expected to find Python Data Science article")
+}
+
+func TestSearchArticles_ScopedToSubscriptions(t *testing.T) {
+	ctx := context.Background()
+	db := setupTestDB(t)
+	userDID, feedURL := seedSearchData(t, ctx, db)
+
+	otherFeed := "https://other.example.com/feed.xml"
+	_, err := db.ExecContext(ctx, `INSERT INTO feeds (feed_url, title) VALUES (?, ?)`, otherFeed, "Other Feed")
+	assert.NilError(t, err)
+
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO articles (feed_url, guid, title) VALUES (?, ?, ?)
+	`, otherFeed, "other-1", "Go Concurrency Tips")
+	assert.NilError(t, err)
+
+	results, err := db.SearchArticles(ctx, userDID, "Go", 10, 0)
+	assert.NilError(t, err)
+	for _, a := range results {
+		assert.Equal(t, a.FeedURL, feedURL)
+	}
+}
+
+func TestSearchArticles_Pagination(t *testing.T) {
+	ctx := context.Background()
+	db := setupTestDB(t)
+	userDID, _ := seedSearchData(t, ctx, db)
+
+	results, err := db.SearchArticles(ctx, userDID, "Go", 1, 0)
+	assert.NilError(t, err)
+	assert.Equal(t, len(results), 1)
+
+	results2, err := db.SearchArticles(ctx, userDID, "Go", 1, 1)
+	assert.NilError(t, err)
+	assert.Assert(t, len(results2) == 0 || results2[0].ID != results[0].ID)
+}
+
+func TestSearchArticles_EmptyQuery(t *testing.T) {
+	ctx := context.Background()
+	db := setupTestDB(t)
+	userDID, _ := seedSearchData(t, ctx, db)
+
+	results, err := db.SearchArticles(ctx, userDID, "", 10, 0)
+	assert.NilError(t, err)
+	assert.Equal(t, len(results), 0)
+}

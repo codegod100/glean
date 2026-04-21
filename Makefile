@@ -19,11 +19,11 @@ lex-parse:
 
 .PHONY: dev
 dev: css
-	@if [ -f .env ]; then set -a; . ./.env; set +a; fi && go run .
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi && go run -tags fts5 .
 
 .PHONY: build
 build: css
-	go build -o glean .
+	go build -tags fts5 -o glean .
 
 .PHONY: css
 css:
@@ -35,7 +35,7 @@ css-watch:
 
 .PHONY: test
 test:
-	go test ./...
+	go test -tags fts5 ./...
 
 .PHONY: clean
 clean:
