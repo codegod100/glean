@@ -52,7 +52,7 @@ func (f *Fetcher) Fetch(ctx context.Context, feedURL, etag, lastModified string)
 		return nil, "", "", nil
 	}
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, "", "", fmt.Errorf("unexpected status: %d", resp.StatusCode)
 	}
 
