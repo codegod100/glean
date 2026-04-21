@@ -112,7 +112,11 @@ func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	a.AuthorHandle = user.Handle
+	s.render(w, r, "annotation-card.html", map[string]any{
+		"annotation": a,
+		"userDID":    user.DID,
+	})
 }
 
 func (s *Server) handleDeleteAnnotation(w http.ResponseWriter, r *http.Request) {
