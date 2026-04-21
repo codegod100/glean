@@ -148,6 +148,7 @@ func (e *Engine) ComputeUserSimilarity(ctx context.Context) error {
 			0.5,
 			0
 		FROM follows f
+		WHERE f.user_did != f.target_did
 		GROUP BY MIN(f.user_did, f.target_did), MAX(f.user_did, f.target_did)
 		ON CONFLICT(user_a, user_b) DO UPDATE SET
 			jaccard = jaccard + 0.5
