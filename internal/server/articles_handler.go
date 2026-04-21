@@ -42,6 +42,8 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 		unreadCount, _ := s.db.GetUnreadCount(r.Context(), user.DID, feedURL)
 		if unreadCount > 0 {
 			status = "unread"
+		} else {
+			status = "all"
 		}
 	}
 

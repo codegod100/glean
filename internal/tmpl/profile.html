@@ -37,7 +37,7 @@
             <svg class="w-4 h-4 text-spot-muted shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
         </a>
         {{else}}
-        <div class="px-4 py-6 text-center text-spot-secondary text-sm">No public feeds.</div>
+        <div class="px-4 py-6 text-center text-spot-secondary text-sm">No feeds.</div>
         {{end}}
     </div>
 
@@ -46,7 +46,7 @@
         {{range .Annotations}}
         {{template "annotation-card.html" dict "annotation" . "userDID" $.CurrentUserDID}}
         {{else}}
-        <p class="text-sm text-spot-secondary text-center py-4">No public annotations.</p>
+        <p class="text-sm text-spot-secondary text-center py-4">No annotations.</p>
         {{end}}
     </div>
 </div>
