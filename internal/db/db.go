@@ -152,6 +152,8 @@ var schema = []string{
 		user_b TEXT NOT NULL REFERENCES users(did),
 		jaccard REAL NOT NULL,
 		common_feeds INTEGER NOT NULL,
+		common_likes INTEGER NOT NULL DEFAULT 0,
+		common_tags INTEGER NOT NULL DEFAULT 0,
 		computed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		PRIMARY KEY (user_a, user_b),
 		CHECK(user_a < user_b)

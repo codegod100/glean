@@ -26,8 +26,8 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 	}
 
 	allSubs, _ := s.db.ListSubscriptions(r.Context(), user.DID, "", 1000, 0)
-	feedRecs, _ := s.db.GetFeedRecommendations(r.Context(), user.DID, 10)
-	peopleRecs, _ := s.db.GetPeopleRecommendations(r.Context(), user.DID, 5)
+	feedRecs, _ := s.engine.GetFeedRecommendations(r.Context(), user.DID, 10)
+	peopleRecs, _ := s.engine.GetPeopleRecommendations(r.Context(), user.DID, 5)
 	deadFeeds, _ := s.db.ListDeadFeeds(r.Context(), user.DID, 7)
 
 	categories, _ := s.db.GetCategories(r.Context(), user.DID)

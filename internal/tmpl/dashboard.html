@@ -7,7 +7,7 @@
     </div>
 </div>
 {{if eq .SubscriptionCount 0}}
-<div class="bg-spot-surface rounded-xl py-16 px-6 text-center mb-6">
+<div class="bg-spot-surface rounded-xl py-12 px-6 text-center mb-6">
     <div class="w-16 h-16 rounded-full bg-spot-hover flex items-center justify-center mb-4 mx-auto">
         <svg class="w-8 h-8 text-spot-muted" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12.75 19.5v-15m0 0l-6.75 6.75M12.75 4.5l6.75 6.75"/></svg>
     </div>
@@ -18,10 +18,45 @@
         Add feeds
     </a>
 </div>
+
+{{if .GlobalTrending}}
+<div class="mb-6">
+    <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-semibold text-spot-text">Trending</h2>
+        <a href="/trending" class="text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition">See all</a>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {{range .GlobalTrending}}
+        <a href="/articles/{{.ArticleID}}" class="block bg-spot-surface rounded-xl p-4 hover:bg-spot-hover-50 transition">
+            <div class="font-bold text-sm text-spot-text leading-tight">{{.Title}}</div>
+            <div class="flex items-center gap-2 mt-1 text-xs text-spot-secondary">
+                {{if .Author}}<span>{{.Author}}</span>{{end}}
+                <span class="text-spot-muted">{{if .FeedTitle}}{{.FeedTitle}}{{end}}</span>
+            </div>
+            <div class="flex items-center gap-3 mt-2 text-xs text-spot-secondary">
+                <span class="inline-flex items-center gap-1"><svg class="w-4 h-4 text-spot-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">{{template "icon-heart"}}</svg> {{.LikeCount}}</span>
+                <span class="text-spot-muted">{{.AnnotationCount}} notes</span>
+            </div>
+        </a>
+        {{end}}
+    </div>
+</div>
+{{end}}
+
+{{if .FeedRecommendations}}
+<div>
+    <h2 class="text-lg font-semibold text-spot-text mb-3">Popular feeds to get started</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {{range .FeedRecommendations}}
+        {{template "recommendation-card.html" (dict "title" .Title "feed_url" .FeedURL "description" .Description "favicon_url" .FaviconURL "subscriber_count" .SubscriberCount "CSRFToken" $.CSRFToken)}}
+        {{end}}
+    </div>
+</div>
+{{end}}
 {{else}}
 <p class="text-sm text-spot-secondary mb-6">Your personalized feed, based on your social graph.</p>
 
-<div hx-get="/articles/new-count?since={{.Now.Unix}}&return=/dashboard" hx-trigger="every 30s" hx-swap="beforebegin" hx-target="#article-list"></div>
+<div id="new-articles-poll" hx-get="/articles/new-count?since={{.Now.Unix}}&return=/dashboard" hx-trigger="every 30s" hx-swap="innerHTML"></div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="lg:col-span-2">
@@ -109,12 +144,12 @@
             <div class="space-y-3">
                 {{range .PeopleRecommendations}}
                 <div class="bg-spot-surface rounded-xl p-4 flex items-center gap-3 hover:bg-spot-hover-50 transition">
-                    {{if .avatar_url}}<img src="{{.avatar_url}}" class="w-10 h-10 rounded-full">{{end}}
+                    {{if .AvatarURL}}<img src="{{.AvatarURL}}" class="w-10 h-10 rounded-full">{{end}}
                     <div class="min-w-0 flex-1">
-                        <a href="/profile/{{.handle}}" class="font-bold text-spot-text hover:text-spot-green transition">@{{.handle}}</a>
-                        {{if .display_name}}<div class="text-sm text-spot-secondary">{{.display_name}}</div>{{end}}
+                        <a href="/profile/{{.Handle}}" class="font-bold text-spot-text hover:text-spot-green transition">@{{.Handle}}</a>
+                        {{if .DisplayName}}<div class="text-sm text-spot-secondary">{{.DisplayName}}</div>{{end}}
                     </div>
-                    <span class="text-xs text-spot-secondary">{{.common_feeds}} shared</span>
+                    <span class="text-xs text-spot-secondary">{{.CommonFeeds}} shared</span>
                 </div>
                 {{end}}
             </div>
@@ -126,7 +161,7 @@
             <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended feeds</h2>
             <div class="space-y-3">
                 {{range .FeedRecommendations}}
-                {{template "recommendation-card.html" (dict "title" .title "feed_url" .feed_url "description" .description "favicon_url" .favicon_url "subscriber_count" .subscriber_count "CSRFToken" $.CSRFToken)}}
+                {{template "recommendation-card.html" (dict "title" .Title "feed_url" .FeedURL "description" .Description "favicon_url" .FaviconURL "subscriber_count" .SubscriberCount "CSRFToken" $.CSRFToken)}}
                 {{end}}
             </div>
         </div>

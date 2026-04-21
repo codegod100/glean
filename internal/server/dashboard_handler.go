@@ -19,12 +19,13 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		articles = articles[:page.PageSize]
 	}
 
-	articleRecs, _ := s.db.GetArticleRecommendations(r.Context(), user.DID, 5)
-	peopleRecs, _ := s.db.GetPeopleRecommendations(r.Context(), user.DID, 5)
-	feedRecs, _ := s.db.GetFeedRecommendations(r.Context(), user.DID, 5)
+	articleRecs, _ := s.engine.GetArticleRecommendations(r.Context(), user.DID, 5)
+	peopleRecs, _ := s.engine.GetPeopleRecommendations(r.Context(), user.DID, 5)
+	feedRecs, _ := s.engine.GetFeedRecommendations(r.Context(), user.DID, 5)
 
 	since := time.Now().AddDate(0, 0, -7).Format(time.RFC3339)
 	personalTrending, _ := s.db.ListTrendingArticlesForUser(r.Context(), user.DID, since, 5, 0)
+	globalTrending, _ := s.db.ListTrendingArticles(r.Context(), since, 10, 0)
 
 	s.render(w, r, "dashboard.html", map[string]any{
 		"User":                   user,
@@ -35,6 +36,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"FeedRecommendations":    feedRecs,
 		"PeopleRecommendations":  peopleRecs,
 		"PersonalTrending":       personalTrending,
+		"GlobalTrending":         globalTrending,
 		"Page":                   page,
 		"BaseURL":                "/dashboard",
 		"QueryParams":            map[string]string{},
