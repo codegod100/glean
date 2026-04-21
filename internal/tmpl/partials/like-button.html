@@ -1,7 +1,7 @@
 {{define "like-button.html"}}
 <button hx-post="/articles/{{.ID}}/like" hx-target="this" hx-swap="outerHTML"
-        class="border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:border-spot-text transition inline-flex items-center gap-1.5">
-    <svg class="w-3.5 h-3.5 {{if .HasLiked}}text-spot-red{{else}}text-spot-muted{{end}}" fill="{{if .HasLiked}}currentColor{{else}}none{{end}}" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">{{template "icon-heart"}}</svg>
+        class="text-spot-text rounded-pill px-2 py-1 text-xs font-bold transition inline-flex items-center gap-1 hover:text-spot-green">
+    <svg class="w-4 h-4 {{if .HasLiked}}text-spot-red{{else}}text-spot-muted{{end}}" fill="{{if .HasLiked}}currentColor{{else}}none{{end}}" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">{{template "icon-heart"}}</svg>
     <span>{{.LikeCount}}</span>
 </button>
 {{end}}
