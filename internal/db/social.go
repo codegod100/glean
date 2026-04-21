@@ -16,6 +16,7 @@ type Annotation struct {
 	AuthorHandle string
 	FeedURL      string
 	ArticleURL   string
+	ArticleID    sql.NullInt64
 	Quote        sql.NullString
 	Note         sql.NullString
 	Tags         sql.NullString
@@ -45,11 +46,12 @@ func (db *DB) CreateAnnotation(ctx context.Context, a *Annotation) error {
 func (db *DB) GetAnnotation(ctx context.Context, id int64) (*Annotation, error) {
 	a := &Annotation{}
 	err := db.QueryRowContext(ctx, `
-		SELECT a.id, a.uri, a.author_did, COALESCE(u.handle, ''), a.feed_url, a.article_url, a.quote, a.note, a.tags, a.rating, a.created_at, a.cid
+		SELECT a.id, a.uri, a.author_did, COALESCE(u.handle, ''), a.feed_url, a.article_url, ar.id, a.quote, a.note, a.tags, a.rating, a.created_at, a.cid
 		FROM annotations a
 		LEFT JOIN users u ON a.author_did = u.did
+		LEFT JOIN articles ar ON ar.url = a.article_url AND ar.feed_url = a.feed_url
 		WHERE a.id = ?
-	`, id).Scan(&a.ID, &a.URI, &a.AuthorDID, &a.AuthorHandle, &a.FeedURL, &a.ArticleURL,
+	`, id).Scan(&a.ID, &a.URI, &a.AuthorDID, &a.AuthorHandle, &a.FeedURL, &a.ArticleURL, &a.ArticleID,
 		&a.Quote, &a.Note, &a.Tags, &a.Rating, &a.CreatedAt, &a.CID)
 	if err != nil {
 		return nil, err
@@ -79,21 +81,22 @@ func (db *DB) ListAnnotations(ctx context.Context, feedURL, articleURL, authorDI
 	var args []any
 
 	if feedURL != "" {
-		conds = append(conds, "feed_url = ?")
+		conds = append(conds, "a.feed_url = ?")
 		args = append(args, feedURL)
 	}
 	if articleURL != "" {
-		conds = append(conds, "article_url = ?")
+		conds = append(conds, "a.article_url = ?")
 		args = append(args, articleURL)
 	}
 	if authorDID != "" {
-		conds = append(conds, "author_did = ?")
+		conds = append(conds, "a.author_did = ?")
 		args = append(args, authorDID)
 	}
 
-	query := `SELECT a.id, a.uri, a.author_did, COALESCE(u.handle, ''), a.feed_url, a.article_url, a.quote, a.note, a.tags, a.rating, a.created_at, a.cid
+	query := `SELECT a.id, a.uri, a.author_did, COALESCE(u.handle, ''), a.feed_url, a.article_url, ar.id, a.quote, a.note, a.tags, a.rating, a.created_at, a.cid
 		FROM annotations a
-		LEFT JOIN users u ON a.author_did = u.did`
+		LEFT JOIN users u ON a.author_did = u.did
+		LEFT JOIN articles ar ON ar.url = a.article_url AND ar.feed_url = a.feed_url`
 	if len(conds) > 0 {
 		query += ` WHERE ` + strings.Join(conds, " AND ")
 	}
@@ -109,7 +112,7 @@ func (db *DB) ListAnnotations(ctx context.Context, feedURL, articleURL, authorDI
 	var annotations []*Annotation
 	for rows.Next() {
 		a := &Annotation{}
-		if err := rows.Scan(&a.ID, &a.URI, &a.AuthorDID, &a.AuthorHandle, &a.FeedURL, &a.ArticleURL,
+		if err := rows.Scan(&a.ID, &a.URI, &a.AuthorDID, &a.AuthorHandle, &a.FeedURL, &a.ArticleURL, &a.ArticleID,
 			&a.Quote, &a.Note, &a.Tags, &a.Rating, &a.CreatedAt, &a.CID); err != nil {
 			return nil, err
 		}

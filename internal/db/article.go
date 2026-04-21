@@ -355,6 +355,27 @@ func (db *DB) GetArticleByURL(ctx context.Context, url string) (*Article, error)
 	return a, nil
 }
 
+func (db *DB) GetReadCount(ctx context.Context, userDID, feedURL string) (int, error) {
+	var count int
+	if feedURL != "" {
+		err := db.QueryRowContext(ctx, `
+			SELECT COUNT(*)
+			FROM articles a
+			JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+			WHERE a.feed_url = ? AND r.is_read = 1
+		`, userDID, feedURL).Scan(&count)
+		return count, err
+	}
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM articles a
+		JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
+		JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+		WHERE r.is_read = 1
+	`, userDID, userDID).Scan(&count)
+	return count, err
+}
+
 func (db *DB) CountNewArticles(ctx context.Context, userDID string, since time.Time) (int, error) {
 	var count int
 	err := db.QueryRowContext(ctx, `
