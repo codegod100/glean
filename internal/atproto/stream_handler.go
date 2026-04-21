@@ -21,13 +21,15 @@ func NewStreamDBHandler(database *db.DB, logger *slog.Logger) *StreamDBHandler {
 
 func (h *StreamDBHandler) Handle(ctx context.Context, event *Event) error {
 	switch event.Collection {
-	case "at.glean.subscription":
+	case CollectionSubscription:
 		return h.handleSubscription(ctx, event)
-	case "at.glean.like":
+	case CollectionLike:
 		return h.handleLike(ctx, event)
-	case "at.glean.annotation":
+	case CollectionAnnotation:
 		return h.handleAnnotation(ctx, event)
-	case "app.bsky.graph.follow", "sh.tangled.graph.follow":
+	case CollectionMarginNote:
+		return h.handleMarginNote(ctx, event)
+	case CollectionBskyFollow, CollectionTangledFollow:
 		return h.handleFollow(ctx, event)
 	}
 	return nil
@@ -154,4 +156,47 @@ func (h *StreamDBHandler) handleFollow(ctx context.Context, event *Event) error 
 		return h.db.DeleteFollowByURI(ctx, event.URI)
 	}
 	return nil
+}
+
+func (h *StreamDBHandler) handleMarginNote(ctx context.Context, event *Event) error {
+	switch event.Type {
+	case "create", "update":
+		var rec MarginNoteRecord
+		if err := json.Unmarshal(event.Value, &rec); err != nil {
+			return err
+		}
+
+		articleURL, quote, note, tags := rec.ToAnnotation()
+		if articleURL == "" {
+			return nil
+		}
+
+		feedURL := h.resolveFeedURL(ctx, articleURL)
+
+		t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
+		a := &db.Annotation{
+			URI:        event.URI,
+			AuthorDID:  event.DID,
+			FeedURL:    feedURL,
+			ArticleURL: articleURL,
+			Quote:      db.NullStr(quote),
+			Note:       db.NullStr(note),
+			Tags:       db.NullStrTags(tags),
+			CreatedAt:  sql.NullTime{Time: t, Valid: true},
+			CID:        sql.NullString{String: event.CID, Valid: event.CID != ""},
+		}
+		return h.db.CreateAnnotation(ctx, a)
+
+	case "delete":
+		return h.db.DeleteAnnotation(ctx, event.URI)
+	}
+	return nil
+}
+
+func (h *StreamDBHandler) resolveFeedURL(ctx context.Context, articleURL string) string {
+	article, err := h.db.GetArticleByURL(ctx, articleURL)
+	if err != nil {
+		return ""
+	}
+	return article.FeedURL
 }

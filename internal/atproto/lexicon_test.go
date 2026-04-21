@@ -15,9 +15,13 @@ func lexiconPath(filename string) string {
 	return filepath.Join("..", "..", "lexicons", "at", "glean", filename)
 }
 
-func readLexiconProperties(t *testing.T, filename string) map[string]any {
+func lexiconPathFromRoot(relPath string) string {
+	return filepath.Join("..", "..", "lexicons", relPath)
+}
+
+func readLexiconPropertiesFromPath(t *testing.T, path string) map[string]any {
 	t.Helper()
-	data, err := os.ReadFile(lexiconPath(filename))
+	data, err := os.ReadFile(path)
 	assert.NilError(t, err)
 
 	var schema struct {
@@ -30,13 +34,18 @@ func readLexiconProperties(t *testing.T, filename string) map[string]any {
 		} `json:"defs"`
 	}
 	assert.NilError(t, json.Unmarshal(data, &schema))
-	assert.Assert(t, len(schema.Defs.Main.Record.Properties) > 0, "no properties found in %s", filename)
+	assert.Assert(t, len(schema.Defs.Main.Record.Properties) > 0, "no properties found in %s", path)
 	return schema.Defs.Main.Record.Properties
 }
 
 func assertStructMatchesLexicon[T any](t *testing.T, filename string) {
 	t.Helper()
-	properties := readLexiconProperties(t, filename)
+	assertStructMatchesLexiconPath[T](t, lexiconPath(filename))
+}
+
+func assertStructMatchesLexiconPath[T any](t *testing.T, path string) {
+	t.Helper()
+	properties := readLexiconPropertiesFromPath(t, path)
 
 	var zero T
 	typ := reflect.TypeOf(zero)
@@ -52,12 +61,12 @@ func assertStructMatchesLexicon[T any](t *testing.T, filename string) {
 	}
 
 	for prop := range properties {
-		assert.Assert(t, jsonTags[prop], "lexicon property %q missing from %s (lexicon file: %s)", prop, typ.Name(), filename)
+		assert.Assert(t, jsonTags[prop], "lexicon property %q missing from %s (lexicon file: %s)", prop, typ.Name(), path)
 	}
 
 	for name := range jsonTags {
 		_, exists := properties[name]
-		assert.Assert(t, exists, "Go field %q in %s missing from lexicon %s", name, typ.Name(), filename)
+		assert.Assert(t, exists, "Go field %q in %s missing from lexicon %s", name, typ.Name(), path)
 	}
 }
 
@@ -71,4 +80,12 @@ func TestAnnotationRecordMatchesLexicon(t *testing.T) {
 
 func TestLikeRecordMatchesLexicon(t *testing.T) {
 	assertStructMatchesLexicon[LikeRecord](t, "like.json")
+}
+
+func TestFollowRecordMatchesLexicon(t *testing.T) {
+	assertStructMatchesLexiconPath[FollowRecord](t, lexiconPathFromRoot("app/bsky/graph/follow.json"))
+}
+
+func TestMarginNoteRecordMatchesLexicon(t *testing.T) {
+	assertStructMatchesLexiconPath[MarginNoteRecord](t, lexiconPathFromRoot("at/margin/note.json"))
 }

@@ -7,6 +7,15 @@ import (
 	"time"
 )
 
+const (
+	CollectionSubscription   = "at.glean.subscription"
+	CollectionAnnotation     = "at.glean.annotation"
+	CollectionLike           = "at.glean.like"
+	CollectionMarginNote     = "at.margin.note"
+	CollectionBskyFollow     = "app.bsky.graph.follow"
+	CollectionTangledFollow  = "sh.tangled.graph.follow"
+)
+
 type SubscriptionRecord struct {
 	CreatedAt string `json:"createdAt"`
 	FeedURL   string `json:"feedUrl"`
@@ -28,11 +37,6 @@ type LikeRecord struct {
 	CreatedAt  string `json:"createdAt"`
 	FeedURL    string `json:"feedUrl"`
 	ArticleURL string `json:"articleUrl"`
-}
-
-type FollowRecord struct {
-	Subject   string `json:"subject"`
-	CreatedAt string `json:"createdAt"`
 }
 
 type Record struct {

@@ -265,3 +265,17 @@ func (db *DB) UpdateArticleFullContent(ctx context.Context, id int64, fullConten
 	`, fullContent, id)
 	return err
 }
+
+func (db *DB) GetArticleByURL(ctx context.Context, url string) (*Article, error) {
+	a := &Article{}
+	err := db.QueryRowContext(ctx, `
+		SELECT id, feed_url, guid, title, url, author, summary, content, full_content, published, updated, fetched_at
+		FROM articles WHERE url = ?
+		LIMIT 1
+	`, url).Scan(&a.ID, &a.FeedURL, &a.GUID, &a.Title, &a.URL, &a.Author,
+		&a.Summary, &a.Content, &a.FullContent, &a.Published, &a.Updated, &a.FetchedAt)
+	if err != nil {
+		return nil, err
+	}
+	return a, nil
+}

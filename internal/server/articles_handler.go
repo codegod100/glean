@@ -186,7 +186,7 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if client := s.pdsClientForUser(r); client != nil {
-			uri, _, err := client.CreateRecord(r.Context(), user.DID, "at.glean.like", likeRecord)
+			uri, _, err := client.CreateRecord(r.Context(), user.DID, atproto.CollectionLike, likeRecord)
 			if err != nil {
 				s.logger.Error("failed to write like to PDS", "error", err)
 				http.Error(w, "failed to write like to PDS: "+err.Error(), http.StatusBadGateway)

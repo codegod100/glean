@@ -94,11 +94,12 @@ func NewJetstreamConsumer(jetstreamURL string, handler EventHandler, logger *slo
 			"User-Agent": "glean/1.0",
 		},
 		WantedCollections: []string{
-			"at.glean.subscription",
-			"at.glean.annotation",
-			"at.glean.like",
-			"app.bsky.graph.follow",
-			"sh.tangled.graph.follow",
+			CollectionSubscription,
+			CollectionAnnotation,
+			CollectionLike,
+			CollectionBskyFollow,
+			CollectionTangledFollow,
+			CollectionMarginNote,
 		},
 	}
 

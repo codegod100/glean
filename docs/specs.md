@@ -120,7 +120,24 @@ A user likes an article. The liked feed surfaces popular articles and feeds into
 }
 ```
 
-### 3.4 AppView Query Lexicons
+### 3.4 `at.margin.note` (External)
+
+Glean also indexes records from the `at.margin.note` lexicon (owned by [margin.at](https://margin.at)). These are displayed in the UI as if they were `at.glean.annotation` records — margin notes appear alongside glean annotations on article detail pages.
+
+The mapping from margin note to glean annotation:
+
+| Margin note field              | Annotation field | Notes                                                           |
+| ------------------------------ | ---------------- | --------------------------------------------------------------- |
+| `target.source`                | `article_url`    | W3C SpecificResource source URL                                 |
+| `body.value`                   | `note`           | Text content of the annotation                                  |
+| `target.selector.exact`        | `quote`          | TextQuoteSelector exact text                                    |
+| `tags`                         | `tags`           | Direct mapping                                                  |
+| `createdAt`                    | `created_at`     | Direct mapping                                                  |
+| _(looked up from articles DB)_ | `feed_url`       | Resolved by matching `target.source` against known article URLs |
+
+When no matching article exists in the local DB, the annotation is stored with an empty `feed_url`. Margin notes are indexed from both Jetstream and PDS sync, same as glean records.
+
+### 3.5 AppView Query Lexicons
 
 As an AppView, Glean serves the following XRPC query endpoints. Other AT Protocol applications can call these to access indexed `at.glean.*` data without implementing their own indexer.
 
@@ -209,7 +226,7 @@ Get feed recommendations for a user based on clustering.
 
 ```
 Input:
-  repo: string (DID of the user)
+  repo: string (DID of the user, query parameter)
   limit?: integer (default 20, max 50)
 
 Output:
@@ -217,12 +234,12 @@ Output:
   people: [{ did, handle, displayName, avatar, jaccard, commonFeeds }]
 ```
 
-### 3.5 AppView Jetstream Consumption
+### 3.6 AppView Jetstream Consumption
 
 Glean subscribes to a Jetstream endpoint (`GLEAN_JETSTREAM`, default `wss://jetstream2.fr.hose.cam`) for all `at.glean.*` records:
 
 ```
-SUBSCRIBE collections: ["at.glean.subscription", "at.glean.annotation", "at.glean.like"]
+SUBSCRIBE collections: ["at.glean.subscription", "at.glean.annotation", "at.glean.like", "app.bsky.graph.follow", "sh.tangled.graph.follow", "at.margin.note"]
 ```
 
 On each event:
@@ -299,25 +316,16 @@ Go's `encoding/xml` for RSS and Atom. A simple `encoding/json` for JSON Feed.
 Each parser returns a normalized `Feed` and a slice of `Article` structs:
 
 ```go
-type Feed struct {
-    URL         string
-    Title       string
-    SiteURL     string
-    Description string
-    Type        string // "rss", "atom", "json"
-    ETag        string
-    LastModified string
-}
-
 type Article struct {
-    GUID        string
-    Title       string
-    URL         string
-    Author      string
-    Content     string
-    Summary     string
-    Published   time.Time
-    Updated     time.Time
+    FeedURL   string
+    GUID      string
+    Title     string
+    URL       string
+    Author    string
+    Content   string
+    Summary   string
+    Published time.Time
+    Updated   time.Time
 }
 ```
 
@@ -337,14 +345,18 @@ CREATE TABLE articles (
     author      TEXT,
     summary     TEXT,
     content     TEXT,
+    full_content TEXT,
     published   DATETIME,
     updated     DATETIME,
     fetched_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(feed_url, guid)
 );
+
+CREATE INDEX idx_articles_feed ON articles(feed_url);
+CREATE INDEX idx_articles_published ON articles(published DESC);
 ```
 
-Content is stored as raw HTML from the feed's `<content:encoded>`, `<summary>`, or JSON Feed `content_html`. The server renders it in a sanitized view (strip `<script>`, `<iframe>`, etc.).
+Content is stored as raw HTML from the feed's `<content:encoded>`, `<summary>`, or JSON Feed `content_html`. `full_content` stores scraped article content fetched from the original URL. The server renders it in a sanitized view (strip `<script>`, `<iframe>`, etc.).
 
 ### 4.5 Read State
 
@@ -415,9 +427,10 @@ Glean runs as a single Go binary that fills three roles: **AppView** (indexing `
                      │  └─────────────────┘  │         └──────────────────┘
                      └──────────────────────┘
 
-                     AppView responsibilities:
-                     • Subscribe to Jetstream for at.glean.subscription, at.glean.annotation, at.glean.like
-                     • Index records into SQLite
+                      AppView responsibilities:
+                      • Subscribe to Jetstream for at.glean.subscription, at.glean.annotation, at.glean.like, at.margin.note
+                      • Index records into SQLite
+                      • Convert at.margin.note records to annotations (displayed alongside glean.at annotations)
                      • Serve XRPC query endpoints (at.glean.listSubscriptions, etc.)
                      • Host the web UI at glean.at
                      • Write to user PDS on behalf of user (when user acts through UI)
@@ -515,13 +528,10 @@ CREATE TABLE read_state (
     article_id  INTEGER NOT NULL REFERENCES articles(id),
     is_read     BOOLEAN NOT NULL DEFAULT 0,
     read_at     DATETIME,
-    is_starred  BOOLEAN NOT NULL DEFAULT 0,
-    starred_at  DATETIME,
     PRIMARY KEY (user_did, article_id)
 );
 
 CREATE INDEX idx_read_state_unread ON read_state(user_did, is_read) WHERE is_read = 0;
-CREATE INDEX idx_read_state_starred ON read_state(user_did, is_starred) WHERE is_starred = 1;
 ```
 
 ### 6.6 Annotations, Likes
@@ -580,7 +590,39 @@ CREATE TABLE user_similarity (
 );
 ```
 
-## 7. Clustering & Recommendations
+### 6.8 Follows
+
+Tracks follow relationships between users (from `app.bsky.graph.follow` and `sh.tangled.graph.follow` records).
+
+```sql
+CREATE TABLE follows (
+    user_did    TEXT NOT NULL REFERENCES users(did),
+    target_did  TEXT NOT NULL,
+    uri         TEXT,
+    cid         TEXT,
+    followed_at DATETIME,
+    PRIMARY KEY (user_did, target_did)
+);
+
+CREATE INDEX idx_follows_user ON follows(user_did);
+CREATE INDEX idx_follows_target ON follows(target_did);
+```
+
+### 6.9 OAuth Storage
+
+```sql
+CREATE TABLE oauth_auth_requests (
+    state TEXT PRIMARY KEY,
+    data  TEXT NOT NULL
+);
+
+CREATE TABLE oauth_sessions (
+    account_did TEXT NOT NULL,
+    session_id  TEXT NOT NULL,
+    data        TEXT NOT NULL,
+    PRIMARY KEY (account_did, session_id)
+);
+```
 
 Glean has two complementary recommendation signals:
 
@@ -626,10 +668,8 @@ score(feed) = Σ J(target, U)  for each user U subscribed to feed
 4. Return top N articles as recommendations
 
 ```
-score(article) = Σ 1/logN(likers(article))  for each user U who liked it
+score(article) = Σ J(target, U)  for each similar user U who liked the article
 ```
-
-The `1/logN` weighting avoids over-recommending articles from very large feeds.
 
 **People recommendations (to follow on Bluesky):**
 
@@ -657,10 +697,12 @@ For larger scale, move to MinHash + LSH (banded hashing) to approximate Jaccard 
 
 A background goroutine runs on a configurable schedule (`GLEAN_CLUSTER_INTERVAL`, default 6h):
 
-1. **Jetstream ingestion**: Subscribe to Jetstream for `at.glean.*` records
-2. **Index new records**: Parse lexicon records, upsert into SQLite
-3. **Compute similarities**: Batch-update the `feed_similarity`, `user_similarity`, and `article_co_like` tables
-4. **Generate recommendations**: Materialize top recommendations per user into cache tables
+1. **Compute feed similarity**: Batch-update the `feed_similarity` table (Jaccard over subscriber sets)
+2. **Compute user similarity**: Batch-update the `user_similarity` table (Jaccard over subscription sets, boosted by follow relationships)
+3. **Generate feed recommendations**: Materialize top feed recommendations per user into `user_feed_recommendations`
+4. **Generate article recommendations**: Materialize top article recommendations per user into `user_article_recommendations`
+
+Jetstream ingestion and record indexing happen in a separate persistent goroutine (the Jetstream consumer), not in the cron.
 
 ```sql
 CREATE TABLE user_feed_recommendations (
@@ -687,28 +729,31 @@ The server renders HTML fragments that htmx swaps into the page. No JSON API nee
 
 ### 8.1 Pages
 
-| Route                     | Method | Description                                              |
-| ------------------------- | ------ | -------------------------------------------------------- |
-| `/`                       | GET    | Landing page / auth redirect                             |
-| `/dashboard`              | GET    | Main dashboard: unread articles, recommendations sidebar |
-| `/feeds`                  | GET    | Manage RSS subscriptions (OPML import for onboarding)    |
-| `/feeds/opml/upload`      | POST   | Upload OPML file to bulk-import subscriptions            |
-| `/feeds/opml/download`    | GET    | Export subscriptions as OPML (offboarding)               |
-| `/feeds/add`              | POST   | Add a single feed URL                                    |
-| `/feeds/remove`           | DELETE | Remove a feed                                            |
-| `/feeds/refresh`          | POST   | Refresh all subscribed feeds                             |
-| `/feeds/clear`            | POST   | Clear all subscriptions                                  |
-| `/articles`               | GET    | Read articles (paginated, filterable by feed)            |
-| `/articles/{id}`          | GET    | Article detail view                                      |
-| `/articles/{id}/read`     | POST   | Mark article as read                                     |
-| `/articles/{id}/unread`   | POST   | Mark article as unread                                   |
-| `/articles/{id}/like`     | POST   | Like an article                                          |
-| `/articles/mark-all-read` | POST   | Mark all articles as read                                |
-| `/trending`               | GET    | Community feed: articles ranked by likes                 |
-| `/library`                | GET    | Liked articles and annotations                           |
-| `/library/create`         | POST   | Create annotation on an article                          |
-| `/library/{id}/delete`    | POST   | Delete an annotation                                     |
-| `/profile/{did}`          | GET    | Public profile: their feeds, likes, annotations          |
+| Route                          | Method | Description                                              |
+| ------------------------------ | ------ | -------------------------------------------------------- |
+| `/`                            | GET    | Landing page / auth redirect                             |
+| `/dashboard`                   | GET    | Main dashboard: unread articles, recommendations sidebar |
+| `/feeds`                       | GET    | Manage RSS subscriptions (OPML import for onboarding)    |
+| `/feeds/list`                  | GET    | Feed list fragment (htmx partial)                        |
+| `/feeds/discover-url`          | GET    | Discover feed URL from a website                         |
+| `/feeds/opml/upload`           | POST   | Upload OPML file to bulk-import subscriptions            |
+| `/feeds/opml/download`         | GET    | Export subscriptions as OPML (offboarding)               |
+| `/feeds/add`                   | POST   | Add a single feed URL                                    |
+| `/feeds/remove`                | DELETE | Remove a feed                                            |
+| `/feeds/refresh`               | POST   | Refresh all subscribed feeds                             |
+| `/feeds/clear`                 | POST   | Clear all subscriptions                                  |
+| `/articles`                    | GET    | Read articles (paginated, filterable by feed)            |
+| `/articles/{id}`               | GET    | Article detail view                                      |
+| `/articles/{id}/read`          | POST   | Mark article as read                                     |
+| `/articles/{id}/unread`        | POST   | Mark article as unread                                   |
+| `/articles/{id}/like`          | POST   | Like an article                                          |
+| `/articles/{id}/fetch-content` | POST   | Fetch full article content from original URL             |
+| `/articles/mark-all-read`      | POST   | Mark all articles as read                                |
+| `/trending`                    | GET    | Community feed: articles ranked by likes                 |
+| `/library`                     | GET    | Liked articles and annotations                           |
+| `/library/create`              | POST   | Create annotation on an article                          |
+| `/library/{id}/delete`         | POST   | Delete an annotation                                     |
+| `/profile/{did}`               | GET    | Public profile: their feeds, likes, annotations          |
 
 ### 8.2 htmx Patterns
 
@@ -726,12 +771,19 @@ glean/
 ├── go.sum
 ├── Dockerfile
 ├── Makefile
+├── lexicons/
+│   └── at/
+│       ├── glean/                  # Glean lexicon JSON schemas (subscription, annotation, like)
+│       └── margin/                 # External lexicon schemas (note.json for at.margin.note)
 ├── internal/
 │   ├── atproto/
 │   │   ├── auth.go                # DID resolution, OAuth flow
 │   │   ├── client.go              # XRPC client (write to user PDS)
 │   │   ├── jetstream.go           # Subscribe to Jetstream via official client
 │   │   ├── stream_handler.go      # Stream event → DB handler
+│   │   ├── lexicon.go             # Lexicon record types (at.glean.*, maintained by hand)
+│   │   ├── lexicon_external.go    # External lexicon record types (FollowRecord, MarginNoteRecord)
+│   │   ├── lexicon_test.go        # Test: Go structs match lexicon JSON schemas
 │   │   ├── sync.go                # PDS record reconciliation
 │   │   └── xrpc.go                # XRPC query handlers (AppView endpoints)
 │   ├── db/
@@ -740,6 +792,7 @@ glean/
 │   │   ├── feed.go                # Feed + subscription queries
 │   │   ├── article.go             # Article queries
 │   │   ├── social.go              # Like, annotation queries
+│   │   ├── follow.go              # Follow queries
 │   │   ├── cluster.go             # Similarity + recommendation queries
 │   │   ├── oauth_store.go         # OAuth session storage
 │   │   └── store.go               # FeedStore adapter for scheduler
@@ -748,21 +801,25 @@ glean/
 │   │   ├── fetcher.go             # Scheduler with dedup + Fetcher
 │   │   ├── discover.go            # Feed auto-discovery from URLs
 │   │   └── opml.go                # OPML import/export
+│   ├── scraper/
+│   │   └── scraper.go             # Full article content scraper
 │   ├── metrics/
 │   │   └── metrics.go             # Prometheus metrics definitions
 │   ├── cluster/
 │   │   ├── jaccard.go             # Jaccard similarity computation
-│   │   ├── recommender.go         # Feed + people recommendation logic
+│   │   ├── recommender.go         # Feed + people recommendation queries
 │   │   └── cron.go                # Background recomputation scheduler
 │   ├── server/
 │   │   ├── server.go              # HTTP server, router setup
 │   │   ├── auth_handler.go        # OAuth login/callback
 │   │   ├── feeds_handler.go       # Feed management handlers
 │   │   ├── articles_handler.go    # Article reading handlers
+│   │   ├── annotations_handler.go # Annotation handlers
 │   │   ├── dashboard_handler.go   # Dashboard handler
 │   │   ├── trending_handler.go    # Trending handler
-│   │   ├── library_handler.go     # Library (likes + annotations)
+│   │   ├── index_handler.go       # Landing page handler
 │   │   ├── profile_handler.go     # Public profile handler
+│   │   ├── pagination.go          # Pagination helpers
 │   │   ├── middleware.go          # Auth, logging, CSRF middleware
 │   │   └── session.go             # Session management
 │   ├── sanitize/
@@ -770,7 +827,6 @@ glean/
 │   └── tmpl/
 │       ├── base.html              # Base template with htmx + Tailwind
 │       ├── index.html             # Landing page
-│       ├── login.html             # Login page
 │       ├── dashboard.html         # Dashboard
 │       ├── feeds.html             # Feed management
 │       ├── articles.html          # Article listing
@@ -865,10 +921,13 @@ Glean exposes a `/metrics` endpoint for monitoring. Key metrics:
 - **`glean_feed_fetch_duration_seconds`** — Histogram of feed fetch latency
 - **`glean_articles_upserted_total`** — Counter of articles stored from feeds
 - **`glean_jetstream_events_total`** — Jetstream events labeled by collection and action
+- **`glean_jetstream_errors_total`** — Jetstream handler errors
+- **`glean_jetstream_reconnects_total`** — Jetstream reconnection count
 - **`glean_http_requests_total`** — HTTP request counts labeled by method, path, and status
+- **`glean_pds_sync_runs_total`** / **`glean_pds_sync_errors_total`** — PDS sync runs and errors
 - **`glean_cluster_runs_total`** / **`glean_cluster_duration_seconds`** — Recommendation engine runs and timing
 
-### 12.3 Why htmx?
+### 12.4 Why htmx?
 
 - No JavaScript build pipeline
 - Server renders everything — simpler mental model
@@ -876,7 +935,7 @@ Glean exposes a `/metrics` endpoint for monitoring. Key metrics:
 - Perfect fit for a read-centric application
 - TailwindCSS handles styling without writing custom CSS
 
-### 12.4 AppView Architecture
+### 12.5 AppView Architecture
 
 Glean operates as an AT Protocol AppView. This means:
 
@@ -885,7 +944,7 @@ Glean operates as an AT Protocol AppView. This means:
 - **Query path**: Other AT Protocol apps can query Glean's XRPC endpoints to access indexed data (subscriptions, annotations, likes, recommendations) without building their own indexer.
 - **Trade-off**: Article content (fetched from RSS feeds) is local-only and not part of the AT Protocol layer. Only individual feed subscription records (`at.glean.subscription`) live on the PDS.
 
-### 12.5 Privacy Model
+### 12.6 Privacy Model
 
 All PDS records are public. There is no notion of private data on the AT Protocol — everything stored on the repo is visible. Users should be aware that annotations, subscriptions, and likes are all public records.
 

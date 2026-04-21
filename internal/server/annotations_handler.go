@@ -89,7 +89,7 @@ func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) 
 			Note:       a.Note.String,
 			Rating:     int(a.Rating.Int64),
 		}
-		uri, cid, err := client.CreateRecord(r.Context(), user.DID, "at.glean.annotation", record)
+		uri, cid, err := client.CreateRecord(r.Context(), user.DID, atproto.CollectionAnnotation, record)
 		if err != nil {
 			s.logger.Error("failed to write annotation to PDS", "error", err)
 			http.Error(w, "failed to write annotation to PDS: "+err.Error(), http.StatusBadGateway)

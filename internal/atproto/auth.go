@@ -8,8 +8,10 @@ import (
 	"github.com/bluesky-social/indigo/atproto/syntax"
 )
 
-type DIDDocument = identity.DIDDocument
-type Identity = identity.Identity
+type (
+	DIDDocument = identity.DIDDocument
+	Identity    = identity.Identity
+)
 
 func ResolveHandle(ctx context.Context, handle string) (string, error) {
 	h, err := syntax.ParseHandle(handle)

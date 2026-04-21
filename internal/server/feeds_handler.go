@@ -108,7 +108,7 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 			Title:     feedTitle,
 			Category:  category,
 		}
-		uri, cid, err := client.CreateRecord(r.Context(), user.DID, "at.glean.subscription", record)
+		uri, cid, err := client.CreateRecord(r.Context(), user.DID, atproto.CollectionSubscription, record)
 		if err != nil {
 			s.logger.Error("failed to write subscription to PDS", "error", err)
 			http.Error(w, "failed to write subscription to PDS: "+err.Error(), http.StatusBadGateway)
@@ -228,7 +228,7 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 				Title:     fu.Title,
 				Category:  fu.Category,
 			}
-			uri, cid, err := client.CreateRecord(r.Context(), user.DID, "at.glean.subscription", record)
+			uri, cid, err := client.CreateRecord(r.Context(), user.DID, atproto.CollectionSubscription, record)
 			if err != nil {
 				s.logger.Error("failed to write subscription to PDS", "error", err, "url", fu.URL)
 				continue

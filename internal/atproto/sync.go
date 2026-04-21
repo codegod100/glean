@@ -33,14 +33,17 @@ func NewSync(database *db.DB, client *Client, logger *slog.Logger) *Sync {
 func (s *Sync) Run(ctx context.Context, userDID string) error {
 	s.logger.Info("syncing from PDS", "did", userDID)
 
-	if err := s.syncCollection(ctx, userDID, "at.glean.subscription", s.reconcileSubscription); err != nil {
+	if err := s.syncCollection(ctx, userDID, CollectionSubscription, s.reconcileSubscription); err != nil {
 		s.logger.Error("sync subscriptions failed", "error", err, "did", userDID)
 	}
-	if err := s.syncCollection(ctx, userDID, "at.glean.like", s.reconcileLike); err != nil {
+	if err := s.syncCollection(ctx, userDID, CollectionLike, s.reconcileLike); err != nil {
 		s.logger.Error("sync likes failed", "error", err, "did", userDID)
 	}
-	if err := s.syncCollection(ctx, userDID, "at.glean.annotation", s.reconcileAnnotation); err != nil {
+	if err := s.syncCollection(ctx, userDID, CollectionAnnotation, s.reconcileAnnotation); err != nil {
 		s.logger.Error("sync annotations failed", "error", err, "did", userDID)
+	}
+	if err := s.syncCollection(ctx, userDID, CollectionMarginNote, s.reconcileMarginNote); err != nil {
+		s.logger.Error("sync margin notes failed", "error", err, "did", userDID)
 	}
 	if err := s.syncFollows(ctx, userDID); err != nil {
 		s.logger.Error("sync follows failed", "error", err, "did", userDID)
@@ -163,10 +166,49 @@ func (s *Sync) reconcileAnnotation(ctx context.Context, userDID, uri, cid string
 	return s.db.CreateAnnotation(ctx, a)
 }
 
+func (s *Sync) reconcileMarginNote(ctx context.Context, userDID, uri, cid string, value json.RawMessage) error {
+	var rec MarginNoteRecord
+	if err := json.Unmarshal(value, &rec); err != nil {
+		return err
+	}
+
+	articleURL, quote, note, tags := rec.ToAnnotation()
+	if articleURL == "" {
+		return nil
+	}
+
+	var existing []*db.Annotation
+	existing, _ = s.db.ListAnnotations(ctx, "", articleURL, userDID, 100, 0)
+	for _, a := range existing {
+		if a.URI == uri {
+			return nil
+		}
+	}
+
+	feedURL := ""
+	if article, err := s.db.GetArticleByURL(ctx, articleURL); err == nil {
+		feedURL = article.FeedURL
+	}
+
+	t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
+	a := &db.Annotation{
+		URI:        uri,
+		AuthorDID:  userDID,
+		FeedURL:    feedURL,
+		ArticleURL: articleURL,
+		Quote:      db.NullStr(quote),
+		Note:       db.NullStr(note),
+		Tags:       db.NullStrTags(tags),
+		CreatedAt:  db.NullTime(t),
+		CID:        db.NullStr(cid),
+	}
+	return s.db.CreateAnnotation(ctx, a)
+}
+
 func (s *Sync) syncFollows(ctx context.Context, userDID string) error {
 	activeFollows := make(map[string]db.Follow)
 
-	for _, collection := range []string{"app.bsky.graph.follow", "sh.tangled.graph.follow"} {
+	for _, collection := range []string{CollectionBskyFollow, CollectionTangledFollow} {
 		cursor := ""
 		for {
 			records, next, err := s.client.ListRecords(ctx, userDID, collection, 100, cursor)

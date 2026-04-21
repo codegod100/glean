@@ -61,7 +61,7 @@ func (h *XRPCHandler) ListSubscriptions(w http.ResponseWriter, r *http.Request) 
 		}
 
 		sv := SubscriptionView{
-			URI: fmtATURI(repo, "at.glean.subscription", strconv.Itoa(id)),
+			URI: fmtATURI(repo, CollectionSubscription, strconv.Itoa(id)),
 			Value: SubscriptionRecord{
 				CreatedAt: addedAt.String,
 				FeedURL:   feedURL,
@@ -300,8 +300,11 @@ func (h *XRPCHandler) GetTrending(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *XRPCHandler) GetRecommendations(w http.ResponseWriter, r *http.Request) {
-	repo := chi.URLParam(r, "repo")
-	limit := parseIntParam(r, "limit", 10)
+	repo := r.URL.Query().Get("repo")
+	limit := parseIntParam(r, "limit", 20)
+	if limit > 50 {
+		limit = 50
+	}
 
 	feedRows, err := h.db.QueryContext(r.Context(), `
 		SELECT r.feed_url, f.title, f.site_url, f.description, f.subscriber_count, r.score
