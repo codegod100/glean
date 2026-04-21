@@ -10,14 +10,14 @@ The core idea: your RSS subscriptions are a strong signal about your interests. 
 
 ## 2. Stack
 
-| Layer            | Technology                           |
-| ---------------- | ------------------------------------ |
-| Backend          | Go                                   |
-| Database         | SQLite (via `mattn/go-sqlite3`)      |
-| Frontend         | htmx + TailwindCSS                   |
-| Auth             | AT Protocol OAuth / DID resolution   |
-| AT Protocol role | AppView for `at.glean.*` lexicons    |
-| Data source      | AT Protocol Jetstream → SQLite index |
+| Layer            | Technology                                                      |
+| ---------------- | --------------------------------------------------------------- |
+| Backend          | Go                                                              |
+| Database         | SQLite (via `mattn/go-sqlite3`)                                 |
+| Frontend         | htmx + TailwindCSS                                              |
+| Auth             | AT Protocol OAuth / DID resolution (configurable PLC directory) |
+| AT Protocol role | AppView for `at.glean.*` lexicons                               |
+| Data source      | AT Protocol Jetstream → SQLite index                            |
 
 ## 3. AT Protocol Lexicons
 
@@ -137,7 +137,26 @@ The mapping from margin note to glean annotation:
 
 When no matching article exists in the local DB, the annotation is stored with an empty `feed_url`. Margin notes are indexed from both Jetstream and PDS sync, same as glean records.
 
-### 3.5 AppView Query Lexicons
+### 3.5 `app.bsky.graph.follow` (External)
+
+Follow relationships are tracked from Bluesky and Tangled follow records. The `FollowRecord` struct is validated against the lexicon at `lexicons/app/bsky/graph/follow.json`. The optional `via` field (a strong ref) is preserved as raw JSON but not used by Glean.
+
+### 3.6 Lexicon Constants
+
+All collection NSIDs are defined as constants in `lexicon.go` and used throughout the codebase:
+
+```go
+const (
+    CollectionSubscription   = "at.glean.subscription"
+    CollectionAnnotation     = "at.glean.annotation"
+    CollectionLike           = "at.glean.like"
+    CollectionMarginNote     = "at.margin.note"
+    CollectionBskyFollow     = "app.bsky.graph.follow"
+    CollectionTangledFollow  = "sh.tangled.graph.follow"
+)
+```
+
+### 3.7 AppView Query Lexicons
 
 As an AppView, Glean serves the following XRPC query endpoints. Other AT Protocol applications can call these to access indexed `at.glean.*` data without implementing their own indexer.
 
@@ -234,9 +253,9 @@ Output:
   people: [{ did, handle, displayName, avatar, jaccard, commonFeeds }]
 ```
 
-### 3.6 AppView Jetstream Consumption
+### 3.8 AppView Jetstream Consumption
 
-Glean subscribes to a Jetstream endpoint (`GLEAN_JETSTREAM`, default `wss://jetstream2.fr.hose.cam`) for all `at.glean.*` records:
+Glean subscribes to a Jetstream endpoint (`GLEAN_JETSTREAM`, default `wss://jetstream.glean.at`) for all `at.glean.*` records:
 
 ```
 SUBSCRIBE collections: ["at.glean.subscription", "at.glean.annotation", "at.glean.like", "app.bsky.graph.follow", "sh.tangled.graph.follow", "at.margin.note"]
@@ -774,7 +793,8 @@ glean/
 ├── lexicons/
 │   └── at/
 │       ├── glean/                  # Glean lexicon JSON schemas (subscription, annotation, like)
-│       └── margin/                 # External lexicon schemas (note.json for at.margin.note)
+│       └── margin/                 # External: at.margin.note W3C Web Annotation schema
+│   └── app/bsky/graph/             # External: app.bsky.graph.follow schema
 ├── internal/
 │   ├── atproto/
 │   │   ├── auth.go                # DID resolution, OAuth flow
@@ -845,6 +865,8 @@ glean/
 ```
 
 ## 10. Auth Flow
+
+DID resolution uses a configurable PLC directory (`GLEAN_PLC_URL`, defaults to `https://didplc.glean.at`). The identity directory is initialized once at startup via `InitIdentity()` with a caching layer (250k entries, 24h TTL).
 
 1. User visits `/`, clicks "Sign in with Bluesky" (or any AT Proto PDS)
 2. Server redirects to AT Protocol OAuth authorization endpoint

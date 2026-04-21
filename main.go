@@ -21,10 +21,12 @@ import (
 func main() {
 	addr := flag.String("addr", envOr("GLEAN_ADDR", ":8080"), "listen address")
 	dbPath := flag.String("db", envOr("GLEAN_DB", "glean.db"), "database path")
-	jetstreamURL := flag.String("jetstream", envOr("GLEAN_JETSTREAM", "wss://jetstream2.fr.hose.cam"), "Jetstream URL")
+	jetstreamURL := flag.String("jetstream", envOr("GLEAN_JETSTREAM", "wss://jetstream.glean.at"), "Jetstream URL")
 	syncInterval := flag.Duration("sync-interval", envDuration("GLEAN_SYNC_INTERVAL", 1*time.Hour), "PDS sync interval")
 	clusterInterval := flag.Duration("cluster-interval", envDuration("GLEAN_CLUSTER_INTERVAL", 6*time.Hour), "cluster recomputation interval")
 	flag.Parse()
+
+	atproto.InitIdentity(envOr("GLEAN_PLC_URL", ""))
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 

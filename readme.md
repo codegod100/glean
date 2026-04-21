@@ -10,6 +10,7 @@ Your subscriptions live as records on your PDS. You own them. If Glean goes away
 
 - RSS, Atom, and JSON Feed support with a keyboard-driven reading interface
 - Highlights, notes, tags, and ratings on articles
+- [margin.at](https://margin.at) annotations displayed alongside glean annotations
 - A trending page showing what's popular across all users
 - Feed and people recommendations based on reading overlap
 - OPML import and export
@@ -36,15 +37,16 @@ Then open `http://localhost:8080`.
 
 ## Configuration
 
-| Variable                   | Default                        | What it does                                              |
-| -------------------------- | ------------------------------ | --------------------------------------------------------- |
-| `GLEAN_ADDR`               | `:8080`                        | Listen address                                            |
-| `GLEAN_DB`                 | `glean.db`                     | SQLite database path                                      |
-| `GLEAN_JETSTREAM`          | `wss://jetstream2.fr.hose.cam` | Jetstream WebSocket URL                                   |
-| `GLEAN_SYNC_INTERVAL`      | `1h`                           | PDS sync interval (Go duration: `30m`, `2h30m`, etc.)    |
-| `GLEAN_CLUSTER_INTERVAL`   | `6h`                           | Cluster recomputation interval (Go duration)              |
-| `GLEAN_OAUTH_CLIENT_ID`    | _(empty)_                      | OAuth client metadata URL (leave empty for localhost dev) |
-| `GLEAN_OAUTH_REDIRECT_URL` | _(empty)_                      | OAuth redirect URL (leave empty for localhost dev)        |
+| Variable                   | Default                    | What it does                                              |
+| -------------------------- | -------------------------- | --------------------------------------------------------- |
+| `GLEAN_ADDR`               | `:8080`                    | Listen address                                            |
+| `GLEAN_DB`                 | `glean.db`                 | SQLite database path                                      |
+| `GLEAN_JETSTREAM`          | `wss://jetstream.glean.at` | Jetstream WebSocket URL                                   |
+| `GLEAN_SYNC_INTERVAL`      | `1h`                       | PDS sync interval (Go duration: `30m`, `2h30m`, etc.)     |
+| `GLEAN_CLUSTER_INTERVAL`   | `6h`                       | Cluster recomputation interval (Go duration)              |
+| `GLEAN_PLC_URL`            | `https://plc.directory`    | PLC directory URL for DID resolution                      |
+| `GLEAN_OAUTH_CLIENT_ID`    | _(empty)_                  | OAuth client metadata URL (leave empty for localhost dev) |
+| `GLEAN_OAUTH_REDIRECT_URL` | _(empty)_                  | OAuth redirect URL (leave empty for localhost dev)        |
 
 For production:
 
