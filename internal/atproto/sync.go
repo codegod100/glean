@@ -140,12 +140,9 @@ func (s *Sync) reconcileAnnotation(ctx context.Context, userDID, uri, cid string
 		return nil
 	}
 
-	var existing []*db.Annotation
-	existing, _ = s.db.ListAnnotations(ctx, rec.FeedURL, rec.ArticleURL, userDID, 100, 0)
-	for _, a := range existing {
-		if a.URI == uri {
-			return nil
-		}
+	exists, err := s.db.AnnotationExists(ctx, uri)
+	if err != nil || exists {
+		return err
 	}
 
 	t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
@@ -177,12 +174,9 @@ func (s *Sync) reconcileMarginNote(ctx context.Context, userDID, uri, cid string
 		return nil
 	}
 
-	var existing []*db.Annotation
-	existing, _ = s.db.ListAnnotations(ctx, "", articleURL, userDID, 100, 0)
-	for _, a := range existing {
-		if a.URI == uri {
-			return nil
-		}
+	exists, err := s.db.AnnotationExists(ctx, uri)
+	if err != nil || exists {
+		return err
 	}
 
 	feedURL := ""

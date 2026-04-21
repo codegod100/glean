@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"strings"
 )
 
@@ -60,6 +59,18 @@ func (db *DB) DeleteAnnotation(ctx context.Context, uri string) error {
 	return err
 }
 
+func (db *DB) AnnotationExists(ctx context.Context, uri string) (bool, error) {
+	var exists int
+	err := db.QueryRowContext(ctx, `SELECT 1 FROM annotations WHERE uri = ?`, uri).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (db *DB) ListAnnotations(ctx context.Context, feedURL, articleURL, authorDID string, limit, offset int) ([]*Annotation, error) {
 	var conds []string
 	var args []any
@@ -83,7 +94,8 @@ func (db *DB) ListAnnotations(ctx context.Context, feedURL, articleURL, authorDI
 	if len(conds) > 0 {
 		query += ` WHERE ` + strings.Join(conds, " AND ")
 	}
-	query += fmt.Sprintf(` ORDER BY a.created_at DESC LIMIT %d OFFSET %d`, limit, offset)
+	query += ` ORDER BY a.created_at DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
 
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -140,7 +152,8 @@ func (db *DB) ListLikes(ctx context.Context, authorDID, feedURL string, limit, o
 	if len(conds) > 0 {
 		query += ` WHERE ` + strings.Join(conds, " AND ")
 	}
-	query += fmt.Sprintf(` ORDER BY created_at DESC LIMIT %d OFFSET %d`, limit, offset)
+	query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
 
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -207,7 +220,7 @@ type TrendingItem struct {
 }
 
 func (db *DB) ListTrendingArticlesForUser(ctx context.Context, userDID, since string, limit, offset int) ([]*TrendingItem, error) {
-	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
+	rows, err := db.QueryContext(ctx, `
 		SELECT ar.id, ar.title, COALESCE(ar.url, ''), COALESCE(ar.author, ''),
 		       COALESCE(ar.summary, ''), l.feed_url, COALESCE(f.title, ''),
 		       COALESCE(f.favicon_url, ''),
@@ -227,8 +240,8 @@ func (db *DB) ListTrendingArticlesForUser(ctx context.Context, userDID, since st
 		  )
 		GROUP BY ar.id
 		ORDER BY like_count DESC, annotation_count DESC
-		LIMIT %d OFFSET %d
-	`, limit, offset), since, since, userDID, userDID, userDID, userDID, userDID)
+		LIMIT ? OFFSET ?
+	`, since, since, userDID, userDID, userDID, userDID, userDID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +261,7 @@ func (db *DB) ListTrendingArticlesForUser(ctx context.Context, userDID, since st
 }
 
 func (db *DB) ListTrendingArticles(ctx context.Context, since string, limit, offset int) ([]*TrendingItem, error) {
-	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
+	rows, err := db.QueryContext(ctx, `
 		SELECT ar.id, ar.title, COALESCE(ar.url, ''), COALESCE(ar.author, ''),
 		       COALESCE(ar.summary, ''), l.feed_url, COALESCE(f.title, ''),
 		       COALESCE(f.favicon_url, ''),
@@ -261,8 +274,8 @@ func (db *DB) ListTrendingArticles(ctx context.Context, since string, limit, off
 		WHERE l.created_at >= ?
 		GROUP BY ar.id
 		ORDER BY like_count DESC, annotation_count DESC
-		LIMIT %d OFFSET %d
-	`, limit, offset), since, since)
+		LIMIT ? OFFSET ?
+	`, since, since, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -282,7 +295,7 @@ func (db *DB) ListTrendingArticles(ctx context.Context, since string, limit, off
 }
 
 func (db *DB) ListLikedArticles(ctx context.Context, userDID string, limit, offset int) ([]*Article, error) {
-	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
+	rows, err := db.QueryContext(ctx, `
 		SELECT DISTINCT a.id, a.feed_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 			a.published, a.updated, a.fetched_at,
 			COALESCE(f.title, '')
@@ -291,8 +304,8 @@ func (db *DB) ListLikedArticles(ctx context.Context, userDID string, limit, offs
 		LEFT JOIN feeds f ON f.feed_url = a.feed_url
 		WHERE l.author_did = ?
 		ORDER BY l.created_at DESC
-		LIMIT %d OFFSET %d
-	`, limit, offset), userDID)
+		LIMIT ? OFFSET ?
+	`, userDID, limit, offset)
 	if err != nil {
 		return nil, err
 	}

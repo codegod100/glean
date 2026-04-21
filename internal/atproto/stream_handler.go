@@ -63,11 +63,9 @@ func (h *StreamDBHandler) handleSubscription(ctx context.Context, event *Event) 
 		if !ok {
 			return nil
 		}
-		subs, _ := h.db.ListSubscriptions(ctx, event.DID, "", 100, 0)
-		for _, sub := range subs {
-			if sub.URI.Valid && sub.URI.String == event.URI {
-				return h.db.DeleteSubscription(ctx, event.DID, sub.FeedURL)
-			}
+		sub, err := h.db.GetSubscriptionByURI(ctx, event.DID, event.URI)
+		if err == nil && sub != nil {
+			return h.db.DeleteSubscription(ctx, event.DID, sub.FeedURL)
 		}
 		_ = parsed
 	}

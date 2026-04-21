@@ -29,14 +29,7 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 	peopleRecs, _ := s.db.GetPeopleRecommendations(r.Context(), user.DID, 5)
 	deadFeeds, _ := s.db.ListDeadFeeds(r.Context(), user.DID, 7)
 
-	seen := make(map[string]bool)
-	var categories []string
-	for _, sub := range allSubs {
-		if sub.Category.Valid && sub.Category.String != "" && !seen[sub.Category.String] {
-			seen[sub.Category.String] = true
-			categories = append(categories, sub.Category.String)
-		}
-	}
+	categories, _ := s.db.GetCategories(r.Context(), user.DID)
 
 	s.render(w, r, "feeds.html", map[string]any{
 		"User":                  user,

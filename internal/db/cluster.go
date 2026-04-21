@@ -3,16 +3,21 @@ package db
 import (
 	"context"
 	"database/sql"
-	"fmt"
 )
 
 func (db *DB) ComputeFeedSimilarity(ctx context.Context) error {
-	_, err := db.ExecContext(ctx, `DELETE FROM feed_similarity`)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx, `DELETE FROM feed_similarity`)
 	if err != nil {
 		return err
 	}
 
-	rows, err := db.QueryContext(ctx, `
+	rows, err := tx.QueryContext(ctx, `
 		SELECT s1.feed_url, s2.feed_url, COUNT(*) AS overlap
 		FROM subscriptions s1
 		JOIN subscriptions s2 ON s1.user_did = s2.user_did AND s1.feed_url < s2.feed_url
@@ -48,7 +53,7 @@ func (db *DB) ComputeFeedSimilarity(ctx context.Context) error {
 	}
 
 	if len(subCounts) > 0 {
-		countRows, err := db.QueryContext(ctx, `
+		countRows, err := tx.QueryContext(ctx, `
 			SELECT feed_url, COUNT(*) FROM subscriptions GROUP BY feed_url
 		`)
 		if err != nil {
@@ -66,31 +71,42 @@ func (db *DB) ComputeFeedSimilarity(ctx context.Context) error {
 		countRows.Close()
 	}
 
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO feed_similarity (feed_a, feed_b, jaccard, computed_at)
+		VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
 	for _, p := range pairs {
 		total := subCounts[p.feedA] + subCounts[p.feedB] - p.overlap
 		if total == 0 {
 			continue
 		}
 		jaccard := float64(p.overlap) / float64(total)
-		_, err := db.ExecContext(ctx, `
-			INSERT INTO feed_similarity (feed_a, feed_b, jaccard, computed_at)
-			VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-		`, p.feedA, p.feedB, jaccard)
-		if err != nil {
+		if _, err := stmt.ExecContext(ctx, p.feedA, p.feedB, jaccard); err != nil {
 			return err
 		}
 	}
 
-	return nil
+	return tx.Commit()
 }
 
 func (db *DB) ComputeUserSimilarity(ctx context.Context) error {
-	_, err := db.ExecContext(ctx, `DELETE FROM user_similarity`)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx, `DELETE FROM user_similarity`)
 	if err != nil {
 		return err
 	}
 
-	rows, err := db.QueryContext(ctx, `
+	rows, err := tx.QueryContext(ctx, `
 		SELECT s1.user_did, s2.user_did, COUNT(*) AS common
 		FROM subscriptions s1
 		JOIN subscriptions s2 ON s1.user_did < s2.user_did AND s1.feed_url = s2.feed_url
@@ -126,7 +142,7 @@ func (db *DB) ComputeUserSimilarity(ctx context.Context) error {
 	}
 
 	if len(subCounts) > 0 {
-		countRows, err := db.QueryContext(ctx, `
+		countRows, err := tx.QueryContext(ctx, `
 			SELECT user_did, COUNT(*) FROM subscriptions GROUP BY user_did
 		`)
 		if err != nil {
@@ -144,33 +160,44 @@ func (db *DB) ComputeUserSimilarity(ctx context.Context) error {
 		countRows.Close()
 	}
 
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO user_similarity (user_a, user_b, jaccard, common_feeds, computed_at)
+		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
 	for _, p := range pairs {
 		total := subCounts[p.userA] + subCounts[p.userB] - p.common
 		if total == 0 {
 			continue
 		}
 		jaccard := float64(p.common) / float64(total)
-		_, err := db.ExecContext(ctx, `
-			INSERT INTO user_similarity (user_a, user_b, jaccard, common_feeds, computed_at)
-			VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-		`, p.userA, p.userB, jaccard, p.common)
-		if err != nil {
+		if _, err := stmt.ExecContext(ctx, p.userA, p.userB, jaccard, p.common); err != nil {
 			return err
 		}
 	}
 
-	return nil
+	return tx.Commit()
 }
 
 func (db *DB) ComputeFeedRecommendations(ctx context.Context, userDID string) error {
-	_, err := db.ExecContext(ctx, `
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	_, err = tx.ExecContext(ctx, `
 		DELETE FROM user_feed_recommendations WHERE user_did = ?
 	`, userDID)
 	if err != nil {
 		return err
 	}
 
-	rows, err := db.QueryContext(ctx, `
+	rows, err := tx.QueryContext(ctx, `
 		SELECT
 			CASE WHEN fs.feed_a IN (SELECT feed_url FROM subscriptions WHERE user_did = ?) THEN fs.feed_b ELSE fs.feed_a END AS recommended_feed,
 			SUM(fs.jaccard) AS score
@@ -186,21 +213,30 @@ func (db *DB) ComputeFeedRecommendations(ctx context.Context, userDID string) er
 	}
 	defer rows.Close()
 
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO user_feed_recommendations (user_did, feed_url, score, computed_at)
+		VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
 	for rows.Next() {
 		var feedURL string
 		var score float64
 		if err := rows.Scan(&feedURL, &score); err != nil {
 			return err
 		}
-		_, err := db.ExecContext(ctx, `
-			INSERT INTO user_feed_recommendations (user_did, feed_url, score, computed_at)
-			VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-		`, userDID, feedURL, score)
-		if err != nil {
+		if _, err := stmt.ExecContext(ctx, userDID, feedURL, score); err != nil {
 			return err
 		}
 	}
-	return rows.Err()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 func (db *DB) GetFeedRecommendations(ctx context.Context, userDID string, limit int) ([]map[string]any, error) {
@@ -241,7 +277,7 @@ func (db *DB) GetFeedRecommendations(ctx context.Context, userDID string, limit 
 }
 
 func (db *DB) GetPeopleRecommendations(ctx context.Context, userDID string, limit int) ([]map[string]any, error) {
-	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
+	rows, err := db.QueryContext(ctx, `
 		SELECT
 			CASE WHEN us.user_a = ? THEN us.user_b ELSE us.user_a END AS recommended_user,
 			us.jaccard, us.common_feeds,
@@ -251,8 +287,8 @@ func (db *DB) GetPeopleRecommendations(ctx context.Context, userDID string, limi
 		WHERE (us.user_a = ? OR us.user_b = ?)
 		  AND u.handle IS NOT NULL AND u.handle != ''
 		ORDER BY us.jaccard DESC
-		LIMIT %d
-	`, limit), userDID, userDID, userDID, userDID)
+		LIMIT ?
+	`, userDID, userDID, userDID, userDID, limit)
 	if err != nil {
 		return nil, err
 	}

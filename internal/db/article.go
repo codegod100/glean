@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"database/sql"
-	"fmt"
 )
 
 type Article struct {
@@ -78,7 +77,8 @@ func (db *DB) ListArticles(ctx context.Context, userDID, feedURL string, limit, 
 		args = append(args, feedURL)
 	}
 
-	query += fmt.Sprintf(` ORDER BY a.published DESC LIMIT %d OFFSET %d`, limit, offset)
+	query += ` ORDER BY a.published DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
 
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -117,7 +117,8 @@ func (db *DB) ListUnreadArticles(ctx context.Context, userDID, feedURL string, l
 		args = append(args, feedURL)
 	}
 
-	query += fmt.Sprintf(` ORDER BY a.published DESC LIMIT %d OFFSET %d`, limit, offset)
+	query += ` ORDER BY a.published DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
 
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -156,7 +157,8 @@ func (db *DB) ListReadArticles(ctx context.Context, userDID, feedURL string, lim
 		args = append(args, feedURL)
 	}
 
-	query += fmt.Sprintf(` ORDER BY a.published DESC LIMIT %d OFFSET %d`, limit, offset)
+	query += ` ORDER BY a.published DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
 
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {

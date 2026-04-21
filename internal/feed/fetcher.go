@@ -119,9 +119,21 @@ func (s *Scheduler) fetchAll(ctx context.Context) {
 		s.logger.Error("failed to get feeds", "error", err)
 		return
 	}
+
+	sem := make(chan struct{}, 10)
+	var wg sync.WaitGroup
 	for _, f := range feeds {
-		s.FetchFeed(ctx, f)
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(feed *Feed) {
+			defer func() {
+				<-sem
+				wg.Done()
+			}()
+			s.FetchFeed(ctx, feed)
+		}(f)
 	}
+	wg.Wait()
 }
 
 func (s *Scheduler) FetchFeed(ctx context.Context, feed *Feed) {

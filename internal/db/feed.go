@@ -3,7 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"strings"
 	"time"
 )
 
@@ -203,13 +203,38 @@ func (db *DB) DeleteAllSubscriptions(ctx context.Context, userDID string) error 
 		return err
 	}
 
-	for _, u := range feedURLs {
-		if _, err := tx.ExecContext(ctx, `UPDATE feeds SET subscriber_count = MAX(subscriber_count - 1, 0) WHERE feed_url = ?`, u); err != nil {
+	if len(feedURLs) > 0 {
+		ph := make([]string, len(feedURLs))
+		args := make([]any, len(feedURLs))
+		for i, u := range feedURLs {
+			ph[i] = "?"
+			args[i] = u
+		}
+		_, err = tx.ExecContext(ctx, `
+			UPDATE feeds SET subscriber_count = MAX(subscriber_count - 1, 0)
+			WHERE feed_url IN (`+strings.Join(ph, ",")+`)
+		`, args...)
+		if err != nil {
 			return err
 		}
 	}
 
 	return tx.Commit()
+}
+
+func (db *DB) GetSubscriptionByURI(ctx context.Context, userDID, uri string) (*Subscription, error) {
+	s := &Subscription{}
+	err := db.QueryRowContext(ctx, `
+		SELECT s.id, s.user_did, s.feed_url, COALESCE(s.title, f.title, ''), s.category, s.added_at,
+		s.uri, s.cid
+		FROM subscriptions s
+		LEFT JOIN feeds f ON s.feed_url = f.feed_url
+		WHERE s.user_did = ? AND s.uri = ?
+	`, userDID, uri).Scan(&s.ID, &s.UserDID, &s.FeedURL, &s.FeedTitle, &s.Category, &s.AddedAt, &s.URI, &s.CID)
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 func (db *DB) GetSubscription(ctx context.Context, userDID, feedURL string) (*Subscription, error) {
@@ -240,7 +265,8 @@ func (db *DB) ListSubscriptions(ctx context.Context, userDID, category string, l
 		args = append(args, category)
 	}
 
-	query += fmt.Sprintf(` ORDER BY s.added_at DESC LIMIT %d OFFSET %d`, limit, offset)
+	query += ` ORDER BY s.added_at DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
 
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -265,6 +291,28 @@ func (db *DB) GetSubscriptionCount(ctx context.Context, userDID string) (int, er
 		SELECT COUNT(*) FROM subscriptions WHERE user_did = ?
 	`, userDID).Scan(&count)
 	return count, err
+}
+
+func (db *DB) GetCategories(ctx context.Context, userDID string) ([]string, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT DISTINCT category FROM subscriptions
+		WHERE user_did = ? AND category IS NOT NULL AND category != ''
+		ORDER BY category
+	`, userDID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var categories []string
+	for rows.Next() {
+		var cat string
+		if err := rows.Scan(&cat); err != nil {
+			return nil, err
+		}
+		categories = append(categories, cat)
+	}
+	return categories, rows.Err()
 }
 
 func (db *DB) UpdateFeedFavicon(ctx context.Context, feedURL, faviconURL string) error {
@@ -301,14 +349,14 @@ func (db *DB) ListDeadFeeds(ctx context.Context, userDID string, threshold int) 
 }
 
 func (db *DB) ListAllFeeds(ctx context.Context, limit, offset int) ([]*Feed, error) {
-	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
+	rows, err := db.QueryContext(ctx, `
 		SELECT feed_url, title, site_url, description, feed_type,
 			last_fetched_at, last_error, subscriber_count, etag, last_modified,
 			fetch_interval_minutes, next_fetch_at, consecutive_empty_fetches, error_count, favicon_url
 		FROM feeds
 		ORDER BY subscriber_count DESC
-		LIMIT %d OFFSET %d
-	`, limit, offset))
+		LIMIT ? OFFSET ?
+	`, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -328,15 +376,15 @@ func (db *DB) ListAllFeeds(ctx context.Context, limit, offset int) ([]*Feed, err
 }
 
 func (db *DB) ListUnsubscribedFeeds(ctx context.Context, userDID string, limit, offset int) ([]*Feed, error) {
-	rows, err := db.QueryContext(ctx, fmt.Sprintf(`
+	rows, err := db.QueryContext(ctx, `
 		SELECT feed_url, title, site_url, description, feed_type,
 			last_fetched_at, last_error, subscriber_count, etag, last_modified,
 			fetch_interval_minutes, next_fetch_at, consecutive_empty_fetches, error_count, favicon_url
 		FROM feeds
 		WHERE feed_url NOT IN (SELECT feed_url FROM subscriptions WHERE user_did = ?)
 		ORDER BY subscriber_count DESC
-		LIMIT %d OFFSET %d
-	`, limit, offset), userDID)
+		LIMIT ? OFFSET ?
+	`, userDID, limit, offset)
 	if err != nil {
 		return nil, err
 	}

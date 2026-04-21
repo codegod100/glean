@@ -422,6 +422,12 @@ func (h *XRPCHandler) ListFeedLists(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	feedLists := make([]FeedListEntry, 0)
+	type userRow struct {
+		did          string
+		subCount     int
+	}
+	var users []userRow
+
 	for rows.Next() {
 		var did, handle string
 		var subCount int
@@ -429,40 +435,50 @@ func (h *XRPCHandler) ListFeedLists(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		users = append(users, userRow{did: did, subCount: subCount})
+	}
 
+	subsByDID := make(map[string][]SubscriptionRecord)
+	if len(users) > 0 {
+		ph := make([]string, len(users))
+		args := make([]any, len(users))
+		for i, u := range users {
+			ph[i] = "?"
+			args[i] = u.did
+		}
 		subRows, err := h.db.QueryContext(r.Context(), `
-			SELECT s.feed_url, COALESCE(s.title, f.title), s.category
+			SELECT s.user_did, s.feed_url, COALESCE(s.title, f.title), s.category
 			FROM subscriptions s
 			JOIN feeds f ON s.feed_url = f.feed_url
-			WHERE s.user_did = ?
-			ORDER BY s.added_at DESC
-		`, did)
+			WHERE s.user_did IN (`+strings.Join(ph, ",")+`)
+			ORDER BY s.user_did, s.added_at DESC
+		`, args...)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		subs := make([]SubscriptionRecord, 0)
 		for subRows.Next() {
-			var feedURL, title string
+			var did, feedURL, title string
 			var cat sql.NullString
-			if err := subRows.Scan(&feedURL, &title, &cat); err != nil {
+			if err := subRows.Scan(&did, &feedURL, &title, &cat); err != nil {
 				subRows.Close()
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			subs = append(subs, SubscriptionRecord{
+			subsByDID[did] = append(subsByDID[did], SubscriptionRecord{
 				FeedURL:  feedURL,
 				Title:    title,
 				Category: cat.String,
 			})
 		}
 		subRows.Close()
+	}
 
+	for _, u := range users {
 		feedLists = append(feedLists, FeedListEntry{
-			DID:               did,
-			SubscriptionCount: subCount,
-			Subscriptions:     subs,
+			DID:               u.did,
+			SubscriptionCount: u.subCount,
+			Subscriptions:     subsByDID[u.did],
 		})
 	}
 

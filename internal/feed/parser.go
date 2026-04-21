@@ -99,7 +99,7 @@ type jsonFeed struct {
 }
 
 func Parse(r io.Reader, feedURL string) (*ParseResult, error) {
-	data, err := io.ReadAll(r)
+	data, err := io.ReadAll(io.LimitReader(r, 10*1024*1024))
 	if err != nil {
 		return nil, fmt.Errorf("reading feed data: %w", err)
 	}

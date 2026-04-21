@@ -31,12 +31,14 @@ type DB struct {
 }
 
 func Open(path string) (*DB, error) {
-	db, err := sql.Open("sqlite3", path)
+	db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_busy_timeout=5000")
 	if err != nil {
 		return nil, err
 	}
 
 	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(2)
+	db.SetConnMaxLifetime(30 * time.Minute)
 
 	if err := initSchema(db); err != nil {
 		db.Close()
@@ -189,12 +191,19 @@ var schema = []string{
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_subscriptions_feed ON subscriptions(feed_url)`,
 	`CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_did)`,
+	`CREATE INDEX IF NOT EXISTS idx_subscriptions_uri ON subscriptions(uri)`,
 	`CREATE INDEX IF NOT EXISTS idx_articles_feed ON articles(feed_url)`,
 	`CREATE INDEX IF NOT EXISTS idx_articles_published ON articles(published DESC)`,
+	`CREATE INDEX IF NOT EXISTS idx_articles_url ON articles(url)`,
 	`CREATE INDEX IF NOT EXISTS idx_read_state_unread ON read_state(user_did, is_read) WHERE is_read = 0`,
 	`CREATE INDEX IF NOT EXISTS idx_annotations_article ON annotations(article_url)`,
+	`CREATE INDEX IF NOT EXISTS idx_annotations_author ON annotations(author_did)`,
+	`CREATE INDEX IF NOT EXISTS idx_annotations_created_at ON annotations(created_at DESC)`,
 	`CREATE INDEX IF NOT EXISTS idx_likes_article ON likes(feed_url, article_url)`,
 	`CREATE INDEX IF NOT EXISTS idx_likes_author ON likes(author_did)`,
+	`CREATE INDEX IF NOT EXISTS idx_likes_created_at ON likes(created_at DESC)`,
 	`CREATE INDEX IF NOT EXISTS idx_follows_user ON follows(user_did)`,
 	`CREATE INDEX IF NOT EXISTS idx_follows_target ON follows(target_did)`,
+	`CREATE INDEX IF NOT EXISTS idx_follows_uri ON follows(uri)`,
+	`CREATE INDEX IF NOT EXISTS idx_users_handle ON users(handle)`,
 }

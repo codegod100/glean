@@ -21,20 +21,21 @@ var (
 	relFeedRe    = regexp.MustCompile(`rel="(alternate|feed)"`)
 	typeFeedRe   = regexp.MustCompile(`type="([^"]*(?:rss|atom|feed|xml)[^"]*)"`)
 	relIconRe    = regexp.MustCompile(`rel="[^"]*icon[^"]*"`)
+	baseHrefRe   = regexp.MustCompile(`<base[^>]+href="([^"]*)"`)
 	faviconPaths = []string{"/favicon.ico", "/favicon.png", "/apple-touch-icon.png"}
+
+	discoverClient = &http.Client{Timeout: 15 * time.Second}
 )
 
 func Discover(ctx context.Context, siteURL string) (*DiscoveryResult, error) {
-	client := &http.Client{Timeout: 15 * time.Second}
-
 	result := &DiscoveryResult{}
 
-	favicon := discoverFavicon(ctx, client, siteURL)
+	favicon := discoverFavicon(ctx, discoverClient, siteURL)
 	if favicon != "" {
 		result.Favicon = favicon
 	}
 
-	feeds := discoverFeedLinks(ctx, client, siteURL)
+	feeds := discoverFeedLinks(ctx, discoverClient, siteURL)
 	result.FeedURLs = feeds
 
 	return result, nil
@@ -165,8 +166,7 @@ func tryDefaultFavicons(ctx context.Context, client *http.Client, siteURL string
 }
 
 func resolveBaseURL(siteURL, html string) string {
-	baseRe := regexp.MustCompile(`<base[^>]+href="([^"]*)"`)
-	match := baseRe.FindStringSubmatch(html)
+	match := baseHrefRe.FindStringSubmatch(html)
 	if len(match) >= 2 && match[1] != "" {
 		return resolveURL(siteURL, match[1])
 	}
