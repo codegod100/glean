@@ -303,10 +303,10 @@ A background scheduler polls subscribed feeds on a fixed 5-minute tick. Feeds ar
                              │
               ┌──────────────┼──────────────┐
               │              │              │
-         ┌────▼────┐  ┌─────▼─────┐  ┌─────▼─────┐
-         │RSS/XML  │  │Atom/XML   │  │JSON Feed  │
-         │Parser   │  │Parser     │  │Parser     │
-         └─────────┘  └───────────┘  └───────────┘
+     ┌────▼────┐  ┌─────▼─────┐  ┌─────▼─────┐  ┌─────▼─────┐
+     │RSS/XML  │  │RSS1/RDF   │  │Atom/XML   │  │JSON Feed  │
+     │Parser   │  │Parser     │  │Parser     │  │Parser     │
+     └─────────┘  └───────────┘  └───────────┘  └───────────┘
 ```
 
 ### 4.2 Fetch Schedule
@@ -799,6 +799,7 @@ glean/
 │   ├── atproto/
 │   │   ├── auth.go                # DID resolution, OAuth flow
 │   │   ├── client.go              # XRPC client (write to user PDS)
+│   │   ├── collectiondir.go       # Collection directory backfill (startup)
 │   │   ├── jetstream.go           # Subscribe to Jetstream via official client
 │   │   ├── stream_handler.go      # Stream event → DB handler
 │   │   ├── lexicon.go             # Lexicon record types (at.glean.*, maintained by hand)
@@ -817,7 +818,7 @@ glean/
 │   │   ├── oauth_store.go         # OAuth session storage
 │   │   └── store.go               # FeedStore adapter for scheduler
 │   ├── feed/
-│   │   ├── parser.go              # RSS/Atom/JSON feed parser
+│   │   ├── parser.go              # RSS/Atom/RDF/JSON feed parser
 │   │   ├── fetcher.go             # Scheduler with dedup + Fetcher
 │   │   ├── discover.go            # Feed auto-discovery from URLs
 │   │   └── opml.go                # OPML import/export
@@ -847,6 +848,7 @@ glean/
 │   └── tmpl/
 │       ├── base.html              # Base template with htmx + Tailwind
 │       ├── index.html             # Landing page
+│       ├── login.html             # Login page
 │       ├── dashboard.html         # Dashboard
 │       ├── feeds.html             # Feed management
 │       ├── articles.html          # Article listing
@@ -854,6 +856,7 @@ glean/
 │       ├── trending.html          # Trending articles
 │       ├── library.html           # Liked articles + annotations
 │       ├── profile.html           # User profile
+│       ├── 404.html               # Not found page
 │       └── partials/              # Reusable template fragments
 ├── static/
 │   ├── input.css                  # Tailwind input

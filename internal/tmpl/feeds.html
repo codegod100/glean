@@ -93,23 +93,7 @@
             {{end}}
         </div>
 
-        {{if or .Page.HasPrev .Page.HasNext}}
-        <div class="flex items-center justify-center gap-3 py-6">
-            {{if .Page.HasPrev}}
-            <a href="{{paginationURL .BaseURL .Page.PrevPage .QueryParams}}" class="px-3 py-1.5 rounded-lg text-sm bg-spot-hover text-spot-text hover:bg-spot-hover-50 transition">&laquo; Prev</a>
-            {{else}}
-            <span class="px-3 py-1.5 rounded-lg text-sm bg-spot-hover text-spot-muted cursor-not-allowed">&laquo; Prev</span>
-            {{end}}
-
-            <span class="text-sm text-spot-secondary">Page {{.Page.Page}}</span>
-
-            {{if .Page.HasNext}}
-            <a href="{{paginationURL .BaseURL .Page.NextPage .QueryParams}}" class="px-3 py-1.5 rounded-lg text-sm bg-spot-hover text-spot-text hover:bg-spot-hover-50 transition">Next &raquo;</a>
-            {{else}}
-            <span class="px-3 py-1.5 rounded-lg text-sm bg-spot-hover text-spot-muted cursor-not-allowed">Next &raquo;</span>
-            {{end}}
-        </div>
-        {{end}}
+        {{template "pagination.html" (dict "HasPrev" .Page.HasPrev "HasNext" .Page.HasNext "PrevPage" .Page.PrevPage "NextPage" .Page.NextPage "Page" .Page.Page "BaseURL" .BaseURL "QueryParams" .QueryParams)}}
     </div>
 
     <div class="space-y-6">
@@ -140,14 +124,7 @@
             <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide mb-4">Similar readers</h2>
             <div class="space-y-3">
                 {{range .PeopleRecommendations}}
-                <div class="bg-spot-surface rounded-xl p-4 flex items-center gap-3 hover:bg-spot-hover-50 transition">
-                    {{if .AvatarURL}}<img src="{{.AvatarURL}}" class="w-10 h-10 rounded-full">{{end}}
-                    <div class="min-w-0 flex-1">
-                        <a href="/profile/{{.Handle}}" class="font-bold text-spot-text hover:text-spot-green transition">@{{.Handle}}</a>
-                        {{if .DisplayName}}<div class="text-sm text-spot-secondary">{{.DisplayName}}</div>{{end}}
-                    </div>
-                    <span class="text-xs text-spot-secondary">{{.CommonFeeds}} shared</span>
-                </div>
+                {{template "profile-card.html" .}}
                 {{end}}
             </div>
         </div>

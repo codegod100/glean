@@ -44,6 +44,7 @@ Then open `http://localhost:8080`.
 | `GLEAN_JETSTREAM`          | `wss://jetstream.glean.at` | Jetstream WebSocket URL                                   |
 | `GLEAN_SYNC_INTERVAL`      | `1h`                       | PDS sync interval (Go duration: `30m`, `2h30m`, etc.)     |
 | `GLEAN_CLUSTER_INTERVAL`   | `10m`                      | Cluster recomputation interval (Go duration)              |
+| `GLEAN_COLLECTION_DIR_URL` | _(empty)_                  | Collection directory URL for startup backfill              |
 | `GLEAN_PLC_URL`            | `https://didplc.glean.at`  | PLC directory URL for DID resolution                      |
 | `GLEAN_OAUTH_CLIENT_ID`    | _(empty)_                  | OAuth client metadata URL (leave empty for localhost dev) |
 | `GLEAN_OAUTH_REDIRECT_URL` | _(empty)_                  | OAuth redirect URL (leave empty for localhost dev)        |
