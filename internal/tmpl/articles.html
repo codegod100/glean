@@ -10,8 +10,8 @@
     </div>
     <p class="text-sm text-spot-secondary mb-6">All your subscribed articles, newest first.</p>
 
-    <div class="flex items-center gap-2 mb-6">
-        <form method="GET" action="/articles" class="flex-1 max-w-md" id="search-form">
+    <div class="flex items-center gap-3 mb-6">
+        <form method="GET" action="/articles" class="flex-1" id="search-form">
             <div class="relative">
                 <input type="text" name="q" value="{{.SearchQuery}}" placeholder="Search articles..."
                        class="w-full bg-spot-hover text-spot-text rounded-pill pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder"
@@ -21,24 +21,23 @@
                 {{if .Status}}<input type="hidden" name="status" value="{{.Status}}">{{end}}
             </div>
         </form>
-    </div>
-
-    <div class="flex items-center gap-2 mb-6">
-        <a href="/articles?status=all{{if .FeedURL}}&feed={{.FeedURL}}{{end}}"
-           class="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-button transition
-                  {{if eq .Status ""}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
-            All
-        </a>
-        <a href="/articles?status=unread{{if .FeedURL}}&feed={{.FeedURL}}{{end}}"
-           class="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-button transition
-                  {{if eq .Status "unread"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
-            Unread
-        </a>
-        <a href="/articles?status=read{{if .FeedURL}}&feed={{.FeedURL}}{{end}}"
-           class="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-button transition
-                  {{if eq .Status "read"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
-            Read
-        </a>
+        <div class="flex items-center gap-2 shrink-0">
+            <a href="/articles?status=all{{if .FeedURL}}&feed={{.FeedURL}}{{end}}"
+               class="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-button transition
+                      {{if eq .Status ""}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
+                All
+            </a>
+            <a href="/articles?status=unread{{if .FeedURL}}&feed={{.FeedURL}}{{end}}"
+               class="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-button transition
+                      {{if eq .Status "unread"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
+                Unread
+            </a>
+            <a href="/articles?status=read{{if .FeedURL}}&feed={{.FeedURL}}{{end}}"
+               class="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-button transition
+                      {{if eq .Status "read"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
+                Read
+            </a>
+        </div>
     </div>
 
 <div id="article-list" class="space-y-3">
