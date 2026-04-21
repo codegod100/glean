@@ -94,7 +94,7 @@ func (h *StreamDBHandler) handleLike(ctx context.Context, event *Event) error {
 		}
 
 		t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
-		return h.db.CreateLike(ctx, &db.Like{
+		err = h.db.CreateLike(ctx, &db.Like{
 			URI:        event.URI,
 			AuthorDID:  event.DID,
 			FeedURL:    rec.FeedURL,
@@ -102,6 +102,10 @@ func (h *StreamDBHandler) handleLike(ctx context.Context, event *Event) error {
 			CreatedAt:  sql.NullTime{Time: t, Valid: true},
 			CID:        sql.NullString{String: event.CID, Valid: event.CID != ""},
 		})
+		if errors.Is(err, db.ErrDuplicateLike) {
+			return nil
+		}
+		return err
 
 	case "delete":
 		return h.db.DeleteLike(ctx, event.URI)

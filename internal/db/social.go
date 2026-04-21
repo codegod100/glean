@@ -3,8 +3,11 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 )
+
+var ErrDuplicateLike = errors.New("already liked this article")
 
 type Annotation struct {
 	ID           int64
@@ -116,11 +119,18 @@ func (db *DB) ListAnnotations(ctx context.Context, feedURL, articleURL, authorDI
 }
 
 func (db *DB) CreateLike(ctx context.Context, l *Like) error {
-	_, err := db.ExecContext(ctx, `
-		INSERT INTO likes (uri, author_did, feed_url, article_url, created_at, cid)
+	result, err := db.ExecContext(ctx, `
+		INSERT OR IGNORE INTO likes (uri, author_did, feed_url, article_url, created_at, cid)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`, l.URI, l.AuthorDID, l.FeedURL, l.ArticleURL, l.CreatedAt, l.CID)
-	return err
+	if err != nil {
+		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return ErrDuplicateLike
+	}
+	return nil
 }
 
 func (db *DB) DeleteLike(ctx context.Context, uri string) error {

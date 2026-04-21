@@ -132,7 +132,11 @@ func (s *Sync) reconcileLike(ctx context.Context, userDID, uri, cid string, valu
 		CreatedAt:  db.NullTime(t),
 		CID:        db.NullStr(cid),
 	}
-	return s.db.CreateLike(ctx, like)
+	err = s.db.CreateLike(ctx, like)
+	if errors.Is(err, db.ErrDuplicateLike) {
+		return nil
+	}
+	return err
 }
 
 func (s *Sync) reconcileAnnotation(ctx context.Context, userDID, uri, cid string, value json.RawMessage) error {

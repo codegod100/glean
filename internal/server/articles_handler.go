@@ -2,6 +2,7 @@ package server
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -244,7 +245,7 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 				ArticleURL: article.URL.String,
 				CreatedAt:  sql.NullTime{Time: time.Now(), Valid: true},
 			}
-			if err := s.db.CreateLike(r.Context(), like); err != nil {
+			if err := s.db.CreateLike(r.Context(), like); err != nil && !errors.Is(err, db.ErrDuplicateLike) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -256,7 +257,7 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 				ArticleURL: article.URL.String,
 				CreatedAt:  sql.NullTime{Time: time.Now(), Valid: true},
 			}
-			if err := s.db.CreateLike(r.Context(), like); err != nil {
+			if err := s.db.CreateLike(r.Context(), like); err != nil && !errors.Is(err, db.ErrDuplicateLike) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
