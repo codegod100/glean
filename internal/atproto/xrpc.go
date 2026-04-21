@@ -301,10 +301,7 @@ func (h *XRPCHandler) GetTrending(w http.ResponseWriter, r *http.Request) {
 
 func (h *XRPCHandler) GetRecommendations(w http.ResponseWriter, r *http.Request) {
 	repo := r.URL.Query().Get("repo")
-	limit := parseIntParam(r, "limit", 20)
-	if limit > 50 {
-		limit = 50
-	}
+	limit := min(parseIntParam(r, "limit", 20), 50)
 
 	feedRows, err := h.db.QueryContext(r.Context(), `
 		SELECT r.feed_url, f.title, f.site_url, f.description, f.subscriber_count, r.score
@@ -423,8 +420,8 @@ func (h *XRPCHandler) ListFeedLists(w http.ResponseWriter, r *http.Request) {
 
 	feedLists := make([]FeedListEntry, 0)
 	type userRow struct {
-		did          string
-		subCount     int
+		did      string
+		subCount int
 	}
 	var users []userRow
 
