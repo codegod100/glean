@@ -1,15 +1,15 @@
 {{define "annotation-card.html"}}
-<div id="annotation-{{.annotation.ID}}" class="bg-spot-surface rounded-xl p-4 shadow-spot">
+<div id="annotation-{{.annotation.ID}}" class="bg-spot-surface rounded-xl p-5 border border-spot-divider shadow-sm">
     {{if .annotation.ArticleURL}}
-    <div class="text-xs text-spot-muted mb-2">
+    <div class="text-xs mb-3">
         <a href="{{.annotation.ArticleURL}}" class="text-spot-secondary hover:text-spot-green transition truncate block">{{.annotation.ArticleURL}}</a>
     </div>
     {{end}}
     {{if .annotation.Quote.Valid}}
-    <blockquote class="border-l-2 border-spot-green pl-3 text-sm text-spot-body italic leading-relaxed">{{.annotation.Quote.String}}</blockquote>
+    <blockquote class="border-l-2 border-spot-green pl-4 text-sm text-spot-text leading-relaxed">{{.annotation.Quote.String}}</blockquote>
     {{end}}
     {{if .annotation.Note.Valid}}
-    <p class="text-sm text-spot-body mt-2 leading-relaxed">{{.annotation.Note.String}}</p>
+    <p class="text-sm text-spot-text font-medium leading-relaxed mt-3">{{.annotation.Note.String}}</p>
     {{end}}
     {{if .annotation.Tags.Valid}}
     <div class="flex gap-1.5 mt-3 flex-wrap">
