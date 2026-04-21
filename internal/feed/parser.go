@@ -7,6 +7,8 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	htmlcharset "golang.org/x/net/html/charset"
 )
 
 type Feed struct {
@@ -153,16 +155,25 @@ func parseJSONFeed(data []byte, feedURL string) (*ParseResult, error) {
 	return result, nil
 }
 
+func makeXMLDecoder(data []byte) *xml.Decoder {
+	decoder := xml.NewDecoder(strings.NewReader(string(data)))
+	decoder.Strict = false
+	decoder.CharsetReader = func(charset string, input io.Reader) (io.Reader, error) {
+		return htmlcharset.NewReader(input, "text/xml; charset="+charset)
+	}
+	return decoder
+}
+
 func parseXMLFeed(data []byte, feedURL string) (*ParseResult, error) {
 	var rss rssFeed
-	if err := xml.Unmarshal(data, &rss); err == nil {
+	if err := makeXMLDecoder(data).Decode(&rss); err == nil {
 		if rss.XMLName.Local == "rss" {
 			return convertRSS(&rss, feedURL), nil
 		}
 	}
 
 	var atom atomFeed
-	if err := xml.Unmarshal(data, &atom); err == nil {
+	if err := makeXMLDecoder(data).Decode(&atom); err == nil {
 		if atom.XMLName.Local == "feed" {
 			return convertAtom(&atom, feedURL), nil
 		}
