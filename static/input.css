@@ -67,6 +67,8 @@
   .article-body iframe[src*="youtube.com"], .article-body iframe[src*="youtube-nocookie.com"], .article-body iframe[src*="vimeo.com"], .article-body iframe[src*="spotify.com"], .article-body iframe[src*="soundcloud.com"], .article-body iframe[src*="bandcamp.com"] { @apply w-full aspect-video }
   .article-body del { @apply line-through text-spot-secondary }
   .article-body mark { @apply bg-spot-orange/30 px-1 rounded }
+  .article-body .annotation-highlight { @apply bg-spot-green/25 border-b-2 border-spot-green/50 px-0.5 rounded-sm transition-colors }
+  .article-body .annotation-highlight:hover { @apply bg-spot-green/40 }
 }
 
 @layer utilities {
