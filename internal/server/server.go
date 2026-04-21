@@ -392,7 +392,6 @@ func (s *Server) syncUserInBackground(userDID string, client *atproto.Client) {
 		if isNewUser {
 			s.refreshUserFeeds(ctx, userDID)
 		}
-		s.engine.ComputeForUser(ctx, userDID)
 	}()
 }
 
@@ -496,7 +495,6 @@ func (s *Server) BackfillFromCollectionDir(ctx context.Context, collectionDirURL
 		}
 
 		s.refreshUserFeeds(ctx, did)
-		s.engine.ComputeForUser(ctx, did)
 	}
 
 	s.logger.Info("collection directory backfill complete")

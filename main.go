@@ -23,7 +23,7 @@ func main() {
 	dbPath := flag.String("db", envOr("GLEAN_DB", "glean.db"), "database path")
 	jetstreamURL := flag.String("jetstream", envOr("GLEAN_JETSTREAM", "wss://jetstream.glean.at"), "Jetstream URL")
 	syncInterval := flag.Duration("sync-interval", envDuration("GLEAN_SYNC_INTERVAL", 1*time.Hour), "PDS sync interval")
-	clusterInterval := flag.Duration("cluster-interval", envDuration("GLEAN_CLUSTER_INTERVAL", 6*time.Hour), "cluster recomputation interval")
+	clusterInterval := flag.Duration("cluster-interval", envDuration("GLEAN_CLUSTER_INTERVAL", 10*time.Minute), "cluster recomputation interval")
 	collectionDirURL := flag.String("collection-dir", envOr("GLEAN_COLLECTION_DIR_URL", ""), "collection directory URL for startup backfill")
 	flag.Parse()
 

@@ -714,7 +714,7 @@ For larger scale, move to MinHash + LSH (banded hashing) to approximate Jaccard 
 
 ### 7.5 Clustering Engine (Cron)
 
-A background goroutine runs on a configurable schedule (`GLEAN_CLUSTER_INTERVAL`, default 6h):
+A background goroutine runs on a configurable schedule (`GLEAN_CLUSTER_INTERVAL`, default 10m):
 
 1. **Compute feed similarity**: Batch-update the `feed_similarity` table (Jaccard over subscriber sets)
 2. **Compute user similarity**: Batch-update the `user_similarity` table (Jaccard over subscription sets, boosted by follow relationships)
