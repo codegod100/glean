@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"time"
 )
 
 type Article struct {
@@ -280,4 +281,15 @@ func (db *DB) GetArticleByURL(ctx context.Context, url string) (*Article, error)
 		return nil, err
 	}
 	return a, nil
+}
+
+func (db *DB) CountNewArticles(ctx context.Context, userDID string, since time.Time) (int, error) {
+	var count int
+	err := db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM articles a
+		JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
+		WHERE a.fetched_at > ?
+	`, userDID, since).Scan(&count)
+	return count, err
 }

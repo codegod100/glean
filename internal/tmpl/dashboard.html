@@ -21,6 +21,8 @@
 {{else}}
 <p class="text-sm text-spot-secondary mb-6">Your personalized feed, based on your social graph.</p>
 
+<div hx-get="/articles/new-count?since={{.Now.Unix}}&return=/dashboard" hx-trigger="every 30s" hx-swap="beforebegin" hx-target="#article-list"></div>
+
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="lg:col-span-2">
         {{if .ArticleRecommendations}}

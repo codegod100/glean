@@ -38,5 +38,6 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"Page":                   page,
 		"BaseURL":                "/dashboard",
 		"QueryParams":            map[string]string{},
+		"Now":                    time.Now(),
 	})
 }

@@ -65,7 +65,38 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 		"Page":        page,
 		"BaseURL":     "/articles",
 		"QueryParams": buildQueryParams(map[string]string{"feed": feedURL, "status": status}),
+		"Now":         time.Now(),
 	})
+}
+
+func (s *Server) handleNewArticleCount(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	sinceUnix, err := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	since := time.Unix(sinceUnix, 0)
+
+	count, err := s.db.CountNewArticles(r.Context(), user.DID, since)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html")
+	if count == 0 {
+		w.Write([]byte(""))
+		return
+	}
+	fmt.Fprintf(w, `<div id="new-articles-banner" class="bg-spot-green rounded-xl px-5 py-3 flex items-center justify-between mb-4"><span class="text-sm text-white font-medium">%d new article%s available.</span><a href="%s" class="text-sm font-bold text-white uppercase tracking-button hover:underline transition">Refresh</a></div>`, count, pluralS(count), r.URL.Query().Get("return"))
+}
+
+func pluralS(n int) string {
+	if n != 1 {
+		return "s"
+	}
+	return ""
 }
 
 func (s *Server) handleArticleDetail(w http.ResponseWriter, r *http.Request) {

@@ -163,6 +163,7 @@ func (s *Server) setupRoutes() {
 	s.router.Route("/articles", func(r chi.Router) {
 		r.Use(s.requireAuth)
 		r.Get("/", s.handleArticles)
+		r.Get("/new-count", s.handleNewArticleCount)
 		r.Get("/{id}", s.handleArticleDetail)
 		r.Post("/{id}/read", s.handleMarkRead)
 		r.Post("/{id}/unread", s.handleMarkUnread)
