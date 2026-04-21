@@ -126,7 +126,7 @@
             <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended feeds</h2>
             <div class="space-y-3">
                 {{range .FeedRecommendations}}
-                {{template "recommendation-card.html" .}}
+                {{template "recommendation-card.html" (dict "title" .title "feed_url" .feed_url "description" .description "favicon_url" .favicon_url "subscriber_count" .subscriber_count "CSRFToken" $.CSRFToken)}}
                 {{end}}
             </div>
         </div>

@@ -2,13 +2,20 @@
 <div class="bg-spot-surface rounded-xl p-3 hover:bg-spot-hover-50 transition">
     <div class="flex items-center justify-between gap-2">
         <div class="min-w-0 flex items-center gap-2">
-            {{if .favicon_url}}{{if .favicon_url.Valid}}<img src="{{.favicon_url.String}}" class="w-4 h-4 rounded shrink-0" loading="lazy">{{end}}{{end}}
+            {{if .favicon_url}}<img src="{{.favicon_url}}" class="w-4 h-4 rounded shrink-0" loading="lazy">{{end}}
             <div class="min-w-0">
                 <div class="font-bold text-sm text-spot-text truncate">{{if .title}}{{.title}}{{else}}{{.feed_url}}{{end}}</div>
                 {{if .description}}<p class="text-xs text-spot-secondary truncate mt-0.5">{{.description}}</p>{{end}}
             </div>
         </div>
-        <span class="text-xs text-spot-secondary shrink-0">{{.subscriber_count}} subs</span>
+        <div class="flex items-center gap-2 shrink-0">
+            <span class="text-xs text-spot-secondary">{{.subscriber_count}} subs</span>
+            <form hx-post="/feeds/add" hx-target="closest .bg-spot-surface" hx-swap="outerHTML" class="inline">
+                {{csrfInput .CSRFToken}}
+                <input type="hidden" name="feed_url" value="{{.feed_url}}">
+                <button type="submit" class="text-xs font-bold uppercase tracking-button text-spot-green hover:brightness-110 transition">Subscribe</button>
+            </form>
+        </div>
     </div>
 </div>
 {{end}}

@@ -266,11 +266,11 @@ func (db *DB) GetFeedRecommendations(ctx context.Context, userDID string, limit 
 		results = append(results, map[string]any{
 			"feed_url":         feedURL,
 			"score":            score,
-			"title":            title,
-			"site_url":         siteURL,
-			"description":      description,
+			"title":            title.String,
+			"site_url":         siteURL.String,
+			"description":      description.String,
 			"subscriber_count": subCount,
-			"favicon_url":      faviconURL,
+			"favicon_url":      faviconURL.String,
 		})
 	}
 	return results, rows.Err()
