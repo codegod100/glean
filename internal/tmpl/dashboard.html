@@ -1,53 +1,64 @@
 {{define "dashboard.html"}}
 <div class="flex items-center justify-between mb-2">
     <h1 class="text-2xl font-bold text-spot-text">Dashboard</h1>
+    {{if gt .SubscriptionCount 0}}
     <div class="flex gap-4 text-sm">
         <span class="text-spot-secondary"><strong class="text-spot-text">{{.UnreadCount}}</strong> unread</span>
         <span class="text-spot-secondary"><strong class="text-spot-text">{{.SubscriptionCount}}</strong> feeds</span>
     </div>
+    {{end}}
 </div>
+<p class="text-sm text-spot-secondary mb-6">
+    {{if eq .SubscriptionCount 0}}Get started by subscribing to RSS feeds.{{else}}Your personalized feed, based on your social graph.{{end}}
+</p>
 
 {{if eq .SubscriptionCount 0}}
-<div class="bg-spot-surface rounded-xl py-12 px-6 text-center mb-6">
-    <div class="w-16 h-16 rounded-full bg-spot-hover flex items-center justify-center mb-4 mx-auto">
-        <svg class="w-8 h-8 text-spot-muted" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12.75 19.5v-15m0 0l-6.75 6.75M12.75 4.5l6.75 6.75"/></svg>
-    </div>
-    <h2 class="text-lg font-semibold text-spot-text mb-2">Add your first feed</h2>
-    <p class="text-sm text-spot-secondary mb-6">Subscribe to RSS feeds to start building your personalized reading experience.</p>
-    <a href="/feeds" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-spot-green text-white text-sm font-medium hover:opacity-90 transition">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-        Add feeds
-    </a>
-</div>
+<div id="new-articles-poll" hx-get="/articles/new-count?since={{.Now.Unix}}&return=/dashboard" hx-trigger="every 30s" hx-swap="innerHTML"></div>
 
-{{if .GlobalTrending}}
-<div class="mb-6">
-    <div class="flex items-center justify-between mb-3">
-        <h2 class="text-lg font-semibold text-spot-text">Trending</h2>
-        <a href="/trending" class="text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition">See all</a>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2 space-y-6">
+        <div class="bg-spot-surface rounded-xl py-12 px-6 text-center">
+            <div class="w-16 h-16 rounded-full bg-spot-hover flex items-center justify-center mb-4 mx-auto">
+                <svg class="w-8 h-8 text-spot-muted" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12.75 19.5v-15m0 0l-6.75 6.75M12.75 4.5l6.75 6.75"/></svg>
+            </div>
+            <h2 class="text-lg font-semibold text-spot-text mb-2">Add your first feed</h2>
+            <p class="text-sm text-spot-secondary mb-6">Subscribe to RSS feeds to start building your personalized reading experience.</p>
+            <a href="/feeds" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-spot-green text-white text-sm font-medium hover:opacity-90 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                Add feeds
+            </a>
+        </div>
+
+        {{if .GlobalTrending}}
+        <div>
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-lg font-semibold text-spot-text">Trending</h2>
+                <a href="/trending" class="text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition">See all</a>
+            </div>
+            <div class="space-y-3">
+                {{range .GlobalTrending}}
+                {{template "trending-card.html" .}}
+                {{end}}
+            </div>
+        </div>
+        {{end}}
     </div>
-    <div class="space-y-3">
-        {{range .GlobalTrending}}
-        {{template "trending-card.html" .}}
+
+    <div class="space-y-8">
+        {{if .FeedRecommendations}}
+        <div>
+            <h2 class="text-lg font-semibold text-spot-text mb-4">Popular feeds to get started</h2>
+            <div class="space-y-3">
+                {{range .FeedRecommendations}}
+                {{template "recommendation-card.html" (dict "title" .Title "feed_url" .FeedURL "description" .Description "favicon_url" .FaviconURL "subscriber_count" .SubscriberCount "CSRFToken" $.CSRFToken)}}
+                {{end}}
+            </div>
+        </div>
         {{end}}
     </div>
 </div>
-{{end}}
-
-{{if .FeedRecommendations}}
-<div>
-    <h2 class="text-lg font-semibold text-spot-text mb-3">Popular feeds to get started</h2>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {{range .FeedRecommendations}}
-        {{template "recommendation-card.html" (dict "title" .Title "feed_url" .FeedURL "description" .Description "favicon_url" .FaviconURL "subscriber_count" .SubscriberCount "CSRFToken" $.CSRFToken)}}
-        {{end}}
-    </div>
-</div>
-{{end}}
 
 {{else}}
-<p class="text-sm text-spot-secondary mb-6">Your personalized feed, based on your social graph.</p>
-
 <div id="new-articles-poll" hx-get="/articles/new-count?since={{.Now.Unix}}&return=/dashboard" hx-trigger="every 30s" hx-swap="innerHTML"></div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
