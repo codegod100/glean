@@ -24,6 +24,8 @@ func (h *StreamDBHandler) Handle(ctx context.Context, event *Event) error {
 	switch event.Collection {
 	case CollectionSubscription:
 		return h.handleSubscription(ctx, event)
+	case CollectionSkyreaderSubscription:
+		return h.handleSkyreaderSubscription(ctx, event)
 	case CollectionLike:
 		return h.handleLike(ctx, event)
 	case CollectionAnnotation:
@@ -197,6 +199,43 @@ func (h *StreamDBHandler) handleMarginNote(ctx context.Context, event *Event) er
 	case "delete":
 		// TODO: I actually don't think we should delete an annotation on Glean if deleted from Margin
 		// return h.db.DeleteAnnotation(ctx, event.URI)
+	}
+	return nil
+}
+
+func (h *StreamDBHandler) handleSkyreaderSubscription(ctx context.Context, event *Event) error {
+	switch event.Type {
+	case "create", "update":
+		var rec SkyreaderSubscriptionRecord
+		if err := json.Unmarshal(event.Value, &rec); err != nil {
+			return err
+		}
+		if rec.FeedURL == "" {
+			return nil
+		}
+
+		existing, err := h.db.GetSubscription(ctx, event.DID, rec.FeedURL)
+		if err == nil && existing != nil {
+			if !existing.URI.Valid || existing.URI.String == "" {
+				return h.db.UpdateSubscriptionURI(ctx, event.DID, rec.FeedURL, event.URI, event.CID)
+			}
+			return nil
+		}
+
+		f := &db.Feed{FeedURL: rec.FeedURL, Title: db.NullStr(rec.Title), SiteURL: db.NullStr(rec.SiteURL)}
+		_ = h.db.UpsertFeed(ctx, f)
+		err = h.db.CreateSubscription(ctx, event.DID, rec.FeedURL, rec.Title, "", event.URI, event.CID)
+		if errors.Is(err, db.ErrDuplicateSubscription) {
+			return nil
+		}
+		return err
+
+	case "delete":
+		// TODO: I actually don't think we should delete an subscription on Glean if deleted from Skyreader
+		// sub, err := h.db.GetSubscriptionByURI(ctx, event.DID, event.URI)
+		// if err == nil && sub != nil {
+		// 	return h.db.DeleteSubscription(ctx, event.DID, sub.FeedURL)
+		// }
 	}
 	return nil
 }

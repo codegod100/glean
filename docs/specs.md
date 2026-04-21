@@ -137,26 +137,43 @@ The mapping from margin note to glean annotation:
 
 When no matching article exists in the local DB, the annotation is stored with an empty `feed_url`. Margin notes are indexed from both Jetstream and PDS sync, same as glean records.
 
-### 3.5 `app.bsky.graph.follow` (External)
+### 3.5 `app.skyreader.feed.subscription` (External)
+
+Glean also indexes records from the Skyreader lexicon (`app.skyreader.feed.subscription`). When a user has subscriptions in Skyreader, they are imported as Glean subscriptions during PDS sync and via Jetstream events. This lets users who previously used Skyreader seamlessly transition to Glean without re-subscribing to their feeds.
+
+The mapping from Skyreader subscription to Glean subscription:
+
+| Skyreader field | Glean field   | Notes                               |
+| --------------- | ------------- | ------------------------------------ |
+| `feedUrl`       | `feed_url`    | Direct mapping                      |
+| `title`         | `title`       | Direct mapping                      |
+| `siteUrl`       | `site_url`    | Stored on the feed record           |
+| `createdAt`     | `added_at`    | Direct mapping                      |
+| _(none)_        | `category`    | Empty (Skyreader has no categories) |
+
+If a Glean subscription already exists for the same `feed_url`, the existing one is kept. If the existing subscription has no URI (was created locally without PDS sync), the Skyreader URI/CID is backfilled.
+
+### 3.6 `app.bsky.graph.follow` (External)
 
 Follow relationships are tracked from Bluesky and Tangled follow records. The `FollowRecord` struct is validated against the lexicon at `lexicons/app/bsky/graph/follow.json`. The optional `via` field (a strong ref) is preserved as raw JSON but not used by Glean.
 
-### 3.6 Lexicon Constants
+### 3.7 Lexicon Constants
 
 All collection NSIDs are defined as constants in `lexicon.go` and used throughout the codebase:
 
 ```go
 const (
-    CollectionSubscription   = "at.glean.subscription"
-    CollectionAnnotation     = "at.glean.annotation"
-    CollectionLike           = "at.glean.like"
-    CollectionMarginNote     = "at.margin.note"
-    CollectionBskyFollow     = "app.bsky.graph.follow"
-    CollectionTangledFollow  = "sh.tangled.graph.follow"
+    CollectionSubscription          = "at.glean.subscription"
+    CollectionAnnotation            = "at.glean.annotation"
+    CollectionLike                  = "at.glean.like"
+    CollectionMarginNote            = "at.margin.note"
+    CollectionSkyreaderSubscription = "app.skyreader.feed.subscription"
+    CollectionBskyFollow            = "app.bsky.graph.follow"
+    CollectionTangledFollow         = "sh.tangled.graph.follow"
 )
 ```
 
-### 3.7 AppView Query Lexicons
+### 3.8 AppView Query Lexicons
 
 As an AppView, Glean serves the following XRPC query endpoints. Other AT Protocol applications can call these to access indexed `at.glean.*` data without implementing their own indexer.
 
@@ -253,12 +270,12 @@ Output:
   people: [{ did, handle, displayName, avatar, jaccard, commonFeeds }]
 ```
 
-### 3.8 AppView Jetstream Consumption
+### 3.9 AppView Jetstream Consumption
 
 Glean subscribes to a Jetstream endpoint (`GLEAN_JETSTREAM`, default `wss://jetstream.glean.at`) for all `at.glean.*` records:
 
 ```
-SUBSCRIBE collections: ["at.glean.subscription", "at.glean.annotation", "at.glean.like", "app.bsky.graph.follow", "sh.tangled.graph.follow", "at.margin.note"]
+SUBSCRIBE collections: ["at.glean.subscription", "at.glean.annotation", "at.glean.like", "app.bsky.graph.follow", "sh.tangled.graph.follow", "at.margin.note", "app.skyreader.feed.subscription"]
 ```
 
 On each event:
@@ -446,10 +463,11 @@ Glean runs as a single Go binary that fills three roles: **AppView** (indexing `
                      │  └─────────────────┘  │         └──────────────────┘
                      └──────────────────────┘
 
-                      AppView responsibilities:
-                      • Subscribe to Jetstream for at.glean.subscription, at.glean.annotation, at.glean.like, at.margin.note
-                      • Index records into SQLite
-                      • Convert at.margin.note records to annotations (displayed alongside glean.at annotations)
+                       AppView responsibilities:
+                       • Subscribe to Jetstream for at.glean.subscription, at.glean.annotation, at.glean.like, at.margin.note, app.skyreader.feed.subscription
+                       • Index records into SQLite
+                       • Convert at.margin.note records to annotations (displayed alongside glean.at annotations)
+                       • Import app.skyreader.feed.subscription records as Glean subscriptions
                      • Serve XRPC query endpoints (at.glean.listSubscriptions, etc.)
                      • Host the web UI at glean.at
                      • Write to user PDS on behalf of user (when user acts through UI)
@@ -803,7 +821,7 @@ glean/
 │   │   ├── jetstream.go           # Subscribe to Jetstream via official client
 │   │   ├── stream_handler.go      # Stream event → DB handler
 │   │   ├── lexicon.go             # Lexicon record types (at.glean.*, maintained by hand)
-│   │   ├── lexicon_external.go    # External lexicon record types (FollowRecord, MarginNoteRecord)
+│   │   ├── lexicon_external.go    # External lexicon record types (FollowRecord, MarginNoteRecord, SkyreaderSubscriptionRecord)
 │   │   ├── lexicon_test.go        # Test: Go structs match lexicon JSON schemas
 │   │   ├── sync.go                # PDS record reconciliation
 │   │   └── xrpc.go                # XRPC query handlers (AppView endpoints)

@@ -11,6 +11,14 @@ type FollowRecord struct {
 	Via       json.RawMessage `json:"via,omitempty"`
 }
 
+// Note: app.skyreader.feed.subscription is not published, so thre is no tests that verifies this is correct. (ref: https://tangled.org/julien.rbrt.fr/glean/issues/3#comment-5760)
+type SkyreaderSubscriptionRecord struct {
+	CreatedAt string `json:"createdAt"`
+	FeedURL   string `json:"feedUrl"`
+	Title     string `json:"title,omitempty"`
+	SiteURL   string `json:"siteUrl,omitempty"`
+}
+
 type MarginNoteRecord struct {
 	Body       *MarginNoteBody      `json:"body,omitempty"`
 	Color      string               `json:"color,omitempty"`
@@ -49,11 +57,11 @@ type MarginNoteSelector struct {
 }
 
 type MarginNoteTarget struct {
-	Selector  *MarginNoteSelector  `json:"selector,omitempty"`
-	Source    string               `json:"source"`
-	SourceHash string              `json:"sourceHash,omitempty"`
-	State     *MarginNoteTimeState `json:"state,omitempty"`
-	Title     string               `json:"title,omitempty"`
+	Selector   *MarginNoteSelector  `json:"selector,omitempty"`
+	Source     string               `json:"source"`
+	SourceHash string               `json:"sourceHash,omitempty"`
+	State      *MarginNoteTimeState `json:"state,omitempty"`
+	Title      string               `json:"title,omitempty"`
 }
 
 type MarginNoteTimeState struct {

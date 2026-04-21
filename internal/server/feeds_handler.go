@@ -128,11 +128,11 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.render(w, r, "feed-item.html", map[string]any{
-		"User":      user,
-		"FeedURL":   sub.FeedURL,
-		"FeedTitle": sub.FeedTitle,
-		"Category":  sub.Category,
-		"FaviconURL": sub.FaviconURL,
+		"User":        user,
+		"FeedURL":     sub.FeedURL,
+		"FeedTitle":   sub.FeedTitle,
+		"Category":    sub.Category,
+		"FaviconURL":  sub.FaviconURL,
 		"UnreadCount": sub.UnreadCount,
 	})
 }

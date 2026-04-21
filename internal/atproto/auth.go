@@ -28,9 +28,9 @@ func InitIdentity(plcURL string) {
 		HTTPClient: http.Client{
 			Timeout: 10 * time.Second,
 			Transport: &http.Transport{
-				Proxy:             http.ProxyFromEnvironment,
-				IdleConnTimeout:   1000 * time.Millisecond,
-				MaxIdleConns:      100,
+				Proxy:           http.ProxyFromEnvironment,
+				IdleConnTimeout: 1000 * time.Millisecond,
+				MaxIdleConns:    100,
 			},
 		},
 		Resolver: net.Resolver{
@@ -39,7 +39,7 @@ func InitIdentity(plcURL string) {
 				return d.DialContext(ctx, network, address)
 			},
 		},
-		TryAuthoritativeDNS:  true,
+		TryAuthoritativeDNS:   true,
 		SkipDNSDomainSuffixes: []string{".bsky.social"},
 		UserAgent:             "glean/1.0",
 	}

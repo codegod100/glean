@@ -8,12 +8,13 @@ import (
 )
 
 const (
-	CollectionSubscription   = "at.glean.subscription"
-	CollectionAnnotation     = "at.glean.annotation"
-	CollectionLike           = "at.glean.like"
-	CollectionMarginNote     = "at.margin.note"
-	CollectionBskyFollow     = "app.bsky.graph.follow"
-	CollectionTangledFollow  = "sh.tangled.graph.follow"
+	CollectionSubscription          = "at.glean.subscription"
+	CollectionAnnotation            = "at.glean.annotation"
+	CollectionLike                  = "at.glean.like"
+	CollectionMarginNote            = "at.margin.note"
+	CollectionSkyreaderSubscription = "app.skyreader.feed.subscription"
+	CollectionBskyFollow            = "app.bsky.graph.follow"
+	CollectionTangledFollow         = "sh.tangled.graph.follow"
 )
 
 type SubscriptionRecord struct {

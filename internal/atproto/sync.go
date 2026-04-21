@@ -37,6 +37,9 @@ func (s *Sync) Run(ctx context.Context, userDID string) error {
 	if err := s.syncCollection(ctx, userDID, CollectionSubscription, s.reconcileSubscription); err != nil {
 		s.logger.Error("sync subscriptions failed", "error", err, "did", userDID)
 	}
+	if err := s.syncCollection(ctx, userDID, CollectionSkyreaderSubscription, s.reconcileSkyreaderSubscription); err != nil {
+		s.logger.Error("sync skyreader subscriptions failed", "error", err, "did", userDID)
+	}
 	if err := s.syncCollection(ctx, userDID, CollectionLike, s.reconcileLike); err != nil {
 		s.logger.Error("sync likes failed", "error", err, "did", userDID)
 	}
@@ -99,6 +102,34 @@ func (s *Sync) reconcileSubscription(ctx context.Context, userDID, uri, cid stri
 	}
 
 	err = s.db.CreateSubscription(ctx, userDID, rec.FeedURL, rec.Title, rec.Category, uri, cid)
+	if errors.Is(err, db.ErrDuplicateSubscription) {
+		return nil
+	}
+	return err
+}
+
+func (s *Sync) reconcileSkyreaderSubscription(ctx context.Context, userDID, uri, cid string, value json.RawMessage) error {
+	var rec SkyreaderSubscriptionRecord
+	if err := json.Unmarshal(value, &rec); err != nil {
+		return err
+	}
+
+	if rec.FeedURL == "" {
+		return nil
+	}
+
+	f := &db.Feed{FeedURL: rec.FeedURL, Title: db.NullStr(rec.Title), SiteURL: db.NullStr(rec.SiteURL)}
+	_ = s.db.UpsertFeed(ctx, f)
+
+	existing, err := s.db.GetSubscription(ctx, userDID, rec.FeedURL)
+	if err == nil && existing != nil {
+		if !existing.URI.Valid || existing.URI.String == "" {
+			return s.db.UpdateSubscriptionURI(ctx, userDID, rec.FeedURL, uri, cid)
+		}
+		return nil
+	}
+
+	err = s.db.CreateSubscription(ctx, userDID, rec.FeedURL, rec.Title, "", uri, cid)
 	if errors.Is(err, db.ErrDuplicateSubscription) {
 		return nil
 	}

@@ -12,7 +12,7 @@ import (
 
 func TestFetchSubscriberDIDs(t *testing.T) {
 	page1 := struct {
-		Repos  []struct {
+		Repos []struct {
 			DID string `json:"did"`
 		} `json:"repos"`
 		Cursor string `json:"cursor"`
@@ -26,7 +26,7 @@ func TestFetchSubscriberDIDs(t *testing.T) {
 		Cursor: "nextpage",
 	}
 	page2 := struct {
-		Repos  []struct {
+		Repos []struct {
 			DID string `json:"did"`
 		} `json:"repos"`
 		Cursor string `json:"cursor"`
