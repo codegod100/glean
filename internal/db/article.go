@@ -317,6 +317,8 @@ func (db *DB) SearchArticles(ctx context.Context, userDID, query string, limit, 
 		return nil, nil
 	}
 
+	columnQuery := "{title summary} : " + safeQuery
+
 	rows, err := db.QueryContext(ctx, `
 		SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 			a.published, a.updated, a.fetched_at,
@@ -329,7 +331,7 @@ func (db *DB) SearchArticles(ctx context.Context, userDID, query string, limit, 
 		WHERE articles_fts MATCH ?
 		ORDER BY ft.rank
 		LIMIT ? OFFSET ?
-	`, userDID, userDID, safeQuery, limit, offset)
+	`, userDID, userDID, columnQuery, limit, offset)
 	if err != nil {
 		return nil, err
 	}

@@ -240,15 +240,14 @@ func TestSearchArticles_FindsBySummary(t *testing.T) {
 	assert.Equal(t, results[0].Title, "Rust Memory Safety")
 }
 
-func TestSearchArticles_FindsByContent(t *testing.T) {
+func TestSearchArticles_IgnoresContentOnlyMatch(t *testing.T) {
 	ctx := context.Background()
 	db := setupTestDB(t)
 	userDID, _ := seedSearchData(t, ctx, db)
 
 	results, err := db.SearchArticles(ctx, userDID, "garbage collection", 10, 0)
 	assert.NilError(t, err)
-	assert.Equal(t, len(results), 1)
-	assert.Equal(t, results[0].Title, "Rust Memory Safety")
+	assert.Equal(t, len(results), 0)
 }
 
 func TestSearchArticles_NoResults(t *testing.T) {
