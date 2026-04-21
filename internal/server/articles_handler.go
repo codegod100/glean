@@ -39,8 +39,8 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 	page := pageFromRequest(r, 50)
 
 	if status == "" && searchQuery == "" {
-		readCount, _ := s.db.GetReadCount(r.Context(), user.DID, feedURL)
-		if readCount > 0 {
+		unreadCount, _ := s.db.GetUnreadCount(r.Context(), user.DID, feedURL)
+		if unreadCount > 0 {
 			status = "unread"
 		}
 	}
