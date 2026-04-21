@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -56,7 +57,11 @@ func (h *StreamDBHandler) handleSubscription(ctx context.Context, event *Event) 
 
 		f := &db.Feed{FeedURL: rec.FeedURL, Title: db.NullStr(rec.Title)}
 		_ = h.db.UpsertFeed(ctx, f)
-		return h.db.CreateSubscription(ctx, event.DID, rec.FeedURL, rec.Title, rec.Category, event.URI, event.CID)
+		err = h.db.CreateSubscription(ctx, event.DID, rec.FeedURL, rec.Title, rec.Category, event.URI, event.CID)
+		if errors.Is(err, db.ErrDuplicateSubscription) {
+			return nil
+		}
+		return err
 
 	case "delete":
 		parsed, ok := ParseRecordURI(event.URI)

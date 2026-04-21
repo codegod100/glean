@@ -22,6 +22,7 @@ import (
 	"github.com/bluesky-social/indigo/atproto/syntax"
 
 	"pkg.rbrt.fr/glean/internal/atproto"
+	"pkg.rbrt.fr/glean/internal/cluster"
 	"pkg.rbrt.fr/glean/internal/db"
 	"pkg.rbrt.fr/glean/internal/feed"
 	"pkg.rbrt.fr/glean/internal/metrics"
@@ -62,12 +63,13 @@ type Server struct {
 	oauthStore  *db.OAuthStore
 	fetcher     *feed.Fetcher
 	scheduler   *feed.Scheduler
+	engine      *cluster.Engine
 	scraper     *scraper.Scraper
 	clientID    string
 	callbackURL string
 }
 
-func New(database *db.DB, clientID, callbackURL, addr string, scheduler *feed.Scheduler, logger *slog.Logger) *Server {
+func New(database *db.DB, clientID, callbackURL, addr string, scheduler *feed.Scheduler, engine *cluster.Engine, logger *slog.Logger) *Server {
 	oauthStore := db.NewOAuthStore(database)
 
 	var config oauth.ClientConfig
@@ -91,6 +93,7 @@ func New(database *db.DB, clientID, callbackURL, addr string, scheduler *feed.Sc
 		oauthStore:  oauthStore,
 		fetcher:     feed.NewFetcher(),
 		scheduler:   scheduler,
+		engine:      engine,
 		scraper:     scraper.New(logger),
 		clientID:    clientID,
 		callbackURL: callbackURL,
@@ -373,13 +376,57 @@ func (s *Server) pdsClientForUser(r *http.Request) *atproto.Client {
 
 func (s *Server) syncUserInBackground(userDID string, client *atproto.Client) {
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
+
+		isNewUser := false
+		if count, err := s.db.GetSubscriptionCount(ctx, userDID); err == nil && count == 0 {
+			isNewUser = true
+		}
+
 		sync := atproto.NewSync(s.db, client, s.logger)
 		if err := sync.Run(ctx, userDID); err != nil {
 			s.logger.Error("background sync failed", "error", err, "did", userDID)
 		}
+
+		if !isNewUser {
+			return
+		}
+
+		// if the user is new, but has value from the PDS, we should backfill and refetch their data.
+		s.refreshUserFeeds(ctx, userDID)
+		s.engine.ComputeAll(ctx)
 	}()
+}
+
+func (s *Server) refreshUserFeeds(ctx context.Context, userDID string) {
+	subs, err := s.db.ListSubscriptions(ctx, userDID, "", 1000, 0)
+	if err != nil {
+		s.logger.Error("failed to list subscriptions for initial fetch", "error", err, "did", userDID)
+		return
+	}
+
+	seen := make(map[string]bool, len(subs))
+	for _, sub := range subs {
+		if seen[sub.FeedURL] {
+			continue
+		}
+		seen[sub.FeedURL] = true
+
+		f, err := s.db.GetFeed(ctx, sub.FeedURL)
+		if err != nil {
+			continue
+		}
+		s.scheduler.FetchFeed(ctx, &feed.Feed{
+			URL:          f.FeedURL,
+			Title:        f.Title.String,
+			SiteURL:      f.SiteURL.String,
+			Description:  f.Description.String,
+			Type:         f.FeedType.String,
+			ETag:         f.Etag.String,
+			LastModified: f.LastModified.String,
+		})
+	}
 }
 
 func (s *Server) PeriodicSync(ctx context.Context, interval time.Duration) {

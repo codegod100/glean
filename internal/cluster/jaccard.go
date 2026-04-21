@@ -4,11 +4,31 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"sync"
 )
 
 type Engine struct {
 	db     *sql.DB
 	logger *slog.Logger
+	mu     sync.Mutex
+}
+
+func (e *Engine) ComputeAll(ctx context.Context) {
+	if !e.mu.TryLock() {
+		e.logger.Info("skipping ComputeAll: already in progress")
+		return
+	}
+	defer e.mu.Unlock()
+
+	if err := e.ComputeFeedSimilarity(ctx); err != nil {
+		e.logger.Error("feed similarity failed", "error", err)
+	}
+	if err := e.ComputeUserSimilarity(ctx); err != nil {
+		e.logger.Error("user similarity failed", "error", err)
+	}
+	if err := e.ComputeRecommendations(ctx); err != nil {
+		e.logger.Error("recommendations failed", "error", err)
+	}
 }
 
 func (e *Engine) ComputeArticleRecommendations(ctx context.Context) error {

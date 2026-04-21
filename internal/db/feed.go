@@ -3,9 +3,12 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"strings"
 	"time"
 )
+
+var ErrDuplicateSubscription = errors.New("already subscribed to this feed")
 
 type Feed struct {
 	FeedURL                 string
@@ -135,12 +138,16 @@ func (db *DB) DecrementSubscriberCount(ctx context.Context, feedURL string) erro
 }
 
 func (db *DB) CreateSubscription(ctx context.Context, userDID, feedURL, title, category, uri, cid string) error {
-	_, err := db.ExecContext(ctx, `
-		INSERT INTO subscriptions (user_did, feed_url, title, category, uri, cid)
+	result, err := db.ExecContext(ctx, `
+		INSERT OR IGNORE INTO subscriptions (user_did, feed_url, title, category, uri, cid)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`, userDID, feedURL, nilIfEmpty(title), category, uriOrNil(category, uri), uriOrNil(category, cid))
 	if err != nil {
 		return err
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return ErrDuplicateSubscription
 	}
 	return db.IncrementSubscriberCount(ctx, feedURL)
 }

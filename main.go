@@ -43,9 +43,10 @@ func main() {
 	storeAdapter := db.NewFeedStoreAdapter(database)
 	scheduler := feed.NewScheduler(storeAdapter, logger)
 
-	srv := server.New(database, clientID, callbackURL, *addr, scheduler, logger)
-
 	engine := cluster.NewEngine(database.DB, logger)
+
+	srv := server.New(database, clientID, callbackURL, *addr, scheduler, engine, logger)
+
 	cron := cluster.NewCron(engine, *clusterInterval, logger)
 
 	handler := atproto.NewStreamDBHandler(database, logger)

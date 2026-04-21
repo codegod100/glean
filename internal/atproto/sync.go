@@ -14,6 +14,7 @@ package atproto
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -97,7 +98,11 @@ func (s *Sync) reconcileSubscription(ctx context.Context, userDID, uri, cid stri
 		return nil
 	}
 
-	return s.db.CreateSubscription(ctx, userDID, rec.FeedURL, rec.Title, rec.Category, uri, cid)
+	err = s.db.CreateSubscription(ctx, userDID, rec.FeedURL, rec.Title, rec.Category, uri, cid)
+	if errors.Is(err, db.ErrDuplicateSubscription) {
+		return nil
+	}
+	return err
 }
 
 func (s *Sync) reconcileLike(ctx context.Context, userDID, uri, cid string, value json.RawMessage) error {

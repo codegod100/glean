@@ -23,17 +23,7 @@ func (c *Cron) Run(ctx context.Context) error {
 		c.logger.Info("starting similarity computation")
 		start := time.Now()
 
-		if err := c.engine.ComputeFeedSimilarity(ctx); err != nil {
-			c.logger.Error("feed similarity failed", "error", err)
-		}
-
-		if err := c.engine.ComputeUserSimilarity(ctx); err != nil {
-			c.logger.Error("user similarity failed", "error", err)
-		}
-
-		if err := c.engine.ComputeRecommendations(ctx); err != nil {
-			c.logger.Error("recommendations failed", "error", err)
-		}
+		c.engine.ComputeAll(ctx)
 
 		metrics.ClusterRuns.Inc()
 		metrics.ClusterDuration.Observe(time.Since(start).Seconds())

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -112,6 +113,15 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.db.CreateSubscription(r.Context(), user.DID, feedURL, feedTitle, category, subURI, subCID); err != nil {
+		if errors.Is(err, db.ErrDuplicateSubscription) {
+			subs, _ := s.db.ListSubscriptions(r.Context(), user.DID, "", 100, 0)
+			s.render(w, r, "feed_list.html", map[string]any{
+				"User":          user,
+				"Subscriptions": subs,
+				"Error":         "Already subscribed to this feed.",
+			})
+			return
+		}
 		s.logger.Error("failed to create subscription", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -231,7 +241,9 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if subErr := s.db.CreateSubscription(r.Context(), user.DID, fu.URL, fu.Title, fu.Category, subURI, subCID); subErr != nil {
-			s.logger.Error("failed to create subscription", "error", subErr)
+			if !errors.Is(subErr, db.ErrDuplicateSubscription) {
+				s.logger.Error("failed to create subscription", "error", subErr)
+			}
 			continue
 		}
 		added++

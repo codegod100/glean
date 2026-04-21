@@ -1,4 +1,5 @@
 {{define "feed-list.html"}}
+{{if .Error}}<div class="px-4 py-2 text-sm text-spot-red bg-spot-red/10 border-b border-spot-red/30">{{.Error}}</div>{{end}}
 {{range .Subscriptions}}
 <div class="px-5 py-4 flex items-center justify-between hover:bg-spot-hover-50 transition rounded-xl">
     <div class="min-w-0">
