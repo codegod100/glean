@@ -64,21 +64,32 @@ func (db *DB) GetArticle(ctx context.Context, id int64) (*Article, error) {
 }
 
 func (db *DB) ListArticles(ctx context.Context, userDID, feedURL string, limit, offset int) ([]*Article, error) {
-	query := `
-		SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
-			a.published, a.updated, a.fetched_at,
-			COALESCE(r.is_read, 0)
-		FROM articles a
-		JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
-		LEFT JOIN feeds f ON a.feed_url = f.feed_url
-		LEFT JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
-		WHERE 1=1
-	`
-	args := []any{userDID, userDID}
+	var query string
+	var args []any
 
 	if feedURL != "" {
-		query += ` AND a.feed_url = ?`
-		args = append(args, feedURL)
+		query = `
+			SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
+				a.published, a.updated, a.fetched_at,
+				COALESCE(r.is_read, 0)
+			FROM articles a
+			LEFT JOIN feeds f ON a.feed_url = f.feed_url
+			LEFT JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+			WHERE a.feed_url = ?
+		`
+		args = []any{userDID, feedURL}
+	} else {
+		query = `
+			SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
+				a.published, a.updated, a.fetched_at,
+				COALESCE(r.is_read, 0)
+			FROM articles a
+			JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
+			LEFT JOIN feeds f ON a.feed_url = f.feed_url
+			LEFT JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+			WHERE 1=1
+		`
+		args = []any{userDID, userDID}
 	}
 
 	query += ` ORDER BY a.published DESC LIMIT ? OFFSET ?`
@@ -104,21 +115,32 @@ func (db *DB) ListArticles(ctx context.Context, userDID, feedURL string, limit, 
 }
 
 func (db *DB) ListUnreadArticles(ctx context.Context, userDID, feedURL string, limit, offset int) ([]*Article, error) {
-	query := `
-		SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
-			a.published, a.updated, a.fetched_at,
-			COALESCE(r.is_read, 0)
-		FROM articles a
-		JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
-		LEFT JOIN feeds f ON a.feed_url = f.feed_url
-		LEFT JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
-		WHERE (r.is_read = 0 OR r.is_read IS NULL)
-	`
-	args := []any{userDID, userDID}
+	var query string
+	var args []any
 
 	if feedURL != "" {
-		query += ` AND a.feed_url = ?`
-		args = append(args, feedURL)
+		query = `
+			SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
+				a.published, a.updated, a.fetched_at,
+				COALESCE(r.is_read, 0)
+			FROM articles a
+			LEFT JOIN feeds f ON a.feed_url = f.feed_url
+			LEFT JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+			WHERE a.feed_url = ? AND (r.is_read = 0 OR r.is_read IS NULL)
+		`
+		args = []any{userDID, feedURL}
+	} else {
+		query = `
+			SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
+				a.published, a.updated, a.fetched_at,
+				COALESCE(r.is_read, 0)
+			FROM articles a
+			JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
+			LEFT JOIN feeds f ON a.feed_url = f.feed_url
+			LEFT JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+			WHERE (r.is_read = 0 OR r.is_read IS NULL)
+		`
+		args = []any{userDID, userDID}
 	}
 
 	query += ` ORDER BY a.published DESC LIMIT ? OFFSET ?`
@@ -144,21 +166,32 @@ func (db *DB) ListUnreadArticles(ctx context.Context, userDID, feedURL string, l
 }
 
 func (db *DB) ListReadArticles(ctx context.Context, userDID, feedURL string, limit, offset int) ([]*Article, error) {
-	query := `
-		SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
-			a.published, a.updated, a.fetched_at,
-			COALESCE(r.is_read, 0)
-		FROM articles a
-		JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
-		LEFT JOIN feeds f ON a.feed_url = f.feed_url
-		JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
-		WHERE r.is_read = 1
-	`
-	args := []any{userDID, userDID}
+	var query string
+	var args []any
 
 	if feedURL != "" {
-		query += ` AND a.feed_url = ?`
-		args = append(args, feedURL)
+		query = `
+			SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
+				a.published, a.updated, a.fetched_at,
+				COALESCE(r.is_read, 0)
+			FROM articles a
+			LEFT JOIN feeds f ON a.feed_url = f.feed_url
+			JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+			WHERE r.is_read = 1 AND a.feed_url = ?
+		`
+		args = []any{userDID, feedURL}
+	} else {
+		query = `
+			SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
+				a.published, a.updated, a.fetched_at,
+				COALESCE(r.is_read, 0)
+			FROM articles a
+			JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
+			LEFT JOIN feeds f ON a.feed_url = f.feed_url
+			JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+			WHERE r.is_read = 1
+		`
+		args = []any{userDID, userDID}
 	}
 
 	query += ` ORDER BY a.published DESC LIMIT ? OFFSET ?`
@@ -208,11 +241,10 @@ func (db *DB) MarkAllRead(ctx context.Context, userDID, feedURL string) error {
 		INSERT INTO read_state (user_did, article_id, is_read, read_at)
 		SELECT ?, a.id, 1, CURRENT_TIMESTAMP
 		FROM articles a
-		JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
 		WHERE a.feed_url = ?
 		ON CONFLICT(user_did, article_id) DO UPDATE SET
 			is_read = 1, read_at = CURRENT_TIMESTAMP
-	`, userDID, userDID, feedURL)
+	`, userDID, feedURL)
 	return err
 }
 
@@ -249,10 +281,9 @@ func (db *DB) GetUnreadCount(ctx context.Context, userDID, feedURL string) (int,
 		err := db.QueryRowContext(ctx, `
 			SELECT COUNT(*)
 			FROM articles a
-			JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
 			LEFT JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
 			WHERE a.feed_url = ? AND (r.is_read = 0 OR r.is_read IS NULL)
-		`, userDID, userDID, feedURL).Scan(&count)
+		`, userDID, feedURL).Scan(&count)
 		return count, err
 	}
 	err := db.QueryRowContext(ctx, `

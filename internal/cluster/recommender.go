@@ -54,9 +54,10 @@ func (e *Engine) GetFeedRecommendations(ctx context.Context, userDID string, lim
 		FROM user_feed_recommendations r
 		JOIN feeds f ON f.feed_url = r.feed_url
 		WHERE r.user_did = ?
+		  AND r.feed_url NOT IN (SELECT feed_url FROM subscriptions WHERE user_did = ?)
 		ORDER BY r.score DESC
 		LIMIT ?
-	`, userDID, limit)
+	`, userDID, userDID, limit)
 	if err != nil {
 		return nil, err
 	}
