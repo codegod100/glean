@@ -11,7 +11,7 @@ RUN npm ci
 
 COPY . .
 RUN npx tailwindcss -i ./static/input.css -o ./static/output.css --minify \
-    && CGO_ENABLED=1 go build -ldflags="-s -w" -o /glean .
+    && CGO_ENABLED=1 go build -tags fts5 -ldflags="-s -w" -o /glean .
 
 FROM alpine:3.21
 
