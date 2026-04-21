@@ -94,3 +94,8 @@ body {
 ::-webkit-scrollbar-track { background: var(--spot-bg); }
 ::-webkit-scrollbar-thumb { background: var(--spot-muted); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--spot-outline); }
+
+.htmx-swapping {
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
+}

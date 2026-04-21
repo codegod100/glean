@@ -114,12 +114,7 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.db.CreateSubscription(r.Context(), user.DID, feedURL, feedTitle, category, subURI, subCID); err != nil {
 		if errors.Is(err, db.ErrDuplicateSubscription) {
-			subs, _ := s.db.ListSubscriptions(r.Context(), user.DID, "", 100, 0)
-			s.render(w, r, "feed_list.html", map[string]any{
-				"User":          user,
-				"Subscriptions": subs,
-				"Error":         "Already subscribed to this feed.",
-			})
+			http.Error(w, "Already subscribed to this feed.", http.StatusConflict)
 			return
 		}
 		s.logger.Error("failed to create subscription", "error", err)
@@ -127,10 +122,18 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	subs, _ := s.db.ListSubscriptions(r.Context(), user.DID, "", 100, 0)
-	s.render(w, r, "feed_list.html", map[string]any{
-		"User":          user,
-		"Subscriptions": subs,
+	sub, _ := s.db.GetSubscription(r.Context(), user.DID, feedURL)
+	if sub == nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	s.render(w, r, "feed-item.html", map[string]any{
+		"User":      user,
+		"FeedURL":   sub.FeedURL,
+		"FeedTitle": sub.FeedTitle,
+		"Category":  sub.Category,
+		"FaviconURL": sub.FaviconURL,
+		"UnreadCount": sub.UnreadCount,
 	})
 }
 
@@ -313,7 +316,7 @@ func (s *Server) handleRefreshFeeds(w http.ResponseWriter, r *http.Request) {
 	}
 
 	subs, _ = s.db.ListSubscriptions(r.Context(), user.DID, "", 100, 0)
-	s.render(w, r, "feeds.html", map[string]any{
+	s.render(w, r, "feed-list.html", map[string]any{
 		"User":          user,
 		"Subscriptions": subs,
 	})
