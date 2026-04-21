@@ -41,6 +41,8 @@ Then open `http://localhost:8080`.
 | `GLEAN_ADDR`               | `:8080`                        | Listen address                                            |
 | `GLEAN_DB`                 | `glean.db`                     | SQLite database path                                      |
 | `GLEAN_JETSTREAM`          | `wss://jetstream2.fr.hose.cam` | Jetstream WebSocket URL                                   |
+| `GLEAN_SYNC_INTERVAL`      | `1h`                           | PDS sync interval (Go duration: `30m`, `2h30m`, etc.)    |
+| `GLEAN_CLUSTER_INTERVAL`   | `6h`                           | Cluster recomputation interval (Go duration)              |
 | `GLEAN_OAUTH_CLIENT_ID`    | _(empty)_                      | OAuth client metadata URL (leave empty for localhost dev) |
 | `GLEAN_OAUTH_REDIRECT_URL` | _(empty)_                      | OAuth redirect URL (leave empty for localhost dev)        |
 

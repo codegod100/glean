@@ -2,22 +2,22 @@
 
 ## 1. Overview
 
-Glean is a social RSS reader built on the AT Protocol. It operates as an **AppView** for the `at.glean.*` lexicon namespace: it indexes records from the relay firehose, serves XRPC query endpoints, and provides the web UI at [glean.at](https://glean.at).
+Glean is a social RSS reader built on the AT Protocol. It operates as an **AppView** for the `at.glean.*` lexicon namespace: it indexes records from Jetstream, serves XRPC query endpoints, and provides the web UI at [glean.at](https://glean.at).
 
-Users store their RSS feed subscriptions as individual lexicon records on their PDS (one record per feed). Glean's AppView consumes the firehose, indexes those records, fetches the referenced RSS feeds, and serves both the reader UI and public XRPC APIs for the `at.glean.*` namespace.
+Users store their RSS feed subscriptions as individual lexicon records on their PDS (one record per feed). Glean's AppView consumes Jetstream, indexes those records, fetches the referenced RSS feeds, and serves both the reader UI and public XRPC APIs for the `at.glean.*` namespace.
 
 The core idea: your RSS subscriptions are a strong signal about your interests. When enough people expose theirs, you can discover both **people** (who reads the same things) and **content** (what similar readers follow that you don't).
 
 ## 2. Stack
 
-| Layer            | Technology                         |
-| ---------------- | ---------------------------------- |
-| Backend          | Go                                 |
-| Database         | SQLite (via `mattn/go-sqlite3`)    |
-| Frontend         | htmx + TailwindCSS                 |
-| Auth             | AT Protocol OAuth / DID resolution |
-| AT Protocol role | AppView for `at.glean.*` lexicons  |
-| Data source      | AT Relay firehose → SQLite index   |
+| Layer            | Technology                           |
+| ---------------- | ------------------------------------ |
+| Backend          | Go                                   |
+| Database         | SQLite (via `mattn/go-sqlite3`)      |
+| Frontend         | htmx + TailwindCSS                   |
+| Auth             | AT Protocol OAuth / DID resolution   |
+| AT Protocol role | AppView for `at.glean.*` lexicons    |
+| Data source      | AT Protocol Jetstream → SQLite index |
 
 ## 3. AT Protocol Lexicons
 
@@ -217,9 +217,9 @@ Output:
   people: [{ did, handle, displayName, avatar, jaccard, commonFeeds }]
 ```
 
-### 3.5 AppView Firehose Consumption
+### 3.5 AppView Jetstream Consumption
 
-Glean subscribes to the AT Relay firehose (`wss://bsky.network`) for all `at.glean.*` records:
+Glean subscribes to a Jetstream endpoint (`GLEAN_JETSTREAM`, default `wss://jetstream2.fr.hose.cam`) for all `at.glean.*` records:
 
 ```
 SUBSCRIBE collections: ["at.glean.subscription", "at.glean.annotation", "at.glean.like"]
@@ -231,7 +231,7 @@ On each event:
 - **delete**: Tombstone the record (soft delete to preserve foreign key integrity)
 - **update**: Replace the record's CID and value
 
-The AppView does not handle writes. Users write records to their own PDS. Glean only reads them from the firehose.
+The AppView does not handle writes. Users write records to their own PDS. Glean only reads them from Jetstream.
 
 ## 4. RSS Reader
 
@@ -384,43 +384,43 @@ Beyond the clustering system, Glean also discovers new feeds from article conten
 
 ## 5. System Architecture
 
-Glean runs as a single Go binary that fills three roles: **AppView** (indexing `at.glean.*` records from the firehose, serving XRPC queries), **RSS reader** (fetching and storing feed content), and **web UI** (htmx frontend).
+Glean runs as a single Go binary that fills three roles: **AppView** (indexing `at.glean.*` records from Jetstream, serving XRPC queries), **RSS reader** (fetching and storing feed content), and **web UI** (htmx frontend).
 
 ```
-                         AT Relay (bsky.network)
-                               │ firehose
-                               ▼
-                    ┌─────────────────────┐
-                    │   Go Server (glean.at)│
-                    │                      │
-  Browser ──HTTP──► │  ┌────────────────┐  │ ──XRPC queries──► Other AT apps
-  (htmx + TW)      │  │    Router      │  │
-                    │  │  ┌───────────┐ │  │
-                    │  │  │ Handlers  │ │  │
-                    │  │  │ (UI + XRPC)│ │  │
-                    │  │  └─────┬─────┘ │  │
-                    │  └────────┼────────┘  │
-                    │           │           │
-                    │  ┌────────▼────────┐  │         ┌──────────────────┐
-                    │  │  Service Layer  │  │         │  Feed Scheduler  │
-                    │  │                 │──┼──sync──►│  (goroutine)     │
-                    │  └────────┬────────┘  │         │  Fetcher + Parser│
-                    │           │           │         └────────┬─────────┘
-                    │  ┌────────▼────────┐  │                  │
-                    │  │     SQLite      │  │           RSS/Atom/JSON feeds
-                    │  │  (firehose idx, │  │
-                    │  │   articles,     │  │         ┌──────────────────┐
-                    │  │   read state,   │  │         │  Cluster Engine  │
-                    │  │   clustering)   │◄─┼────────►│  (periodic cron) │
-                    │  └─────────────────┘  │         └──────────────────┘
-                    └──────────────────────┘
+                          Jetstream (GLEAN_JETSTREAM)
+                                │ subscribe
+                                ▼
+                     ┌─────────────────────┐
+                     │   Go Server (glean.at)│
+                     │                      │
+   Browser ──HTTP──► │  ┌────────────────┐  │ ──XRPC queries──► Other AT apps
+   (htmx + TW)      │  │    Router      │  │
+                     │  │  ┌───────────┐ │  │
+                     │  │  │ Handlers  │ │  │
+                     │  │  │ (UI + XRPC)│ │  │
+                     │  │  └─────┬─────┘ │  │
+                     │  └────────┼────────┘  │
+                     │           │           │
+                     │  ┌────────▼────────┐  │         ┌──────────────────┐
+                     │  │  Service Layer  │  │         │  Feed Scheduler  │
+                     │  │                 │──┼──sync──►│  (goroutine)     │
+                     │  └────────┬────────┘  │         │  Fetcher + Parser│
+                     │           │           │         └────────┬─────────┘
+                     │  ┌────────▼────────┐  │                  │
+                     │  │     SQLite      │  │           RSS/Atom/JSON feeds
+                     │  │  (jetstream idx, │  │
+                     │  │   articles,     │  │         ┌──────────────────┐
+                     │  │   read state,   │  │         │  Cluster Engine  │
+                     │  │   clustering)   │◄─┼────────►│  (periodic cron) │
+                     │  └─────────────────┘  │         └──────────────────┘
+                     └──────────────────────┘
 
-                    AppView responsibilities:
-                    • Subscribe to firehose for at.glean.subscription, at.glean.annotation, at.glean.like
-                    • Index records into SQLite
-                    • Serve XRPC query endpoints (at.glean.listSubscriptions, etc.)
-                    • Host the web UI at glean.at
-                    • Write to user PDS on behalf of user (when user acts through UI)
+                     AppView responsibilities:
+                     • Subscribe to Jetstream for at.glean.subscription, at.glean.annotation, at.glean.like
+                     • Index records into SQLite
+                     • Serve XRPC query endpoints (at.glean.listSubscriptions, etc.)
+                     • Host the web UI at glean.at
+                     • Write to user PDS on behalf of user (when user acts through UI)
 ```
 
 ## 6. Database Schema (SQLite)
@@ -525,6 +525,7 @@ CREATE INDEX idx_read_state_starred ON read_state(user_did, is_starred) WHERE is
 ```
 
 ### 6.6 Annotations, Likes
+
 Local mirror of AT Protocol lexicon records for fast querying.
 
 ```sql
@@ -654,9 +655,9 @@ For larger scale, move to MinHash + LSH (banded hashing) to approximate Jaccard 
 
 ### 7.5 Clustering Engine (Cron)
 
-A background goroutine runs on a schedule (e.g., every 6 hours):
+A background goroutine runs on a configurable schedule (`GLEAN_CLUSTER_INTERVAL`, default 6h):
 
-1. **Firehose ingestion**: Subscribe to AT Protocol firehose for `at.glean.*` records
+1. **Jetstream ingestion**: Subscribe to Jetstream for `at.glean.*` records
 2. **Index new records**: Parse lexicon records, upsert into SQLite
 3. **Compute similarities**: Batch-update the `feed_similarity`, `user_similarity`, and `article_co_like` tables
 4. **Generate recommendations**: Materialize top recommendations per user into cache tables
@@ -686,28 +687,28 @@ The server renders HTML fragments that htmx swaps into the page. No JSON API nee
 
 ### 8.1 Pages
 
-| Route                  | Method | Description                                              |
-| ---------------------- | ------ | -------------------------------------------------------- |
-| `/`                    | GET    | Landing page / auth redirect                             |
-| `/dashboard`           | GET    | Main dashboard: unread articles, recommendations sidebar |
-| `/feeds`               | GET    | Manage RSS subscriptions (OPML import for onboarding)    |
-| `/feeds/opml/upload`   | POST   | Upload OPML file to bulk-import subscriptions            |
-| `/feeds/opml/download` | GET    | Export subscriptions as OPML (offboarding)               |
-| `/feeds/add`           | POST   | Add a single feed URL                                    |
-| `/feeds/remove`        | DELETE | Remove a feed                                            |
-| `/feeds/refresh`       | POST   | Refresh all subscribed feeds                             |
-| `/feeds/clear`         | POST   | Clear all subscriptions                                  |
-| `/articles`            | GET    | Read articles (paginated, filterable by feed)            |
-| `/articles/{id}`       | GET    | Article detail view                                      |
-| `/articles/{id}/read`  | POST   | Mark article as read                                     |
-| `/articles/{id}/unread`| POST   | Mark article as unread                                   |
-| `/articles/{id}/like`  | POST   | Like an article                                          |
-| `/articles/mark-all-read` | POST | Mark all articles as read                               |
-| `/trending`            | GET    | Community feed: articles ranked by likes                 |
-| `/library`             | GET    | Liked articles and annotations                           |
-| `/library/create`      | POST   | Create annotation on an article                          |
-| `/library/{id}/delete` | POST   | Delete an annotation                                     |
-| `/profile/{did}`       | GET    | Public profile: their feeds, likes, annotations          |
+| Route                     | Method | Description                                              |
+| ------------------------- | ------ | -------------------------------------------------------- |
+| `/`                       | GET    | Landing page / auth redirect                             |
+| `/dashboard`              | GET    | Main dashboard: unread articles, recommendations sidebar |
+| `/feeds`                  | GET    | Manage RSS subscriptions (OPML import for onboarding)    |
+| `/feeds/opml/upload`      | POST   | Upload OPML file to bulk-import subscriptions            |
+| `/feeds/opml/download`    | GET    | Export subscriptions as OPML (offboarding)               |
+| `/feeds/add`              | POST   | Add a single feed URL                                    |
+| `/feeds/remove`           | DELETE | Remove a feed                                            |
+| `/feeds/refresh`          | POST   | Refresh all subscribed feeds                             |
+| `/feeds/clear`            | POST   | Clear all subscriptions                                  |
+| `/articles`               | GET    | Read articles (paginated, filterable by feed)            |
+| `/articles/{id}`          | GET    | Article detail view                                      |
+| `/articles/{id}/read`     | POST   | Mark article as read                                     |
+| `/articles/{id}/unread`   | POST   | Mark article as unread                                   |
+| `/articles/{id}/like`     | POST   | Like an article                                          |
+| `/articles/mark-all-read` | POST   | Mark all articles as read                                |
+| `/trending`               | GET    | Community feed: articles ranked by likes                 |
+| `/library`                | GET    | Liked articles and annotations                           |
+| `/library/create`         | POST   | Create annotation on an article                          |
+| `/library/{id}/delete`    | POST   | Delete an annotation                                     |
+| `/profile/{did}`          | GET    | Public profile: their feeds, likes, annotations          |
 
 ### 8.2 htmx Patterns
 
@@ -729,7 +730,8 @@ glean/
 │   ├── atproto/
 │   │   ├── auth.go                # DID resolution, OAuth flow
 │   │   ├── client.go              # XRPC client (write to user PDS)
-│   │   ├── firehose.go            # Subscribe to AT Relay firehose
+│   │   ├── jetstream.go           # Subscribe to Jetstream via official client
+│   │   ├── stream_handler.go      # Stream event → DB handler
 │   │   ├── sync.go                # PDS record reconciliation
 │   │   └── xrpc.go                # XRPC query handlers (AppView endpoints)
 │   ├── db/
@@ -862,7 +864,7 @@ Glean exposes a `/metrics` endpoint for monitoring. Key metrics:
 - **`glean_feeds_fetched_total`** — Feed fetch attempts labeled by status (`success`, `error`, `not_modified`)
 - **`glean_feed_fetch_duration_seconds`** — Histogram of feed fetch latency
 - **`glean_articles_upserted_total`** — Counter of articles stored from feeds
-- **`glean_firehose_events_total`** — Firehose events labeled by collection and action
+- **`glean_jetstream_events_total`** — Jetstream events labeled by collection and action
 - **`glean_http_requests_total`** — HTTP request counts labeled by method, path, and status
 - **`glean_cluster_runs_total`** / **`glean_cluster_duration_seconds`** — Recommendation engine runs and timing
 
@@ -878,8 +880,8 @@ Glean exposes a `/metrics` endpoint for monitoring. Key metrics:
 
 Glean operates as an AT Protocol AppView. This means:
 
-- **Read path**: All `at.glean.*` data is consumed from the Relay firehose, not by polling individual PDS instances. The firehose handler runs as a persistent goroutine, upserting records into SQLite as they arrive.
-- **Write path**: Users write records to their own PDS (via standard AT Protocol `com.atproto.repo.createRecord` / `deleteRecord`). Glean never stores user data directly — it only indexes what the firehose delivers.
+- **Read path**: All `at.glean.*` data is consumed from Jetstream, not by polling individual PDS instances. The Jetstream consumer runs as a persistent goroutine, upserting records into SQLite as they arrive.
+- **Write path**: Users write records to their own PDS (via standard AT Protocol `com.atproto.repo.createRecord` / `deleteRecord`). Glean never stores user data directly — it only indexes what Jetstream delivers.
 - **Query path**: Other AT Protocol apps can query Glean's XRPC endpoints to access indexed data (subscriptions, annotations, likes, recommendations) without building their own indexer.
 - **Trade-off**: Article content (fetched from RSS feeds) is local-only and not part of the AT Protocol layer. Only individual feed subscription records (`at.glean.subscription`) live on the PDS.
 
@@ -891,6 +893,4 @@ All PDS records are public. There is no notion of private data on the AT Protoco
 
 - **MinHash/LSH**: Replace brute-force Jaccard when user count exceeds ~50k
 - **Full-text search**: Add FTS5 virtual table on articles for search
-- **Feed groups / reading lists**: Allow users to create curated lists (separate lexicon)
 - **Email digest**: Periodic email with top articles from subscribed feeds
-- **Multi-AppView scaling**: Distribute firehose consumption across multiple instances behind a load balancer

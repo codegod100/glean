@@ -22,6 +22,8 @@ func main() {
 	addr := flag.String("addr", envOr("GLEAN_ADDR", ":8080"), "listen address")
 	dbPath := flag.String("db", envOr("GLEAN_DB", "glean.db"), "database path")
 	jetstreamURL := flag.String("jetstream", envOr("GLEAN_JETSTREAM", "wss://jetstream2.fr.hose.cam"), "Jetstream URL")
+	syncInterval := flag.Duration("sync-interval", envDuration("GLEAN_SYNC_INTERVAL", 1*time.Hour), "PDS sync interval")
+	clusterInterval := flag.Duration("cluster-interval", envDuration("GLEAN_CLUSTER_INTERVAL", 6*time.Hour), "cluster recomputation interval")
 	flag.Parse()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -42,7 +44,7 @@ func main() {
 	srv := server.New(database, clientID, callbackURL, *addr, scheduler, logger)
 
 	engine := cluster.NewEngine(database.DB, logger)
-	cron := cluster.NewCron(engine, 6*time.Hour, logger)
+	cron := cluster.NewCron(engine, *clusterInterval, logger)
 
 	handler := atproto.NewStreamDBHandler(database, logger)
 	jetstream := atproto.NewJetstreamConsumer(*jetstreamURL, handler.Handle, logger)
@@ -61,7 +63,7 @@ func main() {
 		}
 	}()
 	go func() {
-		srv.PeriodicSync(ctx, 1*time.Hour)
+		srv.PeriodicSync(ctx, *syncInterval)
 	}()
 	go func() {
 		if err := jetstream.Start(ctx); err != nil && ctx.Err() == nil {
@@ -104,6 +106,15 @@ func main() {
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+func envDuration(key string, fallback time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
 	}
 	return fallback
 }
