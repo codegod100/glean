@@ -31,7 +31,23 @@ import (
 	"pkg.rbrt.fr/glean/static"
 )
 
-var oauthScopes = []string{"atproto", "transition:generic"}
+var oauthScopes = []string{
+	"atproto",
+	"blob:*/*",
+
+	fmt.Sprintf("repo:%s", atproto.CollectionSubscription),
+	fmt.Sprintf("repo:%s", atproto.CollectionLike),
+	fmt.Sprintf("repo:%s", atproto.CollectionAnnotation),
+
+	"rpc:at.glean.listSubscriptions?aud=*",
+	"rpc:at.glean.listLikes?aud=*",
+	"rpc:at.glean.getTrending?aud=*",
+	"rpc:at.glean.getRecommendations?aud=*",
+	"rpc:at.glean.listFeedLists?aud=*",
+	"rpc:at.glean.listAnnotations?aud=*",
+
+	"rpc:app.bsky.actor.getProfile?aud=*",
+}
 
 func splitString(s, sep string) []string {
 	return strings.Split(s, sep)
