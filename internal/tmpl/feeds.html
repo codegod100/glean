@@ -13,16 +13,24 @@
 <p class="text-sm text-spot-secondary mb-6">Manage your RSS and Atom subscriptions.</p>
 
 {{if .DeadFeeds}}
-<div class="bg-spot-red/10 border border-spot-red/30 rounded-lg p-4 mb-6">
+<div id="dead-feeds" class="bg-spot-red/10 border border-spot-red/30 rounded-lg p-4 mb-6">
     <h3 class="text-sm font-bold text-spot-red mb-2">Feeds with errors ({{len .DeadFeeds}})</h3>
     <div class="space-y-2">
         {{range .DeadFeeds}}
-        <div class="flex items-center justify-between text-sm">
-            <span class="text-spot-text">{{if .Title.Valid}}{{.Title.String}}{{else}}{{.FeedURL}}{{end}}</span>
-            <div class="flex items-center gap-2">
-                <span class="text-spot-red text-xs">{{.ErrorCount}} errors</span>
-                {{if .LastError.Valid}}<span class="text-spot-secondary text-xs truncate max-w-48" title="{{.LastError.String}}">{{.LastError.String}}</span>{{end}}
+        <div class="dead-feed-item flex items-center justify-between text-sm">
+            <div class="min-w-0 flex-1 flex items-center gap-3">
+                <span class="text-spot-text truncate">{{if .Title.Valid}}{{.Title.String}}{{else}}{{.FeedURL}}{{end}}</span>
+                <div class="flex items-center gap-2 shrink-0">
+                    <span class="text-spot-red text-xs">{{.ErrorCount}} errors</span>
+                    {{if .LastError.Valid}}<span class="text-spot-secondary text-xs truncate max-w-48" title="{{.LastError.String}}">{{.LastError.String}}</span>{{end}}
+                </div>
             </div>
+            <form hx-delete="/feeds/remove" hx-target="closest .dead-feed-item" hx-swap="outerHTML swap:0.3s"
+                  hx-confirm="Unsubscribe from this broken feed?" class="inline shrink-0 ml-3">
+                {{csrfInput $.CSRFToken}}
+                <input type="hidden" name="url" value="{{.FeedURL}}">
+                <button type="submit" class="text-xs text-spot-secondary hover:text-spot-red transition font-bold uppercase">Unsubscribe</button>
+            </form>
         </div>
         {{end}}
     </div>
