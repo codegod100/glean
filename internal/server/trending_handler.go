@@ -11,6 +11,10 @@ func (s *Server) handleTrending(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 
 	scope := r.URL.Query().Get("scope")
+	if scope == "for-me" && user == nil {
+		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+		return
+	}
 	if scope != "for-me" {
 		scope = "all"
 	}
@@ -18,11 +22,16 @@ func (s *Server) handleTrending(w http.ResponseWriter, r *http.Request) {
 	page := pageFromRequest(r, 25)
 	since := time.Now().AddDate(0, 0, -7).Format(time.RFC3339)
 
+	var userDID string
+	if user != nil {
+		userDID = user.DID
+	}
+
 	var trending []*db.TrendingItem
 	if scope == "for-me" {
-		trending, _ = s.db.ListTrendingArticlesForUser(r.Context(), user.DID, since, page.Limit()+1, page.Offset())
+		trending, _ = s.db.ListTrendingArticlesForUser(r.Context(), userDID, since, page.Limit()+1, page.Offset())
 	} else {
-		trending, _ = s.db.ListTrendingArticles(r.Context(), user.DID, since, page.Limit()+1, page.Offset())
+		trending, _ = s.db.ListTrendingArticles(r.Context(), userDID, since, page.Limit()+1, page.Offset())
 	}
 
 	totalFetched := len(trending)

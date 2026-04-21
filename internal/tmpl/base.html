@@ -65,7 +65,7 @@
         </div>
         <button onclick="document.getElementById('shortcuts-dialog').close()" class="mt-4 w-full text-sm text-spot-secondary hover:text-spot-text px-4 py-2 rounded-pill border border-spot-outline transition">Close</button>
     </dialog>
-    {{if .User}}
+    {{if or .User (eq .ActivePath "/trending")}}
     <aside class="hidden lg:flex flex-col w-60 bg-spot-bg h-screen fixed left-0 top-0 px-3 py-4 z-20">
         <div class="mb-8 px-3">
             {{template "logo-link"}}
@@ -92,17 +92,25 @@
                 Library
             </a>
         </nav>
-        <div class="mt-auto pt-4 border-t border-spot-divider-30 flex items-center gap-2 px-1">
-            <a href="/profile/{{.User.DID}}" class="flex items-center gap-2 flex-1 min-w-0 px-2 py-1.5 rounded-md hover:bg-spot-hover-50 transition">
-                {{if .User.AvatarURL.Valid}}<img src="{{.User.AvatarURL.String}}" class="w-7 h-7 rounded-full shrink-0">{{end}}
-                <span class="text-sm font-medium truncate text-spot-text">@{{.User.Handle}}</span>
+        <div class="mt-auto pt-4 border-t border-spot-divider-30 px-1">
+            {{if .User}}
+            <div class="flex items-center gap-2">
+                <a href="/profile/{{.User.DID}}" class="flex items-center gap-2 flex-1 min-w-0 px-2 py-1.5 rounded-md hover:bg-spot-hover-50 transition">
+                    {{if .User.AvatarURL.Valid}}<img src="{{.User.AvatarURL.String}}" class="w-7 h-7 rounded-full shrink-0">{{end}}
+                    <span class="text-sm font-medium truncate text-spot-text">@{{.User.Handle}}</span>
+                </a>
+                <form method="POST" action="/auth/logout" class="shrink-0">
+                    {{csrfInput .CSRFToken}}
+                    <button type="submit" class="text-spot-secondary hover:text-spot-red p-1.5 rounded-md hover:bg-spot-hover-50 transition" title="Logout">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                    </button>
+                </form>
+            </div>
+            {{else}}
+            <a href="/auth/login" class="flex items-center justify-center gap-2 w-full bg-spot-green text-white rounded-pill px-4 py-2 text-xs font-bold uppercase tracking-button hover:brightness-110 transition">
+                Sign in
             </a>
-            <form method="POST" action="/auth/logout" class="shrink-0">
-                {{csrfInput .CSRFToken}}
-                <button type="submit" class="text-spot-secondary hover:text-spot-red p-1.5 rounded-md hover:bg-spot-hover-50 transition" title="Logout">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-                </button>
-            </form>
+            {{end}}
         </div>
     </aside>
 
@@ -128,17 +136,21 @@
     </nav>
     {{end}}
 
-    <main id="main-content" class="{{if .User}}lg:ml-60 pb-20 lg:pb-0{{end}} flex-1 min-h-screen flex flex-col">
-        {{if .User}}
+    <main id="main-content" class="{{if or .User (eq .ActivePath "/trending")}}lg:ml-60 pb-20 lg:pb-0{{end}} flex-1 min-h-screen flex flex-col">
+        {{if or .User (eq .ActivePath "/trending")}}
         <div class="lg:hidden bg-spot-surface border-b border-spot-divider px-4 py-3 flex items-center justify-between sticky top-0 z-20">
             {{template "logo-text"}}
+            {{if .User}}
             <a href="/profile/{{.User.DID}}" class="flex items-center gap-2">
                 {{if .User.AvatarURL.Valid}}<img src="{{.User.AvatarURL.String}}" class="w-7 h-7 rounded-full">{{end}}
                 <span class="text-xs text-spot-secondary">@{{.User.Handle}}</span>
             </a>
+            {{else}}
+            <a href="/auth/login" class="bg-spot-green text-white rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:brightness-110 transition">Sign in</a>
+            {{end}}
         </div>
         {{end}}
-        <div class="{{if not .User}}w-full{{else}}max-w-6xl mx-auto px-4 lg:px-8 py-6{{end}} flex-1">
+        <div class="{{if not (or .User (eq .ActivePath "/trending"))}}w-full{{else}}max-w-6xl mx-auto px-4 lg:px-8 py-6{{end}} flex-1">
             {{.Content}}
         </div>
         <footer class="mt-auto">

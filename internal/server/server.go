@@ -177,7 +177,6 @@ func (s *Server) setupRoutes() {
 	})
 
 	s.router.Route("/trending", func(r chi.Router) {
-		r.Use(s.requireAuth)
 		r.Get("/", s.handleTrending)
 	})
 
