@@ -389,13 +389,10 @@ func (s *Server) syncUserInBackground(userDID string, client *atproto.Client) {
 			s.logger.Error("background sync failed", "error", err, "did", userDID)
 		}
 
-		if !isNewUser {
-			return
+		if isNewUser {
+			s.refreshUserFeeds(ctx, userDID)
 		}
-
-		// if the user is new, but has value from the PDS, we should backfill and refetch their data.
-		s.refreshUserFeeds(ctx, userDID)
-		s.engine.ComputeAll(ctx)
+		s.engine.ComputeForUser(ctx, userDID)
 	}()
 }
 

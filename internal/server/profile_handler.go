@@ -2,12 +2,33 @@ package server
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
+
+	"pkg.rbrt.fr/glean/internal/atproto"
 )
 
 func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
-	did := chi.URLParam(r, "did")
+	param := chi.URLParam(r, "did")
+
+	var did string
+	if strings.HasPrefix(param, "did:") {
+		did = param
+	} else {
+		profileUser, err := s.db.GetUserByHandle(r.Context(), param)
+		if err == nil {
+			did = profileUser.DID
+		} else {
+			resolved, err := atproto.ResolveHandle(r.Context(), param)
+			if err != nil {
+				http.Error(w, "handle not found", http.StatusNotFound)
+				return
+			}
+			did = resolved
+		}
+	}
+
 	profileUser, err := s.db.GetUser(r.Context(), did)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
