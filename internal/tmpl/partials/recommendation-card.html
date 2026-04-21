@@ -1,13 +1,13 @@
 {{define "recommendation-card.html"}}
 <div class="bg-spot-surface rounded-xl p-3 hover:bg-spot-hover-50 transition">
     <div class="flex items-center justify-between gap-2">
-        <div class="min-w-0 flex items-center gap-2">
+        <a href="/articles?feed={{.feed_url}}" class="min-w-0 flex items-center gap-2 flex-1">
             {{if .favicon_url}}<img src="{{.favicon_url}}" class="w-4 h-4 rounded shrink-0" loading="lazy">{{end}}
             <div class="min-w-0">
                 <div class="font-bold text-sm text-spot-text truncate">{{if .title}}{{.title}}{{else}}{{.feed_url}}{{end}}</div>
                 {{if .description}}<p class="text-xs text-spot-secondary truncate mt-0.5">{{.description}}</p>{{end}}
             </div>
-        </div>
+        </a>
         <div class="flex items-center gap-2 shrink-0">
             <span class="text-xs text-spot-secondary">{{.subscriber_count}} subs</span>
             <form hx-post="/feeds/add" hx-target="closest .bg-spot-surface" hx-swap="outerHTML" class="inline">

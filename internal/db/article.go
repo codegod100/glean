@@ -72,11 +72,12 @@ func (db *DB) ListArticles(ctx context.Context, userDID, feedURL string, limit, 
 		JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
 		LEFT JOIN feeds f ON a.feed_url = f.feed_url
 		LEFT JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+		WHERE 1=1
 	`
 	args := []any{userDID, userDID}
 
 	if feedURL != "" {
-		query += ` AND s.feed_url = ?`
+		query += ` AND a.feed_url = ?`
 		args = append(args, feedURL)
 	}
 
@@ -111,7 +112,7 @@ func (db *DB) ListUnreadArticles(ctx context.Context, userDID, feedURL string, l
 		JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
 		LEFT JOIN feeds f ON a.feed_url = f.feed_url
 		LEFT JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
-		WHERE r.is_read = 0 OR r.is_read IS NULL
+		WHERE (r.is_read = 0 OR r.is_read IS NULL)
 	`
 	args := []any{userDID, userDID}
 

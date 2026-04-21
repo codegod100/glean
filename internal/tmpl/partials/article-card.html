@@ -10,7 +10,7 @@
                 {{if .FeedFaviconURL.Valid}}<img src="{{.FeedFaviconURL.String}}" class="w-4 h-4 rounded shrink-0" loading="lazy">{{end}}
                 {{if .Author.Valid}}{{if .Author.String}}<span>{{.Author.String}}</span>{{end}}{{end}}
                 {{if .Published.Valid}}<span>{{.Published.Time.Format "Jan 2, 2006 15:04"}}</span>{{end}}
-                <span class="text-spot-muted">{{if .FeedTitle}}{{.FeedTitle}}{{else}}{{.FeedURL}}{{end}}</span>
+                <span class="text-spot-muted"><a href="/articles?feed={{.FeedURL}}" class="hover:text-spot-green transition">{{if .FeedTitle}}{{.FeedTitle}}{{else}}{{.FeedURL}}{{end}}</a></span>
             </div>
             {{if .Summary.Valid}}{{if .Summary.String}}
             <p class="text-sm text-spot-secondary mt-2 line-clamp-2">{{plainText .Summary.String}}</p>

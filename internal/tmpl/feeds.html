@@ -62,7 +62,7 @@
         <div id="feed-list" class="bg-spot-surface rounded-xl divide-y divide-spot-divider">
             {{range .Subscriptions}}
             <div class="feed-item px-5 py-4 flex items-center justify-between hover:bg-spot-hover-50 transition rounded-xl">
-                <div class="min-w-0 flex-1 flex items-center gap-3">
+                <a href="/articles?feed={{.FeedURL}}" class="min-w-0 flex-1 flex items-center gap-3">
                     {{if .FaviconURL.Valid}}<img src="{{.FaviconURL.String}}" class="w-5 h-5 rounded shrink-0" loading="lazy">{{else}}<span class="shrink-0 w-5 h-5 flex items-center justify-center text-spot-muted">{{template "icon-globe"}}</span>{{end}}
                     <div class="min-w-0 flex-1">
                         <div class="flex items-center gap-2">
@@ -71,7 +71,7 @@
                         </div>
                         <div class="text-xs text-spot-muted truncate mt-0.5">{{.FeedURL}}</div>
                     </div>
-                </div>
+                </a>
                 <div class="flex items-center gap-3">
                     {{if .UnreadCount}}<span class="text-xs bg-spot-green/20 text-spot-green px-2.5 py-0.5 rounded-full font-bold">{{.UnreadCount}}</span>{{end}}
                     <form hx-delete="/feeds/remove" hx-target="closest .feed-item" hx-swap="outerHTML swap:0.3s"

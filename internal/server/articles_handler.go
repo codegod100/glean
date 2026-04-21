@@ -75,6 +75,14 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 		"Now":         time.Now(),
 	}
 
+	if feedURL != "" {
+		if feed, err := s.db.GetFeed(r.Context(), feedURL); err == nil {
+			data["Feed"] = feed
+		}
+		unreadCount, _ := s.db.GetUnreadCount(r.Context(), user.DID, feedURL)
+		data["FeedUnreadCount"] = unreadCount
+	}
+
 	if r.Header.Get("HX-Request") == "true" {
 		s.render(w, r, "articles-content.html", data)
 		return
