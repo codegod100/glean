@@ -308,14 +308,16 @@ func (db *DB) ListLikedArticles(ctx context.Context, userDID string, limit, offs
 	rows, err := db.QueryContext(ctx, `
 		SELECT DISTINCT a.id, a.feed_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 			a.published, a.updated, a.fetched_at,
-			COALESCE(f.title, '')
+			COALESCE(f.title, ''),
+			COALESCE(r.is_read, 0)
 		FROM likes l
 		JOIN articles a ON a.url = l.article_url AND a.feed_url = l.feed_url
 		LEFT JOIN feeds f ON f.feed_url = a.feed_url
+		LEFT JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
 		WHERE l.author_did = ?
 		ORDER BY l.created_at DESC
 		LIMIT ? OFFSET ?
-	`, userDID, limit, offset)
+	`, userDID, userDID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +328,7 @@ func (db *DB) ListLikedArticles(ctx context.Context, userDID string, limit, offs
 		a := &Article{}
 		if err := rows.Scan(&a.ID, &a.FeedURL, &a.GUID, &a.Title, &a.URL, &a.Author,
 			&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt,
-			&a.FeedTitle); err != nil {
+			&a.FeedTitle, &a.IsRead); err != nil {
 			return nil, err
 		}
 		articles = append(articles, a)
