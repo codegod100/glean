@@ -195,7 +195,8 @@ func (h *StreamDBHandler) handleMarginNote(ctx context.Context, event *Event) er
 		return h.db.CreateAnnotation(ctx, a)
 
 	case "delete":
-		return h.db.DeleteAnnotation(ctx, event.URI)
+		// TODO: I actually don't think we should delete an annotation on Glean if deleted from Margin
+		// return h.db.DeleteAnnotation(ctx, event.URI)
 	}
 	return nil
 }

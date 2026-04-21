@@ -23,8 +23,7 @@
         </div>
 
         <div class="flex items-center gap-2 mt-6">
-            <button hx-post="/articles/{{.Article.ID}}/like" hx-target="#like-btn" hx-swap="outerHTML"
-                    id="like-btn"
+            <button hx-post="/articles/{{.Article.ID}}/like" hx-target="this" hx-swap="outerHTML"
                     class="border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:border-spot-text transition inline-flex items-center gap-1.5">
                 <svg class="w-3.5 h-3.5 {{if .HasLiked}}text-spot-red{{else}}text-spot-muted{{end}}" fill="{{if .HasLiked}}currentColor{{else}}none{{end}}" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">{{template "icon-heart"}}</svg>
                 <span>{{.LikeCount}}</span>
@@ -166,7 +165,7 @@
     document.addEventListener('keydown', function(e) {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
         if (e.key === 'l') {
-            var btn = document.getElementById('like-btn');
+            var btn = document.querySelector('[hx-post*="/like"]');
             if (btn) btn.click();
         } else if (e.key === 'm') {
             var rbtn = document.getElementById('read-btn');

@@ -24,6 +24,8 @@ type Article struct {
 	Updated        sql.NullTime
 	FetchedAt      sql.NullTime
 	IsRead         sql.NullBool
+	LikeCount      int
+	HasLiked       bool
 }
 
 type ReadState struct {
@@ -71,25 +73,37 @@ func (db *DB) ListArticles(ctx context.Context, userDID, feedURL string, limit, 
 		query = `
 			SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 				a.published, a.updated, a.fetched_at,
-				COALESCE(r.is_read, 0)
+				COALESCE(r.is_read, 0),
+				COALESCE(lc.cnt, 0),
+				COALESCE(ul.liked, 0)
 			FROM articles a
 			LEFT JOIN feeds f ON a.feed_url = f.feed_url
 			LEFT JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+			LEFT JOIN (SELECT feed_url, article_url, COUNT(*) as cnt FROM likes GROUP BY feed_url, article_url) lc
+				ON lc.feed_url = a.feed_url AND lc.article_url = a.url
+			LEFT JOIN (SELECT feed_url, article_url, 1 as liked FROM likes WHERE author_did = ?) ul
+				ON ul.feed_url = a.feed_url AND ul.article_url = a.url
 			WHERE a.feed_url = ?
 		`
-		args = []any{userDID, feedURL}
+		args = []any{userDID, userDID, feedURL}
 	} else {
 		query = `
 			SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 				a.published, a.updated, a.fetched_at,
-				COALESCE(r.is_read, 0)
+				COALESCE(r.is_read, 0),
+				COALESCE(lc.cnt, 0),
+				COALESCE(ul.liked, 0)
 			FROM articles a
 			JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
 			LEFT JOIN feeds f ON a.feed_url = f.feed_url
 			LEFT JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+			LEFT JOIN (SELECT feed_url, article_url, COUNT(*) as cnt FROM likes GROUP BY feed_url, article_url) lc
+				ON lc.feed_url = a.feed_url AND lc.article_url = a.url
+			LEFT JOIN (SELECT feed_url, article_url, 1 as liked FROM likes WHERE author_did = ?) ul
+				ON ul.feed_url = a.feed_url AND ul.article_url = a.url
 			WHERE 1=1
 		`
-		args = []any{userDID, userDID}
+		args = []any{userDID, userDID, userDID}
 	}
 
 	query += ` ORDER BY a.published DESC LIMIT ? OFFSET ?`
@@ -106,7 +120,7 @@ func (db *DB) ListArticles(ctx context.Context, userDID, feedURL string, limit, 
 		a := &Article{}
 		if err := rows.Scan(&a.ID, &a.FeedURL, &a.FeedTitle, &a.FeedFaviconURL, &a.GUID, &a.Title, &a.URL, &a.Author,
 			&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt,
-			&a.IsRead); err != nil {
+			&a.IsRead, &a.LikeCount, &a.HasLiked); err != nil {
 			return nil, err
 		}
 		articles = append(articles, a)
@@ -122,25 +136,37 @@ func (db *DB) ListUnreadArticles(ctx context.Context, userDID, feedURL string, l
 		query = `
 			SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 				a.published, a.updated, a.fetched_at,
-				COALESCE(r.is_read, 0)
+				COALESCE(r.is_read, 0),
+				COALESCE(lc.cnt, 0),
+				COALESCE(ul.liked, 0)
 			FROM articles a
 			LEFT JOIN feeds f ON a.feed_url = f.feed_url
 			LEFT JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+			LEFT JOIN (SELECT feed_url, article_url, COUNT(*) as cnt FROM likes GROUP BY feed_url, article_url) lc
+				ON lc.feed_url = a.feed_url AND lc.article_url = a.url
+			LEFT JOIN (SELECT feed_url, article_url, 1 as liked FROM likes WHERE author_did = ?) ul
+				ON ul.feed_url = a.feed_url AND ul.article_url = a.url
 			WHERE a.feed_url = ? AND (r.is_read = 0 OR r.is_read IS NULL)
 		`
-		args = []any{userDID, feedURL}
+		args = []any{userDID, userDID, feedURL}
 	} else {
 		query = `
 			SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 				a.published, a.updated, a.fetched_at,
-				COALESCE(r.is_read, 0)
+				COALESCE(r.is_read, 0),
+				COALESCE(lc.cnt, 0),
+				COALESCE(ul.liked, 0)
 			FROM articles a
 			JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
 			LEFT JOIN feeds f ON a.feed_url = f.feed_url
 			LEFT JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+			LEFT JOIN (SELECT feed_url, article_url, COUNT(*) as cnt FROM likes GROUP BY feed_url, article_url) lc
+				ON lc.feed_url = a.feed_url AND lc.article_url = a.url
+			LEFT JOIN (SELECT feed_url, article_url, 1 as liked FROM likes WHERE author_did = ?) ul
+				ON ul.feed_url = a.feed_url AND ul.article_url = a.url
 			WHERE (r.is_read = 0 OR r.is_read IS NULL)
 		`
-		args = []any{userDID, userDID}
+		args = []any{userDID, userDID, userDID}
 	}
 
 	query += ` ORDER BY a.published DESC LIMIT ? OFFSET ?`
@@ -157,7 +183,7 @@ func (db *DB) ListUnreadArticles(ctx context.Context, userDID, feedURL string, l
 		a := &Article{}
 		if err := rows.Scan(&a.ID, &a.FeedURL, &a.FeedTitle, &a.FeedFaviconURL, &a.GUID, &a.Title, &a.URL, &a.Author,
 			&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt,
-			&a.IsRead); err != nil {
+			&a.IsRead, &a.LikeCount, &a.HasLiked); err != nil {
 			return nil, err
 		}
 		articles = append(articles, a)
@@ -173,25 +199,37 @@ func (db *DB) ListReadArticles(ctx context.Context, userDID, feedURL string, lim
 		query = `
 			SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 				a.published, a.updated, a.fetched_at,
-				COALESCE(r.is_read, 0)
+				COALESCE(r.is_read, 0),
+				COALESCE(lc.cnt, 0),
+				COALESCE(ul.liked, 0)
 			FROM articles a
 			LEFT JOIN feeds f ON a.feed_url = f.feed_url
 			JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+			LEFT JOIN (SELECT feed_url, article_url, COUNT(*) as cnt FROM likes GROUP BY feed_url, article_url) lc
+				ON lc.feed_url = a.feed_url AND lc.article_url = a.url
+			LEFT JOIN (SELECT feed_url, article_url, 1 as liked FROM likes WHERE author_did = ?) ul
+				ON ul.feed_url = a.feed_url AND ul.article_url = a.url
 			WHERE r.is_read = 1 AND a.feed_url = ?
 		`
-		args = []any{userDID, feedURL}
+		args = []any{userDID, userDID, feedURL}
 	} else {
 		query = `
 			SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 				a.published, a.updated, a.fetched_at,
-				COALESCE(r.is_read, 0)
+				COALESCE(r.is_read, 0),
+				COALESCE(lc.cnt, 0),
+				COALESCE(ul.liked, 0)
 			FROM articles a
 			JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
 			LEFT JOIN feeds f ON a.feed_url = f.feed_url
 			JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+			LEFT JOIN (SELECT feed_url, article_url, COUNT(*) as cnt FROM likes GROUP BY feed_url, article_url) lc
+				ON lc.feed_url = a.feed_url AND lc.article_url = a.url
+			LEFT JOIN (SELECT feed_url, article_url, 1 as liked FROM likes WHERE author_did = ?) ul
+				ON ul.feed_url = a.feed_url AND ul.article_url = a.url
 			WHERE r.is_read = 1
 		`
-		args = []any{userDID, userDID}
+		args = []any{userDID, userDID, userDID}
 	}
 
 	query += ` ORDER BY a.published DESC LIMIT ? OFFSET ?`
@@ -208,7 +246,7 @@ func (db *DB) ListReadArticles(ctx context.Context, userDID, feedURL string, lim
 		a := &Article{}
 		if err := rows.Scan(&a.ID, &a.FeedURL, &a.FeedTitle, &a.FeedFaviconURL, &a.GUID, &a.Title, &a.URL, &a.Author,
 			&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt,
-			&a.IsRead); err != nil {
+			&a.IsRead, &a.LikeCount, &a.HasLiked); err != nil {
 			return nil, err
 		}
 		articles = append(articles, a)
@@ -354,16 +392,22 @@ func (db *DB) SearchArticles(ctx context.Context, userDID, query string, limit, 
 	rows, err := db.QueryContext(ctx, `
 		SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 			a.published, a.updated, a.fetched_at,
-			COALESCE(r.is_read, 0)
+			COALESCE(r.is_read, 0),
+			COALESCE(lc.cnt, 0),
+			COALESCE(ul.liked, 0)
 		FROM articles_fts ft
 		JOIN articles a ON a.id = ft.rowid
 		JOIN subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
 		LEFT JOIN feeds f ON a.feed_url = f.feed_url
 		LEFT JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+		LEFT JOIN (SELECT feed_url, article_url, COUNT(*) as cnt FROM likes GROUP BY feed_url, article_url) lc
+			ON lc.feed_url = a.feed_url AND lc.article_url = a.url
+		LEFT JOIN (SELECT feed_url, article_url, 1 as liked FROM likes WHERE author_did = ?) ul
+			ON ul.feed_url = a.feed_url AND ul.article_url = a.url
 		WHERE articles_fts MATCH ?
 		ORDER BY ft.rank
 		LIMIT ? OFFSET ?
-	`, userDID, userDID, columnQuery, limit, offset)
+	`, userDID, userDID, userDID, columnQuery, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +418,7 @@ func (db *DB) SearchArticles(ctx context.Context, userDID, query string, limit, 
 		a := &Article{}
 		if err := rows.Scan(&a.ID, &a.FeedURL, &a.FeedTitle, &a.FeedFaviconURL, &a.GUID, &a.Title, &a.URL, &a.Author,
 			&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt,
-			&a.IsRead); err != nil {
+			&a.IsRead, &a.LikeCount, &a.HasLiked); err != nil {
 			return nil, err
 		}
 		articles = append(articles, a)

@@ -25,7 +25,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	since := time.Now().AddDate(0, 0, -7).Format(time.RFC3339)
 	personalTrending, _ := s.db.ListTrendingArticlesForUser(r.Context(), user.DID, since, 5, 0)
-	globalTrending, _ := s.db.ListTrendingArticles(r.Context(), since, 10, 0)
+	globalTrending, _ := s.db.ListTrendingArticles(r.Context(), user.DID, since, 10, 0)
 
 	s.render(w, r, "dashboard.html", map[string]any{
 		"User":                   user,

@@ -22,7 +22,7 @@ func (s *Server) handleTrending(w http.ResponseWriter, r *http.Request) {
 	if scope == "for-me" {
 		trending, _ = s.db.ListTrendingArticlesForUser(r.Context(), user.DID, since, page.Limit()+1, page.Offset())
 	} else {
-		trending, _ = s.db.ListTrendingArticles(r.Context(), since, page.Limit()+1, page.Offset())
+		trending, _ = s.db.ListTrendingArticles(r.Context(), user.DID, since, page.Limit()+1, page.Offset())
 	}
 
 	totalFetched := len(trending)

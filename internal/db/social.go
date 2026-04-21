@@ -227,6 +227,7 @@ type TrendingItem struct {
 	FaviconURL      string
 	LikeCount       int
 	AnnotationCount int
+	HasLiked        bool
 }
 
 func (db *DB) ListTrendingArticlesForUser(ctx context.Context, userDID, since string, limit, offset int) ([]*TrendingItem, error) {
@@ -235,11 +236,13 @@ func (db *DB) ListTrendingArticlesForUser(ctx context.Context, userDID, since st
 		       COALESCE(ar.summary, ''), l.feed_url, COALESCE(f.title, ''),
 		       COALESCE(f.favicon_url, ''),
 		       COUNT(DISTINCT l.id) AS like_count,
-		       COUNT(DISTINCT a.id) AS annotation_count
+		       COUNT(DISTINCT a.id) AS annotation_count,
+		       COALESCE(MAX(CASE WHEN ul.id IS NOT NULL THEN 1 ELSE 0 END), 0)
 		FROM likes l
 		JOIN articles ar ON ar.url = l.article_url AND ar.feed_url = l.feed_url
 		LEFT JOIN feeds f ON f.feed_url = l.feed_url
 		LEFT JOIN annotations a ON a.feed_url = l.feed_url AND a.article_url = l.article_url AND a.created_at >= ?
+		LEFT JOIN likes ul ON ul.feed_url = l.feed_url AND ul.article_url = l.article_url AND ul.author_did = ?
 		WHERE l.created_at >= ?
 		  AND l.author_did IN (
 		    SELECT CASE WHEN us.user_a = ? THEN us.user_b ELSE us.user_a END
@@ -251,7 +254,7 @@ func (db *DB) ListTrendingArticlesForUser(ctx context.Context, userDID, since st
 		GROUP BY ar.id
 		ORDER BY like_count DESC, annotation_count DESC
 		LIMIT ? OFFSET ?
-	`, since, since, userDID, userDID, userDID, userDID, userDID, limit, offset)
+	`, since, userDID, since, userDID, userDID, userDID, userDID, userDID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +265,7 @@ func (db *DB) ListTrendingArticlesForUser(ctx context.Context, userDID, since st
 		item := &TrendingItem{}
 		if err := rows.Scan(&item.ArticleID, &item.Title, &item.URL, &item.Author,
 			&item.Summary, &item.FeedURL, &item.FeedTitle, &item.FaviconURL,
-			&item.LikeCount, &item.AnnotationCount); err != nil {
+			&item.LikeCount, &item.AnnotationCount, &item.HasLiked); err != nil {
 			return nil, err
 		}
 		results = append(results, item)
@@ -270,22 +273,24 @@ func (db *DB) ListTrendingArticlesForUser(ctx context.Context, userDID, since st
 	return results, rows.Err()
 }
 
-func (db *DB) ListTrendingArticles(ctx context.Context, since string, limit, offset int) ([]*TrendingItem, error) {
+func (db *DB) ListTrendingArticles(ctx context.Context, userDID, since string, limit, offset int) ([]*TrendingItem, error) {
 	rows, err := db.QueryContext(ctx, `
 		SELECT ar.id, ar.title, COALESCE(ar.url, ''), COALESCE(ar.author, ''),
 		       COALESCE(ar.summary, ''), l.feed_url, COALESCE(f.title, ''),
 		       COALESCE(f.favicon_url, ''),
 		       COUNT(DISTINCT l.id) AS like_count,
-		       COUNT(DISTINCT a.id) AS annotation_count
+		       COUNT(DISTINCT a.id) AS annotation_count,
+		       COALESCE(MAX(CASE WHEN ul.id IS NOT NULL THEN 1 ELSE 0 END), 0)
 		FROM likes l
 		JOIN articles ar ON ar.url = l.article_url AND ar.feed_url = l.feed_url
 		LEFT JOIN feeds f ON f.feed_url = l.feed_url
 		LEFT JOIN annotations a ON a.feed_url = l.feed_url AND a.article_url = l.article_url AND a.created_at >= ?
+		LEFT JOIN likes ul ON ul.feed_url = l.feed_url AND ul.article_url = l.article_url AND ul.author_did = ?
 		WHERE l.created_at >= ?
 		GROUP BY ar.id
 		ORDER BY like_count DESC, annotation_count DESC
 		LIMIT ? OFFSET ?
-	`, since, since, limit, offset)
+	`, since, userDID, since, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -296,7 +301,7 @@ func (db *DB) ListTrendingArticles(ctx context.Context, since string, limit, off
 		item := &TrendingItem{}
 		if err := rows.Scan(&item.ArticleID, &item.Title, &item.URL, &item.Author,
 			&item.Summary, &item.FeedURL, &item.FeedTitle, &item.FaviconURL,
-			&item.LikeCount, &item.AnnotationCount); err != nil {
+			&item.LikeCount, &item.AnnotationCount, &item.HasLiked); err != nil {
 			return nil, err
 		}
 		results = append(results, item)
@@ -309,11 +314,15 @@ func (db *DB) ListLikedArticles(ctx context.Context, userDID string, limit, offs
 		SELECT DISTINCT a.id, a.feed_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 			a.published, a.updated, a.fetched_at,
 			COALESCE(f.title, ''),
-			COALESCE(r.is_read, 0)
+			COALESCE(r.is_read, 0),
+			COALESCE(lc.cnt, 0),
+			1
 		FROM likes l
 		JOIN articles a ON a.url = l.article_url AND a.feed_url = l.feed_url
 		LEFT JOIN feeds f ON f.feed_url = a.feed_url
 		LEFT JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
+		LEFT JOIN (SELECT feed_url, article_url, COUNT(*) as cnt FROM likes GROUP BY feed_url, article_url) lc
+			ON lc.feed_url = a.feed_url AND lc.article_url = a.url
 		WHERE l.author_did = ?
 		ORDER BY l.created_at DESC
 		LIMIT ? OFFSET ?
@@ -328,7 +337,7 @@ func (db *DB) ListLikedArticles(ctx context.Context, userDID string, limit, offs
 		a := &Article{}
 		if err := rows.Scan(&a.ID, &a.FeedURL, &a.GUID, &a.Title, &a.URL, &a.Author,
 			&a.Summary, &a.Content, &a.Published, &a.Updated, &a.FetchedAt,
-			&a.FeedTitle, &a.IsRead); err != nil {
+			&a.FeedTitle, &a.IsRead, &a.LikeCount, &a.HasLiked); err != nil {
 			return nil, err
 		}
 		articles = append(articles, a)
