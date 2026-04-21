@@ -324,3 +324,22 @@ func TestSearchArticles_EmptyQuery(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, len(results), 0)
 }
+
+func TestSearchArticles_SpecialCharactersNoError(t *testing.T) {
+	ctx := context.Background()
+	db := setupTestDB(t)
+	userDID, _ := seedSearchData(t, ctx, db)
+
+	_, err := db.SearchArticles(ctx, userDID, "test.example.com/path?q=1&b=2", 10, 0)
+	assert.NilError(t, err)
+}
+
+func TestSearchArticles_OnlySpecialCharacters(t *testing.T) {
+	ctx := context.Background()
+	db := setupTestDB(t)
+	userDID, _ := seedSearchData(t, ctx, db)
+
+	results, err := db.SearchArticles(ctx, userDID, "...///:::!!!", 10, 0)
+	assert.NilError(t, err)
+	assert.Equal(t, len(results), 0)
+}

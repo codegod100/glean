@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"strings"
 	"time"
+	"unicode"
 )
 
 type Article struct {
@@ -295,8 +296,24 @@ func (db *DB) CountNewArticles(ctx context.Context, userDID string, since time.T
 	return count, err
 }
 
+func escapeFTS5(query string) string {
+	var b strings.Builder
+	b.Grow(len(query))
+	for _, r := range query {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsSpace(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 func (db *DB) SearchArticles(ctx context.Context, userDID, query string, limit, offset int) ([]*Article, error) {
 	if strings.TrimSpace(query) == "" {
+		return nil, nil
+	}
+
+	safeQuery := escapeFTS5(query)
+	if strings.TrimSpace(safeQuery) == "" {
 		return nil, nil
 	}
 
@@ -312,7 +329,7 @@ func (db *DB) SearchArticles(ctx context.Context, userDID, query string, limit, 
 		WHERE articles_fts MATCH ?
 		ORDER BY ft.rank
 		LIMIT ? OFFSET ?
-	`, userDID, userDID, query, limit, offset)
+	`, userDID, userDID, safeQuery, limit, offset)
 	if err != nil {
 		return nil, err
 	}
