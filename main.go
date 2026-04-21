@@ -26,7 +26,7 @@ func main() {
 	clusterInterval := flag.Duration("cluster-interval", envDuration("GLEAN_CLUSTER_INTERVAL", 6*time.Hour), "cluster recomputation interval")
 	flag.Parse()
 
-	atproto.InitIdentity(envOr("GLEAN_PLC_URL", ""))
+	atproto.InitIdentity(envOr("GLEAN_PLC_URL", "https://didplc.glean.at"))
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
