@@ -80,6 +80,24 @@ type atomFeed struct {
 	} `xml:"entry"`
 }
 
+type rdfFeed struct {
+	XMLName xml.Name `xml:"http://www.w3.org/1999/02/22-rdf-syntax-ns# RDF"`
+	Channel struct {
+		Title       string `xml:"title"`
+		Link        string `xml:"link"`
+		Description string `xml:"description"`
+	} `xml:"channel"`
+	Items []struct {
+		About       string `xml:"http://www.w3.org/1999/02/22-rdf-syntax-ns# about,attr"`
+		Title       string `xml:"title"`
+		Link        string `xml:"link"`
+		Description string `xml:"description"`
+		Content     string `xml:"http://purl.org/rss/1.0/modules/content/ encoded"`
+		Creator     string `xml:"http://purl.org/dc/elements/1.1/ creator"`
+		Date        string `xml:"http://purl.org/dc/elements/1.1/ date"`
+	} `xml:"item"`
+}
+
 type jsonFeed struct {
 	Version     string `json:"version"`
 	Title       string `json:"title"`
@@ -179,6 +197,13 @@ func parseXMLFeed(data []byte, feedURL string) (*ParseResult, error) {
 		}
 	}
 
+	var rdf rdfFeed
+	if err := makeXMLDecoder(data).Decode(&rdf); err == nil {
+		if rdf.XMLName.Local == "RDF" {
+			return convertRDF(&rdf, feedURL), nil
+		}
+	}
+
 	return nil, fmt.Errorf("unable to detect feed format")
 }
 
@@ -202,6 +227,40 @@ func convertRSS(rss *rssFeed, feedURL string) *ParseResult {
 			Summary:   item.Description,
 			Author:    item.Author,
 			Published: parseTime(item.PubDate),
+		}
+		if article.GUID == "" {
+			article.GUID = article.URL
+		}
+		result.Articles = append(result.Articles, article)
+	}
+
+	return result
+}
+
+func convertRDF(rdf *rdfFeed, feedURL string) *ParseResult {
+	result := &ParseResult{
+		Feed: Feed{
+			URL:         feedURL,
+			Title:       rdf.Channel.Title,
+			SiteURL:     rdf.Channel.Link,
+			Description: rdf.Channel.Description,
+			Type:        "rdf",
+		},
+	}
+
+	for _, item := range rdf.Items {
+		guid := item.About
+		if guid == "" {
+			guid = item.Link
+		}
+		article := Article{
+			GUID:      guid,
+			Title:     item.Title,
+			URL:       item.Link,
+			Content:   item.Content,
+			Summary:   item.Description,
+			Author:    item.Creator,
+			Published: parseTime(item.Date),
 		}
 		if article.GUID == "" {
 			article.GUID = article.URL
