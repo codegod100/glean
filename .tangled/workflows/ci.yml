@@ -17,8 +17,8 @@ dependencies:
     - gcc
 
 steps:
-  - name: "Build servmon"
-    command: "go build ./..."
+  - name: "Build glean"
+    command: "go build -tags fts5  ./..."
 
   - name: "Run tests"
-    command: "go test ./... -v"
+    command: "go test -tags fts5 ./... -v"
