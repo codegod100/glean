@@ -211,7 +211,7 @@
                                 <a href="/library" class="text-xs text-spot-secondary hover:text-spot-text transition">Library</a>
                             </div>
                         </div>
-                        <div class="flex items-center justify-between">
+                        <div class="flex flex-col gap-3">
                             <div class="flex items-center gap-4">
                                 <button onclick="toggleTheme()" class="text-xs text-spot-secondary hover:text-spot-text inline-flex gap-1.5 items-center transition">
                                     <svg class="w-3.5 h-3.5 theme-icon-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
@@ -219,9 +219,8 @@
                                     <span class="theme-text-dark">Light mode</span>
                                     <span class="theme-text-light hidden">Dark mode</span>
                                 </button>
-                                <button onclick="document.getElementById('shortcuts-dialog').showModal()" class="text-xs text-spot-secondary hover:text-spot-text transition">Shortcuts</button>
                             </div>
-                            <span class="text-xs text-spot-secondary">&copy; {{now.Format "2006"}} Glean &middot; Made in Europe &#127466;&#127482;</span>
+                            <span class="text-xs text-spot-secondary">&copy; {{now.Format "2006"}} <a href="https://bsky.app/profile/julien.rbrt.fr">julien.rbrt.fr</a> &middot; Made in Europe &#127466;&#127482;</span>
                         </div>
                     </div>
                 </div>
