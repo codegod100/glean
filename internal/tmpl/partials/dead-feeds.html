@@ -1,0 +1,34 @@
+{{define "dead-feeds.html"}}
+{{if .DeadFeeds}}
+<div id="dead-feeds" class="bg-spot-red/10 border border-spot-red/30 rounded-lg p-4 mb-6">
+    <h3 class="text-sm font-bold text-spot-red mb-2">Feeds with errors ({{len .DeadFeeds}})</h3>
+    <div class="space-y-2">
+        {{range .DeadFeeds}}
+        <div class="dead-feed-item flex items-start justify-between gap-3 text-sm flex-wrap">
+            <div class="min-w-0 flex-1">
+                <span class="text-spot-text truncate block">{{if .Title.Valid}}{{.Title.String}}{{else}}{{.FeedURL}}{{end}}</span>
+                <div class="flex items-center gap-2 mt-1 flex-wrap">
+                    <span class="text-spot-red text-xs">{{.ErrorCount}} errors</span>
+                    {{if .LastError.Valid}}<span class="text-spot-secondary text-xs truncate max-w-48" title="{{.LastError.String}}">{{.LastError.String}}</span>{{end}}
+                </div>
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+                <form hx-post="/feeds/retry" hx-target="#dead-feeds" hx-swap="outerHTML" class="inline">
+                    <input type="hidden" name="url" value="{{.FeedURL}}">
+                    <button type="submit" class="text-xs text-spot-secondary hover:text-spot-green transition font-bold uppercase">Retry</button>
+                </form>
+                <form hx-delete="/feeds/remove" hx-target="closest .dead-feed-item" hx-swap="outerHTML swap:0.3s"
+                      hx-confirm="Unsubscribe from this broken feed?" class="inline">
+                    {{csrfInput $.CSRFToken}}
+                    <input type="hidden" name="url" value="{{.FeedURL}}">
+                    <button type="submit" class="text-xs text-spot-secondary hover:text-spot-red transition font-bold uppercase">Unsubscribe</button>
+                </form>
+            </div>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{else}}
+<span></span>
+{{end}}
+{{end}}

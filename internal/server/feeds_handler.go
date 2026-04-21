@@ -322,6 +322,43 @@ func (s *Server) handleRefreshFeeds(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleRetryFeed(w http.ResponseWriter, r *http.Request) {
+	feedURL := r.FormValue("url")
+	if feedURL == "" {
+		http.Error(w, "url required", http.StatusBadRequest)
+		return
+	}
+
+	f, err := s.db.GetFeed(r.Context(), feedURL)
+	if err != nil {
+		http.Error(w, "feed not found", http.StatusNotFound)
+		return
+	}
+
+	ff := &feed.Feed{
+		URL:          f.FeedURL,
+		Title:        f.Title.String,
+		SiteURL:      f.SiteURL.String,
+		Description:  f.Description.String,
+		Type:         f.FeedType.String,
+		ETag:         f.Etag.String,
+		LastModified: f.LastModified.String,
+	}
+	s.scheduler.FetchFeed(r.Context(), ff)
+
+	user := currentUser(r)
+	deadFeeds, _ := s.db.ListDeadFeeds(r.Context(), user.DID, 7)
+	if len(deadFeeds) == 0 {
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(""))
+		return
+	}
+
+	s.render(w, r, "dead-feeds.html", map[string]any{
+		"DeadFeeds": deadFeeds,
+	})
+}
+
 func (s *Server) handleDiscoverFeedURL(w http.ResponseWriter, r *http.Request) {
 	siteURL := r.URL.Query().Get("url")
 	if siteURL == "" {

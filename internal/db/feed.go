@@ -77,7 +77,7 @@ func (db *DB) GetFeedsToFetch(ctx context.Context, olderThan time.Duration, limi
 			last_fetched_at, last_error, subscriber_count, etag, last_modified,
 			fetch_interval_minutes, next_fetch_at, consecutive_empty_fetches, error_count, favicon_url
 		FROM feeds
-		WHERE subscriber_count > 0 AND (last_fetched_at IS NULL OR last_fetched_at <= ?)
+		WHERE subscriber_count > 0 AND error_count < 25 AND (last_fetched_at IS NULL OR last_fetched_at <= ?)
 		ORDER BY last_fetched_at ASC NULLS FIRST
 		LIMIT ?
 	`, cutoff, limit)
