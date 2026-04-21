@@ -54,6 +54,24 @@ func (db *DB) GetUserByHandle(ctx context.Context, handle string) (*User, error)
 	return u, nil
 }
 
+func (db *DB) ListUserDIDs(ctx context.Context) (map[string]bool, error) {
+	rows, err := db.QueryContext(ctx, `SELECT did FROM users`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	dids := make(map[string]bool)
+	for rows.Next() {
+		var did string
+		if err := rows.Scan(&did); err != nil {
+			return nil, err
+		}
+		dids[did] = true
+	}
+	return dids, rows.Err()
+}
+
 func (db *DB) ListUsers(ctx context.Context) ([]*User, error) {
 	rows, err := db.QueryContext(ctx, `
 		SELECT did, handle, display_name, avatar_url, indexed_at, updated_at

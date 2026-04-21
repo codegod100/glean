@@ -17,6 +17,10 @@ func NewClient(api *atclient.APIClient) *Client {
 	return &Client{api: api}
 }
 
+func NewUnauthenticatedClient(pdsURL string) *Client {
+	return &Client{api: atclient.NewAPIClient(pdsURL)}
+}
+
 func (c *Client) CreateRecord(ctx context.Context, did, collection string, record any) (string, string, error) {
 	input := map[string]any{
 		"repo":       did,
