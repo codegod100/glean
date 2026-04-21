@@ -242,6 +242,32 @@ func TestComputeUserSimilarityForUser_WithFollowBoost(t *testing.T) {
 	assert.Assert(t, jaccard > 0.6, "follow boost should add 0.5 to subscription jaccard, got %f", jaccard)
 }
 
+func TestComputeUserSimilarityForUser_IncomingFollow(t *testing.T) {
+	ctx := context.Background()
+	database := setupClusterTestDB(t)
+	seedClusterData(t, ctx, database)
+
+	_, err := database.ExecContext(ctx, `INSERT INTO follows (user_did, target_did) VALUES (?, ?)`, "did:test:bob", "did:test:alice")
+	assert.NilError(t, err)
+
+	engine := NewEngine(database.DB, slog.Default())
+	assert.NilError(t, engine.ComputeUserSimilarity(ctx))
+
+	var jaccardBefore float64
+	assert.NilError(t, database.QueryRowContext(ctx,
+		`SELECT jaccard FROM user_similarity WHERE user_a = ? AND user_b = ?`,
+		"did:test:alice", "did:test:bob").Scan(&jaccardBefore))
+
+	assert.NilError(t, engine.ComputeUserSimilarityForUser(ctx, "did:test:alice"))
+
+	var jaccardAfter float64
+	assert.NilError(t, database.QueryRowContext(ctx,
+		`SELECT jaccard FROM user_similarity WHERE user_a = ? AND user_b = ?`,
+		"did:test:alice", "did:test:bob").Scan(&jaccardAfter))
+
+	assert.Assert(t, jaccardAfter > 0, "incoming follow boost should survive per-user recomputation, got %f", jaccardAfter)
+}
+
 func TestComputeRecommendationsForUser(t *testing.T) {
 	ctx := context.Background()
 	database := setupClusterTestDB(t)

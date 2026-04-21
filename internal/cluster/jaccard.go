@@ -606,18 +606,21 @@ func (e *Engine) ComputeUserSimilarityForUser(ctx context.Context, userDID strin
 	followQuery := fmt.Sprintf(`
 		INSERT INTO user_similarity (user_a, user_b, jaccard, common_feeds, common_likes, common_tags)
 		SELECT
-			MIN(?, f.target_did),
-			MAX(?, f.target_did),
+			MIN(?, peer_did),
+			MAX(?, peer_did),
 			%g,
 			0, 0, 0
-		FROM follows f
-		WHERE f.user_did = ? AND f.target_did != ?
-		GROUP BY MIN(?, f.target_did), MAX(?, f.target_did)
+		FROM (
+			SELECT target_did AS peer_did FROM follows WHERE user_did = ? AND target_did != ?
+			UNION
+			SELECT user_did AS peer_did FROM follows WHERE target_did = ? AND user_did != ?
+		)
+		GROUP BY MIN(?, peer_did), MAX(?, peer_did)
 		ON CONFLICT(user_a, user_b) DO UPDATE SET
 			jaccard = jaccard + %g
 	`, e.config.FollowBoost, e.config.FollowBoost)
 
-	if _, err := tx.ExecContext(ctx, followQuery, userDID, userDID, userDID, userDID, userDID, userDID); err != nil {
+	if _, err := tx.ExecContext(ctx, followQuery, userDID, userDID, userDID, userDID, userDID, userDID, userDID, userDID); err != nil {
 		return err
 	}
 
