@@ -19,9 +19,9 @@ func (db *DB) CreateUser(ctx context.Context, did, handle, displayName, avatarUR
 		INSERT INTO users (did, handle, display_name, avatar_url, updated_at)
 		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(did) DO UPDATE SET
-			handle = excluded.handle,
-			display_name = excluded.display_name,
-			avatar_url = excluded.avatar_url,
+			handle = COALESCE(NULLIF(excluded.handle, ''), users.handle),
+			display_name = COALESCE(NULLIF(excluded.display_name, ''), users.display_name),
+			avatar_url = COALESCE(NULLIF(excluded.avatar_url, ''), users.avatar_url),
 			updated_at = CURRENT_TIMESTAMP
 	`, did, handle, displayName, avatarURL)
 	if err != nil {

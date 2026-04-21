@@ -1,5 +1,5 @@
 {{define "feeds.html"}}
-<div class="flex items-center justify-between mb-2">
+<div class="flex items-center justify-between gap-3 mb-2 flex-wrap">
     <h1 class="text-2xl font-bold text-spot-text">Feeds <span class="text-base font-normal text-spot-secondary">({{.SubscriptionCount}})</span></h1>
     <div class="flex items-center gap-3">
         <button hx-post="/feeds/refresh" hx-target="#feed-list" hx-swap="innerHTML"
@@ -17,16 +17,16 @@
     <h3 class="text-sm font-bold text-spot-red mb-2">Feeds with errors ({{len .DeadFeeds}})</h3>
     <div class="space-y-2">
         {{range .DeadFeeds}}
-        <div class="dead-feed-item flex items-center justify-between text-sm">
-            <div class="min-w-0 flex-1 flex items-center gap-3">
-                <span class="text-spot-text truncate">{{if .Title.Valid}}{{.Title.String}}{{else}}{{.FeedURL}}{{end}}</span>
-                <div class="flex items-center gap-2 shrink-0">
+        <div class="dead-feed-item flex items-start justify-between gap-3 text-sm flex-wrap">
+            <div class="min-w-0 flex-1">
+                <span class="text-spot-text truncate block">{{if .Title.Valid}}{{.Title.String}}{{else}}{{.FeedURL}}{{end}}</span>
+                <div class="flex items-center gap-2 mt-1 flex-wrap">
                     <span class="text-spot-red text-xs">{{.ErrorCount}} errors</span>
                     {{if .LastError.Valid}}<span class="text-spot-secondary text-xs truncate max-w-48" title="{{.LastError.String}}">{{.LastError.String}}</span>{{end}}
                 </div>
             </div>
             <form hx-delete="/feeds/remove" hx-target="closest .dead-feed-item" hx-swap="outerHTML swap:0.3s"
-                  hx-confirm="Unsubscribe from this broken feed?" class="inline shrink-0 ml-3">
+                  hx-confirm="Unsubscribe from this broken feed?" class="inline shrink-0">
                 {{csrfInput $.CSRFToken}}
                 <input type="hidden" name="url" value="{{.FeedURL}}">
                 <button type="submit" class="text-xs text-spot-secondary hover:text-spot-red transition font-bold uppercase">Unsubscribe</button>
