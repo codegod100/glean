@@ -11,8 +11,8 @@ func (s *Server) handleTrending(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 
 	scope := r.URL.Query().Get("scope")
-	if scope != "all" {
-		scope = "for-me"
+	if scope != "for-me" {
+		scope = "all"
 	}
 
 	page := pageFromRequest(r, 25)

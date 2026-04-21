@@ -24,8 +24,8 @@
         <div class="flex items-center gap-2 shrink-0">
             <a href="/articles?status=all{{if .FeedURL}}&feed={{.FeedURL}}{{end}}"
                class="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-button transition
-                      {{if eq .Status ""}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
-                All
+                       {{if or (eq .Status "") (eq .Status "all")}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
+                 All
             </a>
             <a href="/articles?status=unread{{if .FeedURL}}&feed={{.FeedURL}}{{end}}"
                class="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-button transition
