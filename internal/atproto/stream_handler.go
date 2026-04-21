@@ -10,16 +10,16 @@ import (
 	"pkg.rbrt.fr/glean/internal/db"
 )
 
-type FirehoseDBHandler struct {
+type StreamDBHandler struct {
 	db     *db.DB
 	logger *slog.Logger
 }
 
-func NewFirehoseDBHandler(database *db.DB, logger *slog.Logger) *FirehoseDBHandler {
-	return &FirehoseDBHandler{db: database, logger: logger}
+func NewStreamDBHandler(database *db.DB, logger *slog.Logger) *StreamDBHandler {
+	return &StreamDBHandler{db: database, logger: logger}
 }
 
-func (h *FirehoseDBHandler) Handle(ctx context.Context, event *FirehoseEvent) error {
+func (h *StreamDBHandler) Handle(ctx context.Context, event *Event) error {
 	switch event.Collection {
 	case "at.glean.subscription":
 		return h.handleSubscription(ctx, event)
@@ -33,7 +33,7 @@ func (h *FirehoseDBHandler) Handle(ctx context.Context, event *FirehoseEvent) er
 	return nil
 }
 
-func (h *FirehoseDBHandler) handleSubscription(ctx context.Context, event *FirehoseEvent) error {
+func (h *StreamDBHandler) handleSubscription(ctx context.Context, event *Event) error {
 	switch event.Type {
 	case "create", "update":
 		var rec SubscriptionRecord
@@ -72,7 +72,7 @@ func (h *FirehoseDBHandler) handleSubscription(ctx context.Context, event *Fireh
 	return nil
 }
 
-func (h *FirehoseDBHandler) handleLike(ctx context.Context, event *FirehoseEvent) error {
+func (h *StreamDBHandler) handleLike(ctx context.Context, event *Event) error {
 	switch event.Type {
 	case "create":
 		var rec LikeRecord
@@ -104,7 +104,7 @@ func (h *FirehoseDBHandler) handleLike(ctx context.Context, event *FirehoseEvent
 	return nil
 }
 
-func (h *FirehoseDBHandler) handleAnnotation(ctx context.Context, event *FirehoseEvent) error {
+func (h *StreamDBHandler) handleAnnotation(ctx context.Context, event *Event) error {
 	switch event.Type {
 	case "create":
 		var rec AnnotationRecord
@@ -138,7 +138,7 @@ func (h *FirehoseDBHandler) handleAnnotation(ctx context.Context, event *Firehos
 	return nil
 }
 
-func (h *FirehoseDBHandler) handleFollow(ctx context.Context, event *FirehoseEvent) error {
+func (h *StreamDBHandler) handleFollow(ctx context.Context, event *Event) error {
 	switch event.Type {
 	case "create":
 		var rec FollowRecord

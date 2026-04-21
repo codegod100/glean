@@ -1,3 +1,5 @@
+// Lexicon record types are maintained by hand (no lexgen).
+// See lexicon_test.go for the test ensuring these stay in sync with lexicons/.
 package atproto
 
 import (

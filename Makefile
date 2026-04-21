@@ -1,3 +1,7 @@
+.PHONY: tools-install
+tools-install:
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+
 .PHONY: lint
 lint:
 	go vet ./...
@@ -5,9 +9,13 @@ lint:
 	test -z "$(shell gofmt -l ./...)"
 	golangci-lint run ./... --fix
 
-.PHONY: lint-install
-lint-install:
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+.PHONY: lex-lint
+lex-lint:
+	goat lex lint
+
+.PHONY: lex-parse
+lex-parse:
+	goat lex parse $(shell find lexicons -name '*.json' 2>/dev/null)
 
 .PHONY: dev
 dev: css

@@ -1,3 +1,14 @@
+// Sync implements per-user reconciliation using com.atproto.repo.listRecords.
+// This is a lighter alternative to full ATProto backfilling (which uses
+// com.atproto.sync.getRepo with revision tracking and event buffering).
+// The full approach is unnecessary here because:
+//   - we only sync known users (not the entire network)
+//   - the Jetstream consumer handles real-time events concurrently
+//   - all reconcile operations are idempotent
+//
+// Known trade-off: syncFollows atomically replaces all follows for a user.
+// A Jetstream follow event arriving mid-sync could be lost, but self-heals
+// on the next sync cycle or Jetstream event.
 package atproto
 
 import (
@@ -72,6 +83,9 @@ func (s *Sync) reconcileSubscription(ctx context.Context, userDID, uri, cid stri
 		return nil
 	}
 
+	f := &db.Feed{FeedURL: rec.FeedURL, Title: db.NullStr(rec.Title)}
+	_ = s.db.UpsertFeed(ctx, f)
+
 	existing, err := s.db.GetSubscription(ctx, userDID, rec.FeedURL)
 	if err == nil && existing != nil {
 		if !existing.URI.Valid || existing.URI.String == "" {
@@ -79,9 +93,6 @@ func (s *Sync) reconcileSubscription(ctx context.Context, userDID, uri, cid stri
 		}
 		return nil
 	}
-
-	f := &db.Feed{FeedURL: rec.FeedURL, Title: db.NullStr(rec.Title)}
-	_ = s.db.UpsertFeed(ctx, f)
 
 	return s.db.CreateSubscription(ctx, userDID, rec.FeedURL, rec.Title, rec.Category, uri, cid)
 }

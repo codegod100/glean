@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -26,8 +27,8 @@ import (
 	"pkg.rbrt.fr/glean/internal/metrics"
 	"pkg.rbrt.fr/glean/internal/sanitize"
 	"pkg.rbrt.fr/glean/internal/scraper"
-	"pkg.rbrt.fr/glean/static"
 	"pkg.rbrt.fr/glean/internal/tmpl"
+	"pkg.rbrt.fr/glean/static"
 )
 
 var oauthScopes = []string{"atproto", "transition:generic"}
@@ -256,14 +257,14 @@ func (s *Server) loadTemplates() {
 						return id
 					}
 				}
-				if strings.HasPrefix(u.Path, "/embed/") {
-					id := strings.TrimPrefix(u.Path, "/embed/")
+				if after, ok := strings.CutPrefix(u.Path, "/embed/"); ok {
+					id := after
 					if id != "" {
 						return id
 					}
 				}
-				if strings.HasPrefix(u.Path, "/shorts/") {
-					id := strings.TrimPrefix(u.Path, "/shorts/")
+				if after, ok := strings.CutPrefix(u.Path, "/shorts/"); ok {
+					id := after
 					if id != "" {
 						return id
 					}
@@ -277,18 +278,13 @@ func (s *Server) loadTemplates() {
 				return false
 			}
 			host := strings.ToLower(u.Hostname())
-			for _, h := range []string{
+			return slices.Contains([]string{
 				"www.youtube.com", "youtube.com", "m.youtube.com", "youtu.be",
 				"vimeo.com", "player.vimeo.com",
 				"open.spotify.com", "embed.spotify.com",
 				"w.soundcloud.com",
 				"bandcamp.com",
-			} {
-				if host == h {
-					return true
-				}
-			}
-			return false
+			}, host)
 		},
 		"sanitizeHTML": func(input string) template.HTML {
 			return template.HTML(sanitize.HTML(input))

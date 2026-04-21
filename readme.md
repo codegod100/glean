@@ -36,13 +36,13 @@ Then open `http://localhost:8080`.
 
 ## Configuration
 
-| Variable                   | Default              | What it does                                              |
-| -------------------------- | -------------------- | --------------------------------------------------------- |
-| `GLEAN_ADDR`               | `:8080`              | Listen address                                            |
-| `GLEAN_DB`                 | `glean.db`           | SQLite database path                                      |
-| `GLEAN_RELAY`              | `wss://bsky.network` | AT Relay WebSocket URL                                    |
-| `GLEAN_OAUTH_CLIENT_ID`    | _(empty)_            | OAuth client metadata URL (leave empty for localhost dev) |
-| `GLEAN_OAUTH_REDIRECT_URL` | _(empty)_            | OAuth redirect URL (leave empty for localhost dev)        |
+| Variable                   | Default                        | What it does                                              |
+| -------------------------- | ------------------------------ | --------------------------------------------------------- |
+| `GLEAN_ADDR`               | `:8080`                        | Listen address                                            |
+| `GLEAN_DB`                 | `glean.db`                     | SQLite database path                                      |
+| `GLEAN_JETSTREAM`          | `wss://jetstream2.fr.hose.cam` | Jetstream WebSocket URL                                   |
+| `GLEAN_OAUTH_CLIENT_ID`    | _(empty)_                      | OAuth client metadata URL (leave empty for localhost dev) |
+| `GLEAN_OAUTH_REDIRECT_URL` | _(empty)_                      | OAuth redirect URL (leave empty for localhost dev)        |
 
 For production:
 

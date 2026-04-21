@@ -21,7 +21,7 @@ import (
 func main() {
 	addr := flag.String("addr", envOr("GLEAN_ADDR", ":8080"), "listen address")
 	dbPath := flag.String("db", envOr("GLEAN_DB", "glean.db"), "database path")
-	relayURL := flag.String("relay", envOr("GLEAN_RELAY", "wss://bsky.network"), "AT Relay URL")
+	jetstreamURL := flag.String("jetstream", envOr("GLEAN_JETSTREAM", "wss://jetstream2.fr.hose.cam"), "Jetstream URL")
 	flag.Parse()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
@@ -44,8 +44,8 @@ func main() {
 	engine := cluster.NewEngine(database.DB, logger)
 	cron := cluster.NewCron(engine, 6*time.Hour, logger)
 
-	firehoseHandler := atproto.NewFirehoseDBHandler(database, logger)
-	firehose := atproto.NewFirehoseConsumer(*relayURL, firehoseHandler.Handle, logger)
+	handler := atproto.NewStreamDBHandler(database, logger)
+	jetstream := atproto.NewJetstreamConsumer(*jetstreamURL, handler.Handle, logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -64,8 +64,8 @@ func main() {
 		srv.PeriodicSync(ctx, 1*time.Hour)
 	}()
 	go func() {
-		if err := firehose.Start(ctx); err != nil && ctx.Err() == nil {
-			logger.Error("firehose error", "error", err)
+		if err := jetstream.Start(ctx); err != nil && ctx.Err() == nil {
+			logger.Error("jetstream error", "error", err)
 		}
 	}()
 

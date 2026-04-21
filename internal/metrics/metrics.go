@@ -22,19 +22,19 @@ var (
 		Help: "Total number of articles upserted",
 	})
 
-	FirehoseEvents = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "glean_firehose_events_total",
-		Help: "Total number of firehose events processed",
+	JetstreamEvents = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "glean_jetstream_events_total",
+		Help: "Total number of jetstream events processed",
 	}, []string{"collection", "action"})
 
-	FirehoseErrors = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "glean_firehose_errors_total",
-		Help: "Total number of firehose handler errors",
+	JetstreamErrors = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "glean_jetstream_errors_total",
+		Help: "Total number of jetstream handler errors",
 	})
 
-	FirehoseReconnects = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "glean_firehose_reconnects_total",
-		Help: "Number of firehose reconnections",
+	JetstreamReconnects = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "glean_jetstream_reconnects_total",
+		Help: "Number of jetstream reconnections",
 	})
 
 	HTTPRequests = promauto.NewCounterVec(prometheus.CounterOpts{
