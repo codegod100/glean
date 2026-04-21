@@ -248,7 +248,8 @@ func (db *DB) GetPeopleRecommendations(ctx context.Context, userDID string, limi
 			u.handle, u.display_name, u.avatar_url
 		FROM user_similarity us
 		JOIN users u ON u.did = CASE WHEN us.user_a = ? THEN us.user_b ELSE us.user_a END
-		WHERE us.user_a = ? OR us.user_b = ?
+		WHERE (us.user_a = ? OR us.user_b = ?)
+		  AND u.handle IS NOT NULL AND u.handle != ''
 		ORDER BY us.jaccard DESC
 		LIMIT %d
 	`, limit), userDID, userDID, userDID, userDID)
@@ -271,8 +272,8 @@ func (db *DB) GetPeopleRecommendations(ctx context.Context, userDID string, limi
 			"jaccard":      jaccard,
 			"common_feeds": commonFeeds,
 			"handle":       handle,
-			"display_name": displayName,
-			"avatar_url":   avatarURL,
+			"display_name": displayName.String,
+			"avatar_url":   avatarURL.String,
 		})
 	}
 	return results, rows.Err()
