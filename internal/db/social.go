@@ -33,7 +33,7 @@ type Like struct {
 
 func (db *DB) CreateAnnotation(ctx context.Context, a *Annotation) error {
 	_, err := db.ExecContext(ctx, `
-		INSERT INTO annotations (uri, author_did, feed_url, article_url, quote, note, tags, rating, created_at, cid)
+		INSERT OR IGNORE INTO annotations (uri, author_did, feed_url, article_url, quote, note, tags, rating, created_at, cid)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, a.URI, a.AuthorDID, a.FeedURL, a.ArticleURL, a.Quote, a.Note, a.Tags, a.Rating, a.CreatedAt, a.CID)
 	return err

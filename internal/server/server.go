@@ -204,6 +204,7 @@ func (s *Server) setupRoutes() {
 
 	s.router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(static.Files))))
 	s.router.Handle("/metrics", promhttp.Handler())
+	s.router.NotFound(s.handleNotFound)
 }
 
 func (s *Server) loadTemplates() {
@@ -430,6 +431,11 @@ func (s *Server) runSyncAll(ctx context.Context) {
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.router.ServeHTTP(w, r)
+}
+
+func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotFound)
+	s.render(w, r, "404.html", nil)
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data map[string]any) {

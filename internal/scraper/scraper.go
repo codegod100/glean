@@ -245,6 +245,15 @@ func renderNode(n *html.Node) string {
 			return
 		}
 		if node.Type == html.ElementNode {
+			if node.Data == "a" && isDeadLink(node) {
+				for c := node.FirstChild; c != nil; c = c.NextSibling {
+					write(c)
+				}
+				return
+			}
+			if node.Data == "img" && isDeadImage(node) {
+				return
+			}
 			buf.WriteString("<")
 			buf.WriteString(node.Data)
 			for _, attr := range node.Attr {
@@ -278,4 +287,32 @@ func isVoidElement(tag string) bool {
 		return true
 	}
 	return false
+}
+
+func isDeadLink(n *html.Node) bool {
+	for _, attr := range n.Attr {
+		if attr.Key != "href" {
+			continue
+		}
+		href := strings.TrimSpace(attr.Val)
+		if strings.HasPrefix(href, "http://") || strings.HasPrefix(href, "https://") {
+			return false
+		}
+		return true
+	}
+	return true
+}
+
+func isDeadImage(n *html.Node) bool {
+	for _, attr := range n.Attr {
+		if attr.Key != "src" {
+			continue
+		}
+		src := strings.TrimSpace(attr.Val)
+		if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
+			return false
+		}
+		return true
+	}
+	return true
 }

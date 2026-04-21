@@ -132,7 +132,7 @@ func TestScrape_FallsBackToArchive(t *testing.T) {
 func TestRenderNode_VoidElements(t *testing.T) {
 	html := `<!DOCTYPE html><html><body>
 		<article>
-			<p>Text with <br>break and <img src="test.jpg"> image</p>
+			<p>Text with <br>break and <img src="https://example.com/test.jpg"> image</p>
 		</article>
 	</body></html>`
 
@@ -141,4 +141,44 @@ func TestRenderNode_VoidElements(t *testing.T) {
 	assert.Assert(t, strings.Contains(content, "<br>"))
 	assert.Assert(t, strings.Contains(content, "<img"))
 	assert.Assert(t, !strings.Contains(content, "</br>"))
+}
+
+func TestRenderNode_StripsDeadLinks(t *testing.T) {
+	html := `<!DOCTYPE html><html><body>
+		<article>
+			<p>Read <a href="/">home</a> and <a href="/about">about</a> and <a>no href</a> and <a href="#section">jump</a> and <a href="javascript:void(0)">click</a> and <a href="mailto:test@example.com">email</a> and <a href="https://example.com/article">real link</a> and <a href="http://example.com/page">http link</a>.</p>
+		</article>
+	</body></html>`
+
+	content, err := extractContent(strings.NewReader(html))
+	assert.NilError(t, err)
+	assert.Assert(t, strings.Contains(content, "home"))
+	assert.Assert(t, strings.Contains(content, "about"))
+	assert.Assert(t, strings.Contains(content, "no href"))
+	assert.Assert(t, strings.Contains(content, "jump"))
+	assert.Assert(t, strings.Contains(content, "click"))
+	assert.Assert(t, strings.Contains(content, "email"))
+	assert.Assert(t, strings.Contains(content, "real link"))
+	assert.Assert(t, strings.Contains(content, "http link"))
+	assert.Assert(t, !strings.Contains(content, `href="/"`))
+	assert.Assert(t, !strings.Contains(content, `href="/about"`))
+	assert.Assert(t, !strings.Contains(content, `href="#section"`))
+	assert.Assert(t, !strings.Contains(content, `href="javascript:`))
+	assert.Assert(t, !strings.Contains(content, `href="mailto:`))
+	assert.Assert(t, strings.Contains(content, `<a href="https://example.com/article">real link</a>`))
+	assert.Assert(t, strings.Contains(content, `<a href="http://example.com/page">http link</a>`))
+}
+
+func TestRenderNode_StripsDeadImages(t *testing.T) {
+	html := `<!DOCTYPE html><html><body>
+		<article>
+			<p>Text <img src="/images/photo.jpg"> more text <img src="https://example.com/img.png"> end <img src="data:image/png;base64,abc"> <img> </p>
+		</article>
+	</body></html>`
+
+	content, err := extractContent(strings.NewReader(html))
+	assert.NilError(t, err)
+	assert.Assert(t, !strings.Contains(content, `/images/photo.jpg`))
+	assert.Assert(t, !strings.Contains(content, `data:image`))
+	assert.Assert(t, strings.Contains(content, `<img src="https://example.com/img.png"`))
 }
