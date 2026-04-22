@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -22,7 +23,7 @@ var (
 	relIconRe  = regexp.MustCompile(`rel="[^"]*icon[^"]*"`)
 	baseHrefRe = regexp.MustCompile(`<base[^>]+href="([^"]*)"`)
 
-	faviconPaths  = []string{"/favicon.ico", "/favicon.png", "/apple-touch-icon.png"}
+	faviconPaths   = []string{"/favicon.ico", "/favicon.png", "/apple-touch-icon.png"}
 	discoverClient = &http.Client{Timeout: 15 * time.Second}
 )
 
@@ -45,9 +46,13 @@ func Discover(ctx context.Context, siteURL string) (*DiscoveryResult, error) {
 	}, nil
 }
 
+func cleanFavicon(s string) string {
+	return strings.TrimRight(s, "/")
+}
+
 func ResolveFavicon(ctx context.Context, feedURL, siteURL, parsedFavicon string) string {
 	if parsedFavicon != "" {
-		return parsedFavicon
+		return cleanFavicon(parsedFavicon)
 	}
 	target := siteURL
 	if target == "" {
@@ -57,7 +62,7 @@ func ResolveFavicon(ctx context.Context, feedURL, siteURL, parsedFavicon string)
 	if err != nil {
 		return ""
 	}
-	return result.Favicon
+	return cleanFavicon(result.Favicon)
 }
 
 func findFeedURLs(base *url.URL, links []string) []string {
@@ -87,7 +92,7 @@ func findFavicon(ctx context.Context, base *url.URL, links []string) string {
 			continue
 		}
 		if u, err := base.Parse(href); err == nil {
-			return u.String()
+			return cleanFavicon(u.String())
 		}
 	}
 
@@ -109,7 +114,7 @@ func findFavicon(ctx context.Context, base *url.URL, links []string) string {
 		}
 		resp.Body.Close()
 		if resp.StatusCode == http.StatusOK {
-			return resolved.String()
+			return cleanFavicon(resolved.String())
 		}
 	}
 	return ""

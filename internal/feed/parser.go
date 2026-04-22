@@ -151,7 +151,7 @@ func parseJSONFeed(data []byte, feedURL string) (*ParseResult, error) {
 			Title:       jf.Title,
 			SiteURL:     jf.HomePageURL,
 			Description: jf.Description,
-			FaviconURL:  jf.Favicon,
+			FaviconURL:  cleanFavicon(jf.Favicon),
 			Type:        "json",
 		},
 	}
@@ -222,7 +222,7 @@ func convertRSS(rss *rssFeed, feedURL string) *ParseResult {
 			Title:       rss.Channel.Title,
 			SiteURL:     rss.Channel.Link,
 			Description: rss.Channel.Description,
-			FaviconURL:  rss.Channel.Image.URL,
+			FaviconURL:  cleanFavicon(rss.Channel.Image.URL),
 			Type:        "rss",
 		},
 	}
@@ -292,7 +292,7 @@ func convertAtom(atom *atomFeed, feedURL string) *ParseResult {
 			Title:       atom.Title,
 			SiteURL:     pickAtomLink(atom.Link),
 			Description: atom.Subtitle,
-			FaviconURL:  favicon,
+			FaviconURL:  cleanFavicon(favicon),
 			Type:        "atom",
 		},
 	}
