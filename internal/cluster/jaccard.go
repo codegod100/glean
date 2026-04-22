@@ -9,20 +9,18 @@ import (
 )
 
 type Config struct {
-	SimilarityThreshold float64
-	FollowBoost         float64
-	LikesWeight         float64
-	TagsWeight          float64
-	DescriptionWeight   float64
+	FollowBoost       float64
+	LikesWeight       float64
+	TagsWeight        float64
+	DescriptionWeight float64
 }
 
 func DefaultConfig() Config {
 	return Config{
-		SimilarityThreshold: 0.2,
-		FollowBoost:         0.5,
-		LikesWeight:         0.3,
-		TagsWeight:          0.2,
-		DescriptionWeight:   0.15,
+		FollowBoost:       0.5,
+		LikesWeight:       0.3,
+		TagsWeight:        0.2,
+		DescriptionWeight: 0.15,
 	}
 }
 
@@ -35,48 +33,6 @@ type Engine struct {
 
 func NewEngine(db *sql.DB, logger *slog.Logger) *Engine {
 	return &Engine{db: db, logger: logger, config: DefaultConfig()}
-}
-
-func (e *Engine) ComputeArticleRecommendations(ctx context.Context) error {
-	tx, err := e.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	if _, err := tx.ExecContext(ctx, `DELETE FROM user_article_recommendations`); err != nil {
-		return err
-	}
-
-	query := fmt.Sprintf(`
-		INSERT INTO user_article_recommendations (user_did, feed_url, article_url, score)
-		SELECT targets.target, l.feed_url, l.article_url, SUM(targets.jaccard) AS score
-		FROM (
-			SELECT us.user_a AS target, us.user_b AS peer, us.jaccard
-			FROM user_similarity us
-			WHERE us.jaccard > %g
-			UNION ALL
-			SELECT us.user_b AS target, us.user_a AS peer, us.jaccard
-			FROM user_similarity us
-			WHERE us.jaccard > %g
-		) targets
-		JOIN likes l ON l.author_did = targets.peer
-		WHERE NOT EXISTS (
-			SELECT 1 FROM subscriptions sub WHERE sub.user_did = targets.target AND sub.feed_url = l.feed_url
-		)
-		AND NOT EXISTS (
-			SELECT 1 FROM likes ul WHERE ul.author_did = targets.target AND ul.feed_url = l.feed_url AND ul.article_url = l.article_url
-		)
-		GROUP BY targets.target, l.feed_url, l.article_url
-		ORDER BY score DESC
-	`, e.config.SimilarityThreshold, e.config.SimilarityThreshold)
-
-	if _, err := tx.ExecContext(ctx, query); err != nil {
-		return err
-	}
-
-	e.logger.Info("article recommendations computed")
-	return tx.Commit()
 }
 
 func (e *Engine) ComputeFeedSimilarity(ctx context.Context) error {
@@ -260,10 +216,15 @@ func (e *Engine) ComputeUserSimilarity(ctx context.Context) error {
 	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO _likes_overlap (user_a, user_b, common)
-		SELECT l1.author_did, l2.author_did, COUNT(*)
+		SELECT l1.author_did, l2.author_did,
+			CAST(SUM(
+				EXP(-0.023 * CAST(julianday('now') - julianday(l1.created_at) AS REAL))
+			  * EXP(-0.023 * CAST(julianday('now') - julianday(l2.created_at) AS REAL))
+			) AS INTEGER)
 		FROM likes l1
 		JOIN likes l2 ON l1.feed_url = l2.feed_url AND l1.article_url = l2.article_url
 			AND l1.author_did < l2.author_did
+		WHERE l1.created_at IS NOT NULL AND l2.created_at IS NOT NULL
 		GROUP BY l1.author_did, l2.author_did
 	`); err != nil {
 		return err
@@ -399,50 +360,4 @@ func (e *Engine) ComputeUserSimilarity(ctx context.Context) error {
 
 	e.logger.Info("user similarity computed")
 	return tx.Commit()
-}
-
-func (e *Engine) ComputeRecommendations(ctx context.Context) error {
-	tx, err := e.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	if _, err := tx.ExecContext(ctx, `DELETE FROM user_feed_recommendations`); err != nil {
-		return err
-	}
-
-	recQuery := fmt.Sprintf(`
-		INSERT INTO user_feed_recommendations (user_did, feed_url, score)
-		SELECT target, feed_url, SUM(jaccard) AS score
-		FROM (
-			SELECT us.user_a AS target, s.feed_url, us.jaccard
-			FROM user_similarity us
-			JOIN subscriptions s ON s.user_did = us.user_b
-			WHERE us.jaccard > %g
-			AND s.feed_url NOT IN (SELECT feed_url FROM subscriptions WHERE user_did = us.user_a)
-
-			UNION ALL
-
-			SELECT us.user_b AS target, s.feed_url, us.jaccard
-			FROM user_similarity us
-			JOIN subscriptions s ON s.user_did = us.user_a
-			WHERE us.jaccard > %g
-			AND s.feed_url NOT IN (SELECT feed_url FROM subscriptions WHERE user_did = us.user_b)
-		)
-		GROUP BY target, feed_url
-		ORDER BY score DESC
-	`, e.config.SimilarityThreshold, e.config.SimilarityThreshold)
-
-	if _, err := tx.ExecContext(ctx, recQuery); err != nil {
-		return err
-	}
-
-	e.logger.Info("feed recommendations computed")
-
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-
-	return e.ComputeArticleRecommendations(ctx)
 }

@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 
@@ -64,6 +65,18 @@ func seedClusterData(t *testing.T, ctx context.Context, database *db.DB) {
 	}
 }
 
+func seedFollowData(t *testing.T, ctx context.Context, database *db.DB) {
+	t.Helper()
+	follows := []struct{ user, target string }{
+		{"did:test:alice", "did:test:bob"},
+		{"did:test:bob", "did:test:carol"},
+	}
+	for _, f := range follows {
+		_, err := database.ExecContext(ctx, `INSERT OR IGNORE INTO follows (user_did, target_did) VALUES (?, ?)`, f.user, f.target)
+		assert.NilError(t, err)
+	}
+}
+
 func TestComputeFeedSimilarity(t *testing.T) {
 	ctx := context.Background()
 	database := setupClusterTestDB(t)
@@ -94,7 +107,7 @@ func TestComputeUserSimilarity(t *testing.T) {
 	assert.Assert(t, count > 0, "expected user similarity pairs")
 }
 
-func TestComputeRecommendations_GeneratesFeedRecsForNewUser(t *testing.T) {
+func TestOnDemandFeedRecommendations(t *testing.T) {
 	ctx := context.Background()
 	database := setupClusterTestDB(t)
 	seedClusterData(t, ctx, database)
@@ -102,7 +115,6 @@ func TestComputeRecommendations_GeneratesFeedRecsForNewUser(t *testing.T) {
 	engine := NewEngine(database.DB, slog.Default())
 	assert.NilError(t, engine.ComputeFeedSimilarity(ctx))
 	assert.NilError(t, engine.ComputeUserSimilarity(ctx))
-	assert.NilError(t, engine.ComputeRecommendations(ctx))
 
 	recs, err := engine.GetFeedRecommendations(ctx, "did:test:carol", 10)
 	assert.NilError(t, err)
@@ -117,7 +129,7 @@ func TestComputeRecommendations_GeneratesFeedRecsForNewUser(t *testing.T) {
 	assert.Assert(t, found, "carol should be recommended feeds she doesn't subscribe to")
 }
 
-func TestComputeRecommendations_NoSelfRecommendations(t *testing.T) {
+func TestNoSelfRecommendations(t *testing.T) {
 	ctx := context.Background()
 	database := setupClusterTestDB(t)
 	seedClusterData(t, ctx, database)
@@ -125,7 +137,6 @@ func TestComputeRecommendations_NoSelfRecommendations(t *testing.T) {
 	engine := NewEngine(database.DB, slog.Default())
 	assert.NilError(t, engine.ComputeFeedSimilarity(ctx))
 	assert.NilError(t, engine.ComputeUserSimilarity(ctx))
-	assert.NilError(t, engine.ComputeRecommendations(ctx))
 
 	recs, err := engine.GetFeedRecommendations(ctx, "did:test:alice", 10)
 	assert.NilError(t, err)
@@ -141,65 +152,341 @@ func TestComputeRecommendations_NoSelfRecommendations(t *testing.T) {
 	}
 }
 
-func TestLikesBasedSimilarity(t *testing.T) {
+func TestDismissedFeedsExcluded(t *testing.T) {
 	ctx := context.Background()
 	database := setupClusterTestDB(t)
 	seedClusterData(t, ctx, database)
 
-	_, err := database.ExecContext(ctx, `INSERT INTO articles (feed_url, guid, title, url) VALUES (?, ?, ?, ?)`,
-		"https://a.com/feed", "art1", "Article 1", "https://a.com/art1")
-	assert.NilError(t, err)
-	_, err = database.ExecContext(ctx, `INSERT INTO articles (feed_url, guid, title, url) VALUES (?, ?, ?, ?)`,
-		"https://a.com/feed", "art2", "Article 2", "https://a.com/art2")
-	assert.NilError(t, err)
-
-	_, err = database.ExecContext(ctx, `INSERT INTO likes (uri, author_did, feed_url, article_url, created_at) VALUES (?, ?, ?, ?, datetime('now'))`,
-		"at://alice/like/1", "did:test:alice", "https://a.com/feed", "https://a.com/art1")
-	assert.NilError(t, err)
-	_, err = database.ExecContext(ctx, `INSERT INTO likes (uri, author_did, feed_url, article_url, created_at) VALUES (?, ?, ?, ?, datetime('now'))`,
-		"at://alice/like/2", "did:test:alice", "https://a.com/feed", "https://a.com/art2")
-	assert.NilError(t, err)
-	_, err = database.ExecContext(ctx, `INSERT INTO likes (uri, author_did, feed_url, article_url, created_at) VALUES (?, ?, ?, ?, datetime('now'))`,
-		"at://carol/like/1", "did:test:carol", "https://a.com/feed", "https://a.com/art1")
-	assert.NilError(t, err)
-
 	engine := NewEngine(database.DB, slog.Default())
+	assert.NilError(t, engine.ComputeFeedSimilarity(ctx))
 	assert.NilError(t, engine.ComputeUserSimilarity(ctx))
 
-	var jaccard float64
-	var commonLikes int
-	assert.NilError(t, database.QueryRowContext(ctx,
-		`SELECT jaccard, common_likes FROM user_similarity WHERE user_a = ? AND user_b = ?`,
-		"did:test:alice", "did:test:carol").Scan(&jaccard, &commonLikes))
-	assert.Equal(t, commonLikes, 1, "alice and carol share 1 liked article")
-	assert.Assert(t, jaccard > 0, "likes should contribute to similarity, got %f", jaccard)
+	assert.NilError(t, engine.DismissFeed(ctx, "did:test:carol", "https://a.com/feed", "not_interested"))
+
+	recs, err := engine.GetFeedRecommendations(ctx, "did:test:carol", 10)
+	assert.NilError(t, err)
+
+	for _, r := range recs {
+		assert.Assert(t, r.FeedURL != "https://a.com/feed",
+			"dismissed feed should not appear in recommendations")
+	}
 }
 
-func TestTagsBasedSimilarity(t *testing.T) {
+func TestIsFeedDismissed(t *testing.T) {
 	ctx := context.Background()
 	database := setupClusterTestDB(t)
 	seedClusterData(t, ctx, database)
 
-	_, err := database.ExecContext(ctx, `INSERT INTO annotations (uri, author_did, feed_url, article_url, tags, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))`,
-		"at://alice/ann/1", "did:test:alice", "https://a.com/feed", "https://a.com/art1", "go,programming")
+	engine := NewEngine(database.DB, slog.Default())
+
+	dismissed, err := engine.IsFeedDismissed(ctx, "did:test:alice", "https://a.com/feed")
 	assert.NilError(t, err)
-	_, err = database.ExecContext(ctx, `INSERT INTO annotations (uri, author_did, feed_url, article_url, tags, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))`,
-		"at://alice/ann/2", "did:test:alice", "https://a.com/feed", "https://a.com/art2", "rust,programming")
+	assert.Assert(t, !dismissed, "feed should not be dismissed initially")
+
+	assert.NilError(t, engine.DismissFeed(ctx, "did:test:alice", "https://a.com/feed", "not_interested"))
+
+	dismissed, err = engine.IsFeedDismissed(ctx, "did:test:alice", "https://a.com/feed")
 	assert.NilError(t, err)
-	_, err = database.ExecContext(ctx, `INSERT INTO annotations (uri, author_did, feed_url, article_url, tags, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))`,
-		"at://carol/ann/1", "did:test:carol", "https://c.com/feed", "https://c.com/art1", "go,web")
+	assert.Assert(t, dismissed, "feed should be dismissed after dismiss call")
+}
+
+func TestRecordImpressions(t *testing.T) {
+	ctx := context.Background()
+	database := setupClusterTestDB(t)
+	seedClusterData(t, ctx, database)
+
+	engine := NewEngine(database.DB, slog.Default())
+
+	impressions := []Impression{
+		{TargetType: "feed", TargetID: "https://a.com/feed"},
+		{TargetType: "feed", TargetID: "https://b.com/feed"},
+	}
+	assert.NilError(t, engine.RecordImpressions(ctx, "did:test:alice", impressions))
+
+	var count int
+	assert.NilError(t, database.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM recommendation_impressions WHERE user_did = 'did:test:alice'`).Scan(&count))
+	assert.Equal(t, count, 2)
+
+	assert.NilError(t, engine.RecordImpressions(ctx, "did:test:alice", impressions))
+
+	var shownCount int
+	assert.NilError(t, database.QueryRowContext(ctx,
+		`SELECT shown_count FROM recommendation_impressions WHERE user_did = 'did:test:alice' AND target_id = 'https://a.com/feed'`).Scan(&shownCount))
+	assert.Equal(t, shownCount, 2, "shown_count should increment on repeated impression")
+}
+
+func TestMarkImpressionActed(t *testing.T) {
+	ctx := context.Background()
+	database := setupClusterTestDB(t)
+	seedClusterData(t, ctx, database)
+
+	engine := NewEngine(database.DB, slog.Default())
+
+	impressions := []Impression{{TargetType: "feed", TargetID: "https://a.com/feed"}}
+	assert.NilError(t, engine.RecordImpressions(ctx, "did:test:alice", impressions))
+
+	assert.NilError(t, engine.MarkImpressionActed(ctx, "did:test:alice", "feed", "https://a.com/feed"))
+
+	var acted bool
+	assert.NilError(t, database.QueryRowContext(ctx,
+		`SELECT acted FROM recommendation_impressions WHERE user_did = 'did:test:alice' AND target_id = 'https://a.com/feed'`).Scan(&acted))
+	assert.Assert(t, acted, "impression should be marked as acted")
+}
+
+func TestComputeFollowDistances(t *testing.T) {
+	ctx := context.Background()
+	database := setupClusterTestDB(t)
+	seedClusterData(t, ctx, database)
+	seedFollowData(t, ctx, database)
+
+	engine := NewEngine(database.DB, slog.Default())
+	assert.NilError(t, engine.ComputeFollowDistances(ctx))
+
+	var d1, d2 int
+	assert.NilError(t, database.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM follow_distances WHERE distance = 1`).Scan(&d1))
+	assert.NilError(t, database.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM follow_distances WHERE distance = 2`).Scan(&d2))
+	assert.Assert(t, d1 >= 2, "expected at least 2 direct follow distances")
+	assert.Assert(t, d2 >= 1, "expected at least 1 two-hop distance (alice -> bob -> carol)")
+
+	var dist int
+	assert.NilError(t, database.QueryRowContext(ctx,
+		`SELECT distance FROM follow_distances WHERE user_a = 'did:test:alice' AND user_b = 'did:test:carol'`).Scan(&dist))
+	assert.Equal(t, dist, 2, "alice should be 2 hops from carol")
+}
+
+func TestAutoDismissStale(t *testing.T) {
+	ctx := context.Background()
+	database := setupClusterTestDB(t)
+	seedClusterData(t, ctx, database)
+
+	engine := NewEngine(database.DB, slog.Default())
+
+	_, err := database.ExecContext(ctx, `
+		INSERT INTO recommendation_impressions (user_did, target_type, target_id, first_shown_at, last_shown_at, shown_count, acted)
+		VALUES ('did:test:alice', 'feed', 'https://stale.com/feed', datetime('now', '-31 days'), datetime('now'), 20, 0)
+	`)
 	assert.NilError(t, err)
+
+	assert.NilError(t, engine.AutoDismissStale(ctx, 15, 30))
+
+	dismissed, err := engine.IsFeedDismissed(ctx, "did:test:alice", "https://stale.com/feed")
+	assert.NilError(t, err)
+	assert.Assert(t, dismissed, "stale recommendation should be auto-dismissed")
+}
+
+func TestAutoDismissStale_DoesNotDismissRecent(t *testing.T) {
+	ctx := context.Background()
+	database := setupClusterTestDB(t)
+	seedClusterData(t, ctx, database)
+
+	engine := NewEngine(database.DB, slog.Default())
+
+	_, err := database.ExecContext(ctx, `
+		INSERT INTO recommendation_impressions (user_did, target_type, target_id, first_shown_at, last_shown_at, shown_count, acted)
+		VALUES ('did:test:alice', 'feed', 'https://recent.com/feed', datetime('now'), datetime('now'), 5, 0)
+	`)
+	assert.NilError(t, err)
+
+	assert.NilError(t, engine.AutoDismissStale(ctx, 15, 30))
+
+	dismissed, err := engine.IsFeedDismissed(ctx, "did:test:alice", "https://recent.com/feed")
+	assert.NilError(t, err)
+	assert.Assert(t, !dismissed, "recent impression should not be auto-dismissed")
+}
+
+func TestAutoDismissStale_DoesNotDismissActed(t *testing.T) {
+	ctx := context.Background()
+	database := setupClusterTestDB(t)
+	seedClusterData(t, ctx, database)
+
+	engine := NewEngine(database.DB, slog.Default())
+
+	_, err := database.ExecContext(ctx, `
+		INSERT INTO recommendation_impressions (user_did, target_type, target_id, first_shown_at, last_shown_at, shown_count, acted)
+		VALUES ('did:test:alice', 'feed', 'https://acted.com/feed', datetime('now', '-31 days'), datetime('now'), 20, 1)
+	`)
+	assert.NilError(t, err)
+
+	assert.NilError(t, engine.AutoDismissStale(ctx, 15, 30))
+
+	dismissed, err := engine.IsFeedDismissed(ctx, "did:test:alice", "https://acted.com/feed")
+	assert.NilError(t, err)
+	assert.Assert(t, !dismissed, "acted recommendation should not be auto-dismissed")
+}
+
+func TestDiversityFiltering(t *testing.T) {
+	candidates := []*FeedRecommendation{
+		{FeedURL: "https://a.com/1", SiteURL: "https://a.com", Score: 1.0},
+		{FeedURL: "https://a.com/2", SiteURL: "https://a.com", Score: 0.9},
+		{FeedURL: "https://a.com/3", SiteURL: "https://a.com", Score: 0.8},
+		{FeedURL: "https://b.com/1", SiteURL: "https://b.com", Score: 0.7},
+		{FeedURL: "https://b.com/2", SiteURL: "https://b.com", Score: 0.6},
+		{FeedURL: "https://c.com/1", SiteURL: "https://c.com", Score: 0.5},
+	}
+
+	result := ApplyDiversity(candidates, 6)
+
+	aCount := 0
+	bCount := 0
+	cCount := 0
+	for _, r := range result {
+		switch extractDomain(r.SiteURL) {
+		case "a.com":
+			aCount++
+		case "b.com":
+			bCount++
+		case "c.com":
+			cCount++
+		}
+	}
+	assert.Assert(t, aCount <= maxPerDomain, "should limit feeds from same domain")
+	assert.Assert(t, len(result) <= 6, "should respect topN limit")
+	assert.Assert(t, cCount >= 1, "should include feeds from different domains")
+}
+
+func TestDiversityFiltering_EmptySiteURL(t *testing.T) {
+	candidates := []*FeedRecommendation{
+		{FeedURL: "https://a.com/1", SiteURL: "", Score: 1.0},
+		{FeedURL: "https://b.com/1", SiteURL: "", Score: 0.9},
+	}
+	result := ApplyDiversity(candidates, 5)
+	assert.Equal(t, len(result), 2, "feeds without site_url should not be filtered out")
+}
+
+func TestSignalWeights_Default(t *testing.T) {
+	ctx := context.Background()
+	database := setupClusterTestDB(t)
+	seedClusterData(t, ctx, database)
+
+	engine := NewEngine(database.DB, slog.Default())
+	w := engine.GetWeights(ctx, "did:test:alice")
+
+	assert.Equal(t, w.WSub, 1.0)
+	assert.Equal(t, w.WLike, 0.5)
+	assert.Equal(t, w.WTag, 0.3)
+	assert.Equal(t, w.WSocial, 0.7)
+	assert.Equal(t, w.WPop, 0.2)
+	assert.Equal(t, w.WCategory, 0.4)
+}
+
+func TestSignalWeights_RewardPenalize(t *testing.T) {
+	ctx := context.Background()
+	database := setupClusterTestDB(t)
+	seedClusterData(t, ctx, database)
+
+	engine := NewEngine(database.DB, slog.Default())
+
+	_, err := database.ExecContext(ctx, `
+		INSERT INTO recommendation_impressions (user_did, target_type, target_id, first_shown_at, last_shown_at, shown_count, acted)
+		VALUES ('did:test:alice', 'feed', 'https://a.com/feed', datetime('now'), datetime('now'), 1, 1)
+	`)
+	assert.NilError(t, err)
+	for i := range minActionsTune {
+		_, err = database.ExecContext(ctx, `
+			INSERT INTO recommendation_impressions (user_did, target_type, target_id, first_shown_at, last_shown_at, shown_count, acted)
+			VALUES ('did:test:alice', 'feed', ?, datetime('now'), datetime('now'), 1, 1)
+		`, fmt.Sprintf("https://%d.com/feed", i))
+		assert.NilError(t, err)
+	}
+
+	engine.RewardSignal(ctx, "did:test:alice", "social")
+
+	w := engine.GetWeights(ctx, "did:test:alice")
+	assert.Assert(t, w.WSocial > 0.7, "rewarding social signal should increase w_social, got %f", w.WSocial)
+}
+
+func TestColdStartRecommendations(t *testing.T) {
+	ctx := context.Background()
+	database := setupClusterTestDB(t)
+	seedClusterData(t, ctx, database)
+	seedFollowData(t, ctx, database)
+
+	engine := NewEngine(database.DB, slog.Default())
+	assert.NilError(t, engine.ComputeFollowDistances(ctx))
+
+	_, err := database.ExecContext(ctx, `UPDATE feeds SET subscriber_count = 2 WHERE feed_url = 'https://a.com/feed'`)
+	assert.NilError(t, err)
+	_, err = database.ExecContext(ctx, `UPDATE feeds SET subscriber_count = 2 WHERE feed_url = 'https://b.com/feed'`)
+	assert.NilError(t, err)
+
+	_, err = database.ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, "did:test:newuser", "newuser")
+	assert.NilError(t, err)
+
+	recs, err := engine.ColdStartRecommendations(ctx, "did:test:newuser", 10)
+	assert.NilError(t, err)
+	assert.Assert(t, len(recs) > 0, "new user should get cold start recommendations")
+}
+
+func TestColdStartRecommendations_NotTriggeredForEstablishedUser(t *testing.T) {
+	ctx := context.Background()
+	database := setupClusterTestDB(t)
+	seedClusterData(t, ctx, database)
+
+	engine := NewEngine(database.DB, slog.Default())
+
+	recs, err := engine.ColdStartRecommendations(ctx, "did:test:alice", 10)
+	assert.NilError(t, err)
+	assert.Assert(t, recs == nil, "established user should not get cold start recommendations")
+}
+
+func TestOnDemandPeopleRecommendations(t *testing.T) {
+	ctx := context.Background()
+	database := setupClusterTestDB(t)
+	seedClusterData(t, ctx, database)
 
 	engine := NewEngine(database.DB, slog.Default())
 	assert.NilError(t, engine.ComputeUserSimilarity(ctx))
 
-	var jaccard float64
-	var commonTags int
+	recs, err := engine.GetPeopleRecommendations(ctx, "did:test:carol", 10)
+	assert.NilError(t, err)
+	assert.Assert(t, len(recs) > 0, "carol should get people recommendations")
+}
+
+func TestDismissArticle(t *testing.T) {
+	ctx := context.Background()
+	database := setupClusterTestDB(t)
+	seedClusterData(t, ctx, database)
+
+	engine := NewEngine(database.DB, slog.Default())
+
+	assert.NilError(t, engine.DismissArticle(ctx, "did:test:alice", "https://a.com/article1", "not_interested"))
+
+	var count int
 	assert.NilError(t, database.QueryRowContext(ctx,
-		`SELECT jaccard, common_tags FROM user_similarity WHERE user_a = ? AND user_b = ?`,
-		"did:test:alice", "did:test:carol").Scan(&jaccard, &commonTags))
-	assert.Equal(t, commonTags, 1, "alice and carol share 1 tag (go)")
-	assert.Assert(t, jaccard > 0, "tags should contribute to similarity, got %f", jaccard)
+		`SELECT COUNT(*) FROM dismissed_recommendations WHERE user_did = 'did:test:alice' AND target_type = 'article'`).Scan(&count))
+	assert.Equal(t, count, 1)
+}
+
+func TestComputeSignalProfiles(t *testing.T) {
+	ctx := context.Background()
+	database := setupClusterTestDB(t)
+	seedClusterData(t, ctx, database)
+
+	engine := NewEngine(database.DB, slog.Default())
+	assert.NilError(t, engine.ComputeSignalProfiles(ctx))
+
+	var count int
+	assert.NilError(t, database.QueryRowContext(ctx, `SELECT COUNT(*) FROM user_signal_profiles`).Scan(&count))
+	assert.Assert(t, count >= 3, "expected signal profiles for all users")
+}
+
+func TestDismissFeed_Idempotent(t *testing.T) {
+	ctx := context.Background()
+	database := setupClusterTestDB(t)
+	seedClusterData(t, ctx, database)
+
+	engine := NewEngine(database.DB, slog.Default())
+
+	assert.NilError(t, engine.DismissFeed(ctx, "did:test:alice", "https://a.com/feed", "reason1"))
+	assert.NilError(t, engine.DismissFeed(ctx, "did:test:alice", "https://a.com/feed", "reason2"))
+
+	var count int
+	assert.NilError(t, database.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM dismissed_recommendations WHERE user_did = 'did:test:alice' AND target_type = 'feed'`).Scan(&count))
+	assert.Equal(t, count, 1, "duplicate dismiss should not create extra rows")
 }
 
 func TestDescriptionBasedFeedSimilarity(t *testing.T) {

@@ -269,6 +269,9 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			_ = s.engine.MarkImpressionActed(r.Context(), user.DID, "article", article.URL.String)
+			sig := s.engine.GetDominantSignal(s.engine.GetWeights(r.Context(), user.DID))
+			s.engine.RewardSignal(r.Context(), user.DID, sig)
 		} else {
 			like := &db.Like{
 				URI:        fmt.Sprintf("glean:like:%d", time.Now().UnixNano()),
@@ -281,6 +284,9 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			_ = s.engine.MarkImpressionActed(r.Context(), user.DID, "article", article.URL.String)
+			sig := s.engine.GetDominantSignal(s.engine.GetWeights(r.Context(), user.DID))
+			s.engine.RewardSignal(r.Context(), user.DID, sig)
 		}
 	}
 

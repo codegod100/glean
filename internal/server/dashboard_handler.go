@@ -3,6 +3,8 @@ package server
 import (
 	"net/http"
 	"time"
+
+	"pkg.rbrt.fr/glean/internal/cluster"
 )
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -23,6 +25,17 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	peopleRecs, _ := s.engine.GetPeopleRecommendations(r.Context(), user.DID, 5)
 	feedRecs, _ := s.engine.GetFeedRecommendations(r.Context(), user.DID, 5)
 
+	var impressions []cluster.Impression
+	for _, rec := range feedRecs {
+		impressions = append(impressions, cluster.Impression{TargetType: "feed", TargetID: rec.FeedURL})
+	}
+	for _, rec := range articleRecs {
+		impressions = append(impressions, cluster.Impression{TargetType: "article", TargetID: rec.URL})
+	}
+	if len(impressions) > 0 {
+		_ = s.engine.RecordImpressions(r.Context(), user.DID, impressions)
+	}
+
 	since := time.Now().AddDate(0, 0, -7).Format(time.RFC3339)
 	personalTrending, _ := s.db.ListTrendingArticlesForUser(r.Context(), user.DID, since, 5, 0)
 	globalTrending, _ := s.db.ListTrendingArticles(r.Context(), user.DID, since, 10, 0)
@@ -42,4 +55,26 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"QueryParams":            map[string]string{},
 		"Now":                    time.Now(),
 	})
+}
+
+func (s *Server) handleDismissArticleRecommendation(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	articleURL := r.FormValue("article_url")
+	if articleURL == "" {
+		http.Error(w, "article_url required", http.StatusBadRequest)
+		return
+	}
+
+	reason := r.FormValue("reason")
+	if reason == "" {
+		reason = "not_interested"
+	}
+
+	if err := s.engine.DismissArticle(r.Context(), user.DID, articleURL, reason); err != nil {
+		s.logger.Error("failed to dismiss article recommendation", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }

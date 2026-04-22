@@ -32,8 +32,14 @@ func (c *Cron) Run(ctx context.Context) error {
 			if err := c.engine.ComputeUserSimilarity(ctx); err != nil {
 				c.engine.logger.Error("user similarity failed", "error", err)
 			}
-			if err := c.engine.ComputeRecommendations(ctx); err != nil {
-				c.engine.logger.Error("recommendations failed", "error", err)
+			if err := c.engine.ComputeFollowDistances(ctx); err != nil {
+				c.engine.logger.Error("follow distances failed", "error", err)
+			}
+			if err := c.engine.ComputeSignalProfiles(ctx); err != nil {
+				c.engine.logger.Error("signal profiles failed", "error", err)
+			}
+			if err := c.engine.AutoDismissStale(ctx, 15, 30); err != nil {
+				c.engine.logger.Error("auto dismiss failed", "error", err)
 			}
 			c.engine.mu.Unlock()
 		}

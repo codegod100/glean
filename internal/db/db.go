@@ -1,10 +1,13 @@
 package db
 
 import (
+	"context"
 	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
+	"math"
 	"strings"
 	"time"
+
+	"github.com/mattn/go-sqlite3"
 )
 
 func NullStr(s string) sql.NullString {
@@ -39,6 +42,31 @@ func Open(path string) (*DB, error) {
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(2)
 	db.SetConnMaxLifetime(30 * time.Minute)
+
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	err = conn.Raw(func(driverConn any) error {
+		sqliteConn, ok := driverConn.(*sqlite3.SQLiteConn)
+		if !ok {
+			return nil
+		}
+		if err := sqliteConn.RegisterFunc("exp", func(x float64) float64 { return math.Exp(x) }, true); err != nil {
+			return err
+		}
+		if err := sqliteConn.RegisterFunc("log", func(x float64) float64 { return math.Log(x) }, true); err != nil {
+			return err
+		}
+		return nil
+	})
+	_ = conn.Close()
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
 
 	if err := initSchema(db); err != nil {
 		db.Close()
@@ -158,21 +186,6 @@ var schema = []string{
 		PRIMARY KEY (user_a, user_b),
 		CHECK(user_a < user_b)
 	)`,
-	`CREATE TABLE IF NOT EXISTS user_feed_recommendations (
-		user_did TEXT NOT NULL REFERENCES users(did),
-		feed_url TEXT NOT NULL REFERENCES feeds(feed_url),
-		score REAL NOT NULL,
-		computed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		PRIMARY KEY (user_did, feed_url)
-	)`,
-	`CREATE TABLE IF NOT EXISTS user_article_recommendations (
-		user_did TEXT NOT NULL REFERENCES users(did),
-		feed_url TEXT NOT NULL,
-		article_url TEXT NOT NULL,
-		score REAL NOT NULL,
-		computed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		PRIMARY KEY (user_did, feed_url, article_url)
-	)`,
 	`CREATE TABLE IF NOT EXISTS follows (
 		user_did TEXT NOT NULL REFERENCES users(did),
 		target_did TEXT NOT NULL,
@@ -208,6 +221,60 @@ var schema = []string{
 	`CREATE INDEX IF NOT EXISTS idx_follows_target ON follows(target_did)`,
 	`CREATE INDEX IF NOT EXISTS idx_follows_uri ON follows(uri)`,
 	`CREATE INDEX IF NOT EXISTS idx_user_similarity_b ON user_similarity(user_b)`,
+
+	`CREATE TABLE IF NOT EXISTS dismissed_recommendations (
+		user_did     TEXT NOT NULL REFERENCES users(did),
+		target_type  TEXT NOT NULL CHECK(target_type IN ('feed', 'article')),
+		target_id    TEXT NOT NULL,
+		reason       TEXT,
+		dismissed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (user_did, target_type, target_id)
+	)`,
+
+	`CREATE TABLE IF NOT EXISTS recommendation_impressions (
+		user_did       TEXT NOT NULL REFERENCES users(did),
+		target_type    TEXT NOT NULL CHECK(target_type IN ('feed', 'article')),
+		target_id      TEXT NOT NULL,
+		first_shown_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		last_shown_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		shown_count    INTEGER NOT NULL DEFAULT 1,
+		acted          BOOLEAN NOT NULL DEFAULT 0,
+		PRIMARY KEY (user_did, target_type, target_id)
+	)`,
+
+	`CREATE TABLE IF NOT EXISTS follow_distances (
+		user_a   TEXT NOT NULL,
+		user_b   TEXT NOT NULL,
+		distance INTEGER NOT NULL CHECK(distance IN (1, 2)),
+		PRIMARY KEY (user_a, user_b)
+	)`,
+
+	`CREATE TABLE IF NOT EXISTS user_signal_weights (
+		user_did   TEXT PRIMARY KEY REFERENCES users(did),
+		w_sub      REAL NOT NULL DEFAULT 1.0,
+		w_like     REAL NOT NULL DEFAULT 0.5,
+		w_tag      REAL NOT NULL DEFAULT 0.3,
+		w_social   REAL NOT NULL DEFAULT 0.7,
+		w_pop      REAL NOT NULL DEFAULT 0.2,
+		w_category REAL NOT NULL DEFAULT 0.4,
+		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`,
+
+	`CREATE TABLE IF NOT EXISTS user_signal_profiles (
+		user_did       TEXT PRIMARY KEY REFERENCES users(did),
+		total_likes     INTEGER NOT NULL DEFAULT 0,
+		total_tags      INTEGER NOT NULL DEFAULT 0,
+		top_categories  TEXT,
+		updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`,
+
+	`CREATE INDEX IF NOT EXISTS idx_dismissed_user_type ON dismissed_recommendations(user_did, target_type)`,
+	`CREATE INDEX IF NOT EXISTS idx_impressions_user_unacted ON recommendation_impressions(user_did, acted, shown_count)`,
+	`CREATE INDEX IF NOT EXISTS idx_impressions_last_shown ON recommendation_impressions(last_shown_at)`,
+	`CREATE INDEX IF NOT EXISTS idx_follow_distances_b ON follow_distances(user_b)`,
+	`CREATE INDEX IF NOT EXISTS idx_follow_distances_a_dist ON follow_distances(user_a, distance)`,
+	`CREATE INDEX IF NOT EXISTS idx_likes_author_feed ON likes(author_did, feed_url, created_at)`,
+	`CREATE INDEX IF NOT EXISTS idx_follows_followed_at ON follows(followed_at)`,
 	`CREATE INDEX IF NOT EXISTS idx_users_handle ON users(handle)`,
 	`CREATE VIRTUAL TABLE IF NOT EXISTS articles_fts USING fts5(title, summary, content, author, content=articles, content_rowid=id)`,
 	`CREATE TRIGGER IF NOT EXISTS articles_ai AFTER INSERT ON articles BEGIN

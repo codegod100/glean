@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"pkg.rbrt.fr/glean/internal/atproto"
+	"pkg.rbrt.fr/glean/internal/cluster"
 	"pkg.rbrt.fr/glean/internal/db"
 	"pkg.rbrt.fr/glean/internal/feed"
 )
@@ -28,6 +29,14 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 	allSubs, _ := s.db.ListSubscriptions(r.Context(), user.DID, "", 1000, 0)
 	feedRecs, _ := s.engine.GetFeedRecommendations(r.Context(), user.DID, 10)
 	peopleRecs, _ := s.engine.GetPeopleRecommendations(r.Context(), user.DID, 5)
+
+	if len(feedRecs) > 0 {
+		impressions := make([]cluster.Impression, len(feedRecs))
+		for i, rec := range feedRecs {
+			impressions[i] = cluster.Impression{TargetType: "feed", TargetID: rec.FeedURL}
+		}
+		_ = s.engine.RecordImpressions(r.Context(), user.DID, impressions)
+	}
 	deadFeeds, _ := s.db.ListDeadFeeds(r.Context(), user.DID, 7)
 
 	categories, _ := s.db.GetCategories(r.Context(), user.DID)
@@ -121,6 +130,10 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	_ = s.engine.MarkImpressionActed(r.Context(), user.DID, "feed", feedURL)
+	sig := s.engine.GetDominantSignal(s.engine.GetWeights(r.Context(), user.DID))
+	s.engine.RewardSignal(r.Context(), user.DID, sig)
 
 	sub, _ := s.db.GetSubscription(r.Context(), user.DID, feedURL)
 	if sub == nil {
@@ -382,6 +395,28 @@ func (s *Server) handleDiscoverFeedURL(w http.ResponseWriter, r *http.Request) {
 		FeedURLs: result.FeedURLs,
 		Favicon:  result.Favicon,
 	})
+}
+
+func (s *Server) handleDismissFeedRecommendation(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	feedURL := r.FormValue("feed_url")
+	if feedURL == "" {
+		http.Error(w, "feed_url required", http.StatusBadRequest)
+		return
+	}
+
+	reason := r.FormValue("reason")
+	if reason == "" {
+		reason = "not_interested"
+	}
+
+	if err := s.engine.DismissFeed(r.Context(), user.DID, feedURL, reason); err != nil {
+		s.logger.Error("failed to dismiss feed recommendation", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func nullString(s string) sql.NullString {

@@ -8,14 +8,17 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+
+	"pkg.rbrt.fr/glean/internal/cluster"
 )
 
 type XRPCHandler struct {
-	db *sql.DB
+	db     *sql.DB
+	engine *cluster.Engine
 }
 
-func NewXRPCHandler(db *sql.DB) *XRPCHandler {
-	return &XRPCHandler{db: db}
+func NewXRPCHandler(db *sql.DB, engine *cluster.Engine) *XRPCHandler {
+	return &XRPCHandler{db: db, engine: engine}
 }
 
 func (h *XRPCHandler) ListSubscriptions(w http.ResponseWriter, r *http.Request) {
@@ -303,72 +306,41 @@ func (h *XRPCHandler) GetRecommendations(w http.ResponseWriter, r *http.Request)
 	repo := r.URL.Query().Get("repo")
 	limit := min(parseIntParam(r, "limit", 20), 50)
 
-	feedRows, err := h.db.QueryContext(r.Context(), `
-		SELECT r.feed_url, f.title, f.site_url, f.description, f.subscriber_count, r.score
-		FROM user_feed_recommendations r
-		JOIN feeds f ON r.feed_url = f.feed_url
-		WHERE r.user_did = ?
-		ORDER BY r.score DESC
-		LIMIT ?
-	`, repo, limit)
+	ctx := r.Context()
+
+	feedRecs, err := h.engine.GetFeedRecommendations(ctx, repo, limit)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer feedRows.Close()
 
-	feeds := make([]RecommendedFeed, 0)
-	for feedRows.Next() {
-		var feedURL, title, siteURL, description string
-		var subscriberCount int
-		var score float64
-		if err := feedRows.Scan(&feedURL, &title, &siteURL, &description, &subscriberCount, &score); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	feeds := make([]RecommendedFeed, 0, len(feedRecs))
+	for _, rec := range feedRecs {
 		feeds = append(feeds, RecommendedFeed{
-			FeedURL:         feedURL,
-			Title:           title,
-			SiteURL:         siteURL,
-			Description:     description,
-			SubscriberCount: subscriberCount,
-			Score:           score,
+			FeedURL:         rec.FeedURL,
+			Title:           rec.Title,
+			SiteURL:         rec.SiteURL,
+			Description:     rec.Description,
+			SubscriberCount: rec.SubscriberCount,
+			Score:           rec.Score,
 		})
 	}
 
-	peopleRows, err := h.db.QueryContext(r.Context(), `
-		SELECT u.did, u.handle, u.display_name, u.avatar_url, s.jaccard, s.common_feeds
-		FROM user_similarity s
-		JOIN users u ON (
-			CASE WHEN s.user_a = ? THEN s.user_b ELSE s.user_a END
-		) = u.did
-		WHERE s.user_a = ? OR s.user_b = ?
-		ORDER BY s.jaccard DESC
-		LIMIT ?
-	`, repo, repo, repo, limit)
+	peopleRecs, err := h.engine.GetPeopleRecommendations(ctx, repo, limit)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer peopleRows.Close()
 
-	people := make([]RecommendedPerson, 0)
-	for peopleRows.Next() {
-		var did, handle string
-		var displayName, avatar sql.NullString
-		var jaccard float64
-		var commonFeeds int
-		if err := peopleRows.Scan(&did, &handle, &displayName, &avatar, &jaccard, &commonFeeds); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	people := make([]RecommendedPerson, 0, len(peopleRecs))
+	for _, rec := range peopleRecs {
 		people = append(people, RecommendedPerson{
-			DID:         did,
-			Handle:      handle,
-			DisplayName: displayName.String,
-			Avatar:      avatar.String,
-			Jaccard:     jaccard,
-			CommonFeeds: commonFeeds,
+			DID:         rec.DID,
+			Handle:      rec.Handle,
+			DisplayName: rec.DisplayName,
+			Avatar:      rec.AvatarURL,
+			Jaccard:     rec.Jaccard,
+			CommonFeeds: rec.CommonFeeds,
 		})
 	}
 

@@ -1,5 +1,5 @@
 {{define "recommendation-card.html"}}
-<div class="bg-spot-surface rounded-xl p-3 hover:bg-spot-hover-50 transition">
+<div class="recommendation-card bg-spot-surface rounded-xl p-3 hover:bg-spot-hover-50 transition">
     <div class="flex items-center justify-between gap-2">
         <a href="/articles?feed={{.feed_url}}" class="min-w-0 flex items-center gap-2 flex-1">
             {{if .favicon_url}}<img src="{{.favicon_url}}" class="w-4 h-4 rounded shrink-0" loading="lazy">{{end}}
@@ -10,7 +10,14 @@
         </a>
         <div class="flex items-center gap-2 shrink-0">
             <span class="text-xs text-spot-secondary">{{.subscriber_count}} subs</span>
-            <form hx-post="/feeds/add" hx-target="closest .bg-spot-surface" hx-swap="outerHTML" class="inline">
+            <form hx-post="/feeds/dismiss" hx-target="closest .recommendation-card" hx-swap="outerHTML" class="inline">
+                {{csrfInput .CSRFToken}}
+                <input type="hidden" name="feed_url" value="{{.feed_url}}">
+                <button type="submit" title="Not interested" class="text-spot-muted hover:text-spot-red transition -m-1 p-1 rounded-full hover:bg-spot-hover-50 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+                </button>
+            </form>
+            <form hx-post="/feeds/add" hx-target="closest .recommendation-card" hx-swap="outerHTML" class="inline">
                 {{csrfInput .CSRFToken}}
                 <input type="hidden" name="feed_url" value="{{.feed_url}}">
                 <button type="submit" class="text-xs font-bold uppercase tracking-button text-spot-green hover:brightness-110 transition">Subscribe</button>

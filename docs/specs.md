@@ -143,13 +143,13 @@ Glean also indexes records from the Skyreader lexicon (`app.skyreader.feed.subsc
 
 The mapping from Skyreader subscription to Glean subscription:
 
-| Skyreader field | Glean field   | Notes                               |
-| --------------- | ------------- | ------------------------------------ |
-| `feedUrl`       | `feed_url`    | Direct mapping                      |
-| `title`         | `title`       | Direct mapping                      |
-| `siteUrl`       | `site_url`    | Stored on the feed record           |
-| `createdAt`     | `added_at`    | Direct mapping                      |
-| _(none)_        | `category`    | Empty (Skyreader has no categories) |
+| Skyreader field | Glean field | Notes                               |
+| --------------- | ----------- | ----------------------------------- |
+| `feedUrl`       | `feed_url`  | Direct mapping                      |
+| `title`         | `title`     | Direct mapping                      |
+| `siteUrl`       | `site_url`  | Stored on the feed record           |
+| `createdAt`     | `added_at`  | Direct mapping                      |
+| _(none)_        | `category`  | Empty (Skyreader has no categories) |
 
 If a Glean subscription already exists for the same `feed_url`, the existing one is kept. If the existing subscription has no URI (was created locally without PDS sync), the Skyreader URI/CID is backfilled.
 
@@ -661,12 +661,20 @@ CREATE TABLE oauth_sessions (
 );
 ```
 
-Glean has two complementary recommendation signals:
+Glean uses a multi-signal recommendation system that combines subscription overlap, like patterns, social graph distance, and user behavior feedback.
 
-- **Subscriptions** (Jaccard similarity): "Who reads the same feeds?" → feed and people discovery
-- **Likes** (co-occurrence): "Who likes the same articles?" → article and feed discovery
+### 7.1 Signals
 
-### 7.1 Feed Co-occurrence (Jaccard Similarity)
+| Signal | Source | Weight (default) | Description |
+|--------|--------|-------------------|-------------|
+| Subscription | `subscriptions` | 1.0 | Jaccard over subscriber sets between similar users |
+| Like | `likes` | 0.5 | Time-decayed like co-occurrence (30-day half-life) |
+| Tag | `annotations.tags` | 0.3 | Jaccard over annotation tag sets |
+| Social | `follow_distances` | 0.7 | Follow distance: 1-hop=1.0, 2-hop=0.3 |
+| Popularity | `feeds.subscriber_count` | 0.2 | `log(1 + subscribers) / log(1 + max)` |
+| Category | `subscriptions.category` | 0.4 | Boost feeds matching user's existing categories |
+
+### 7.2 Feed Co-occurrence (Jaccard Similarity)
 
 For any two feeds, the similarity is the Jaccard index of their subscriber sets:
 
@@ -674,89 +682,153 @@ For any two feeds, the similarity is the Jaccard index of their subscriber sets:
 J(A, B) = |subscribers(A) ∩ subscribers(B)| / |subscribers(A) ∪ subscribers(B)|
 ```
 
-This is recomputed periodically (cron job) or incrementally when subscriptions change.
+Feed description text similarity is also computed (word overlap after stopword removal) and added as a boost.
 
-### 7.2 User Similarity
+### 7.3 User Similarity
 
-For any two users, compute Jaccard over their subscription sets:
-
-```
-J(U1, U2) = |feeds(U1) ∩ feeds(U2)| / |feeds(U1) ∪ feeds(U2)|
-```
-
-### 7.3 Recommendation Algorithms
-
-**Feed recommendations (on glean.at):**
-
-1. Find users with Jaccard > 0.2 (similar readers)
-2. Collect feeds those users subscribe to that the target user does not
-3. Rank by frequency (how many similar users subscribe) and average similarity
-4. Return top N feeds as recommendations
+For any two users, compute Jaccard over their subscription sets, plus like co-occurrence (time-decayed) and tag overlap:
 
 ```
-score(feed) = Σ J(target, U)  for each user U subscribed to feed
+J(U1, U2) = jaccard_subscriptions + 0.3 * jaccard_likes + 0.2 * jaccard_tags + follow_boost
 ```
 
-**Article recommendations (on glean.at, from likes):**
+Like overlap uses exponential time decay: `EXP(-0.023 * age_days)` (30-day half-life).
 
-1. Find users who liked articles that the target user also liked
-2. Collect articles those users liked that the target has not
-3. Rank by frequency and recency
-4. Return top N articles as recommendations
+### 7.4 On-Demand Scoring
+
+Recommendations are computed **on-demand** at query time, not pre-materialized. This avoids write amplification on every cron run.
+
+**Feed recommendation score** (computed in SQL):
 
 ```
-score(article) = Σ J(target, U)  for each similar user U who liked the article
+score = sub_signal * w_sub
+      + like_signal * w_like
+      + social_signal * w_social
+      + pop_signal * w_pop
+      + category_signal * w_category
 ```
 
-**People recommendations (to follow on Bluesky):**
+Where:
+- `sub_signal = SUM(jaccard(target, U))` for similar users U subscribed to feed
+- `like_signal = SUM(jaccard(target, U) * time_decay)` for likes in that feed by similar users
+- `social_signal = SUM(distance_weight)` from follow_distances
+- `pop_signal = log(1 + subscriber_count) / log(1 + max_subscribers)`
+- `category_signal = 1` if feed description matches user's top categories
 
-1. Compute user similarity for all pairs
-2. Return users with highest Jaccard, linking to their Bluesky profile for follow
+**Article recommendation score**:
 
-### 7.4 Implementation
-
-For the initial version, brute-force Jaccard with SQLite is sufficient (scale: ~10k users, ~100k subscriptions). The query is:
-
-```sql
-SELECT s2.feed_url, COUNT(*) as overlap_count
-FROM subscriptions s1
-JOIN subscriptions s2 ON s1.feed_url = s2.feed_url
-WHERE s1.user_did = ? AND s2.user_did != ?
-AND s2.feed_url NOT IN (SELECT feed_url FROM subscriptions WHERE user_did = ?)
-GROUP BY s2.feed_url
-ORDER BY overlap_count DESC
-LIMIT 20;
+```
+score = like_signal * w_like
+      + social_signal * w_social
+      + recency_signal * 0.2
 ```
 
-For larger scale, move to MinHash + LSH (banded hashing) to approximate Jaccard in sub-linear time.
+### 7.5 User Feedback (Dismiss)
 
-### 7.5 Clustering Engine (Cron)
+Users can dismiss recommendations they don't want to see again:
+
+- `POST /feeds/dismiss` — dismiss a feed recommendation
+- `POST /articles/dismiss` — dismiss an article recommendation
+- Dismissals are stored locally in `dismissed_recommendations` (not on PDS)
+- Dismissed items are excluded from all future recommendation queries
+- Auto-dismiss: items shown >15 times over >30 days without action are auto-dismissed
+
+Impression tracking (`recommendation_impressions`) records how many times each recommendation was shown and whether the user acted on it.
+
+### 7.6 Auto-Tuned Signal Weights
+
+Each user has a row in `user_signal_weights` with per-signal weights. When a user acts on a recommendation (subscribes, likes), the dominant signal that produced that recommendation is rewarded:
+
+```
+new_weight = MAX(0.1, MIN(3.0, old_weight * (1 + learning_rate * delta)))
+```
+
+- `learning_rate = 0.1`, `delta = +1` for reward, `-1` for penalty
+- Only activates after `minActionsTune = 5` positive actions
+- Defaults are used when no row exists for a user
+
+### 7.7 Social Graph
+
+Follow distances (1-hop and 2-hop) are pre-computed in `follow_distances` during the cron job:
+
+- 1-hop: direct follows (weight 1.0)
+- 2-hop: friends-of-friends (weight 0.3)
+- 3-hop is excluded due to noise and computational cost
+
+### 7.8 Diversity & Freshness
+
+After scoring, diversity filtering is applied in Go (not SQL):
+
+- **Domain diversity**: max 2 feeds from the same domain in results
+- **Category diversity**: max 3 feeds from the same category in results
+- This prevents recommendation clustering on a single source
+
+### 7.9 Cold Start
+
+New users with <5 subscriptions get a fallback strategy:
+
+1. Feeds from 1-hop followed users (70% weight)
+2. Globally popular feeds by subscriber count (30% weight)
+
+### 7.10 Clustering Engine (Cron)
 
 A background goroutine runs on a configurable schedule (`GLEAN_CLUSTER_INTERVAL`, default 10m):
 
-1. **Compute feed similarity**: Batch-update the `feed_similarity` table (Jaccard over subscriber sets)
-2. **Compute user similarity**: Batch-update the `user_similarity` table (Jaccard over subscription sets, boosted by follow relationships)
-3. **Generate feed recommendations**: Materialize top feed recommendations per user into `user_feed_recommendations`
-4. **Generate article recommendations**: Materialize top article recommendations per user into `user_article_recommendations`
+1. **Compute feed similarity**: Batch-update `feed_similarity` table (Jaccard over subscriber sets + description similarity)
+2. **Compute user similarity**: Batch-update `user_similarity` table (subscription Jaccard + time-decayed likes + tags + follow boost)
+3. **Compute follow distances**: 1-hop and 2-hop from `follows` table
+4. **Compute signal profiles**: Per-user category/tag/like summaries
+5. **Auto-dismiss stale**: Dismiss items shown >15 times over >30 days without action
 
 Jetstream ingestion and record indexing happen in a separate persistent goroutine (the Jetstream consumer), not in the cron.
 
+### 7.11 New Database Tables
+
 ```sql
-CREATE TABLE user_feed_recommendations (
-    user_did    TEXT NOT NULL REFERENCES users(did),
-    feed_url    TEXT NOT NULL REFERENCES feeds(feed_url),
-    score       REAL NOT NULL,
-    computed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_did, feed_url)
+CREATE TABLE dismissed_recommendations (
+    user_did     TEXT NOT NULL REFERENCES users(did),
+    target_type  TEXT NOT NULL CHECK(target_type IN ('feed', 'article')),
+    target_id    TEXT NOT NULL,
+    reason       TEXT,
+    dismissed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_did, target_type, target_id)
 );
 
-CREATE TABLE user_article_recommendations (
-    user_did    TEXT NOT NULL REFERENCES users(did),
-    feed_url    TEXT NOT NULL,
-    article_url TEXT NOT NULL,
-    score       REAL NOT NULL,
-    computed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_did, feed_url, article_url)
+CREATE TABLE recommendation_impressions (
+    user_did       TEXT NOT NULL REFERENCES users(did),
+    target_type    TEXT NOT NULL CHECK(target_type IN ('feed', 'article')),
+    target_id      TEXT NOT NULL,
+    first_shown_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_shown_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    shown_count    INTEGER NOT NULL DEFAULT 1,
+    acted          BOOLEAN NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_did, target_type, target_id)
+);
+
+CREATE TABLE follow_distances (
+    user_a   TEXT NOT NULL,
+    user_b   TEXT NOT NULL,
+    distance INTEGER NOT NULL CHECK(distance IN (1, 2)),
+    PRIMARY KEY (user_a, user_b)
+);
+
+CREATE TABLE user_signal_weights (
+    user_did   TEXT PRIMARY KEY REFERENCES users(did),
+    w_sub      REAL NOT NULL DEFAULT 1.0,
+    w_like     REAL NOT NULL DEFAULT 0.5,
+    w_tag      REAL NOT NULL DEFAULT 0.3,
+    w_social   REAL NOT NULL DEFAULT 0.7,
+    w_pop      REAL NOT NULL DEFAULT 0.2,
+    w_category REAL NOT NULL DEFAULT 0.4,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE user_signal_profiles (
+    user_did       TEXT PRIMARY KEY REFERENCES users(did),
+    total_likes     INTEGER NOT NULL DEFAULT 0,
+    total_tags      INTEGER NOT NULL DEFAULT 0,
+    top_categories  TEXT,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
@@ -778,15 +850,17 @@ The server renders HTML fragments that htmx swaps into the page. No JSON API nee
 | `/feeds/add`                   | POST   | Add a single feed URL                                    |
 | `/feeds/remove`                | DELETE | Remove a feed                                            |
 | `/feeds/refresh`               | POST   | Refresh all subscribed feeds                             |
-| `/feeds/clear`                 | POST   | Clear all subscriptions                                  |
+| `/feeds/clear`                 | POST   | Clear all subscriptions                                    |
+| `/feeds/dismiss`               | POST   | Dismiss a feed recommendation                              |
 | `/articles`                    | GET    | Read articles (paginated, filterable by feed)            |
 | `/articles/{id}`               | GET    | Article detail view                                      |
 | `/articles/{id}/read`          | POST   | Mark article as read                                     |
 | `/articles/{id}/unread`        | POST   | Mark article as unread                                   |
 | `/articles/{id}/like`          | POST   | Like an article                                          |
 | `/articles/{id}/fetch-content` | POST   | Fetch full article content from original URL             |
-| `/articles/mark-all-read`      | POST   | Mark all articles as read                                |
-| `/trending`                    | GET    | Community feed: articles ranked by likes                 |
+| `/articles/mark-all-read`      | POST   | Mark all articles as read                                   |
+| `/articles/dismiss`            | POST   | Dismiss an article recommendation                           |
+| `/trending`                    | GET    | Community feed: articles ranked by likes                    |
 | `/library`                     | GET    | Liked articles and annotations                           |
 | `/library/create`              | POST   | Create annotation on an article                          |
 | `/library/{id}/delete`         | POST   | Delete an annotation                                     |
@@ -846,7 +920,12 @@ glean/
 │   │   └── metrics.go             # Prometheus metrics definitions
 │   ├── cluster/
 │   │   ├── jaccard.go             # Jaccard similarity computation
-│   │   ├── recommender.go         # Feed + people recommendation queries
+│   │   ├── recommender.go         # Feed + people recommendation queries (on-demand)
+│   │   ├── scoring.go             # Multi-signal composite scoring queries
+│   │   ├── social.go              # Follow-distance computation (1-2 hop)
+│   │   ├── dismiss.go             # Dismiss + impression tracking
+│   │   ├── weights.go             # Bandit-style signal weight auto-tuning
+│   │   ├── diversity.go           # Post-query domain/category diversity filtering
 │   │   └── cron.go                # Background recomputation scheduler
 │   ├── server/
 │   │   ├── server.go              # HTTP server, router setup
@@ -993,6 +1072,4 @@ All PDS records are public. There is no notion of private data on the AT Protoco
 
 ## 13. Future Considerations
 
-- **MinHash/LSH**: Replace brute-force Jaccard when user count exceeds ~50k
-- **Full-text search**: Add FTS5 virtual table on articles for search
 - **Email digest**: Periodic email with top articles from subscribed feeds

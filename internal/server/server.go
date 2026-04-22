@@ -162,6 +162,7 @@ func (s *Server) setupRoutes() {
 		r.Get("/list", s.handleFeedList)
 		r.Get("/discover-url", s.handleDiscoverFeedURL)
 		r.Post("/clear", s.handleClearAllSubscriptions)
+		r.Post("/dismiss", s.handleDismissFeedRecommendation)
 	})
 
 	s.router.Route("/articles", func(r chi.Router) {
@@ -174,6 +175,7 @@ func (s *Server) setupRoutes() {
 		r.Post("/{id}/like", s.handleLikeArticle)
 		r.Post("/{id}/fetch-content", s.handleFetchContent)
 		r.Post("/mark-all-read", s.handleMarkAllRead)
+		r.Post("/dismiss", s.handleDismissArticleRecommendation)
 	})
 
 	s.router.Route("/trending", func(r chi.Router) {
@@ -198,7 +200,7 @@ func (s *Server) setupRoutes() {
 	s.router.Post("/auth/logout", s.handleAuthLogout)
 	s.router.Get("/oauth/client-metadata", s.handleOAuthClientMetadata)
 
-	xrpc := atproto.NewXRPCHandler(s.db.DB)
+	xrpc := atproto.NewXRPCHandler(s.db.DB, s.engine)
 	s.router.Get("/xrpc/at.glean.listSubscriptions", xrpc.ListSubscriptions)
 	s.router.Get("/xrpc/at.glean.listAnnotations", xrpc.ListAnnotations)
 	s.router.Get("/xrpc/at.glean.listLikes", xrpc.ListLikes)
