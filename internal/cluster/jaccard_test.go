@@ -44,9 +44,10 @@ func seedClusterData(t *testing.T, ctx context.Context, database *db.DB) {
 		{"https://b.com/feed", "Feed B"},
 		{"https://c.com/feed", "Feed C"},
 		{"https://d.com/feed", "Feed D"},
+		{"https://e.com/feed", "Feed E"},
 	}
 	for _, f := range feeds {
-		_, err := database.ExecContext(ctx, `INSERT INTO feeds (feed_url, title, site_url, description, feed_type) VALUES (?, ?, ?, '', 'rss')`, f.url, f.title, f.url)
+		_, err := database.ExecContext(ctx, `INSERT INTO feeds (feed_url, title, site_url, description, feed_type, subscriber_count) VALUES (?, ?, ?, '', 'rss', 2)`, f.url, f.title, f.url)
 		assert.NilError(t, err)
 	}
 
@@ -54,6 +55,8 @@ func seedClusterData(t *testing.T, ctx context.Context, database *db.DB) {
 		{"did:test:alice", "https://a.com/feed"},
 		{"did:test:alice", "https://b.com/feed"},
 		{"did:test:alice", "https://c.com/feed"},
+		{"did:test:alice", "https://d.com/feed"},
+		{"did:test:alice", "https://e.com/feed"},
 		{"did:test:bob", "https://a.com/feed"},
 		{"did:test:bob", "https://b.com/feed"},
 		{"did:test:bob", "https://d.com/feed"},
@@ -424,8 +427,10 @@ func TestColdStartRecommendations_NotTriggeredForEstablishedUser(t *testing.T) {
 	ctx := context.Background()
 	database := setupClusterTestDB(t)
 	seedClusterData(t, ctx, database)
+	seedFollowData(t, ctx, database)
 
 	engine := NewEngine(database.DB, slog.Default())
+	assert.NilError(t, engine.ComputeFollowDistances(ctx))
 
 	recs, err := engine.ColdStartRecommendations(ctx, "did:test:alice", 10)
 	assert.NilError(t, err)
