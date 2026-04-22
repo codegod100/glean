@@ -70,6 +70,7 @@ func (f *Fetcher) Fetch(ctx context.Context, feedURL, etag, lastModified string)
 type FeedStore interface {
 	GetFeedsToFetch(ctx context.Context, olderThan time.Duration, limit int) ([]*Feed, error)
 	UpsertArticle(ctx context.Context, article *Article) (int64, error)
+	UpsertArticlesBatch(ctx context.Context, articles []Article) error
 	MarkFeedFetched(ctx context.Context, feedURL, etag, lastModified string) error
 	MarkFeedFetchError(ctx context.Context, feedURL, lastError string) error
 	UpdateFeedFavicon(ctx context.Context, feedURL, faviconURL string) error
@@ -120,7 +121,7 @@ func (s *Scheduler) fetchAll(ctx context.Context) {
 		return
 	}
 
-	sem := make(chan struct{}, 3)
+	sem := make(chan struct{}, 10)
 	var wg sync.WaitGroup
 	for _, f := range feeds {
 		wg.Add(1)
@@ -169,13 +170,13 @@ func (s *Scheduler) FetchFeed(ctx context.Context, feed *Feed) {
 
 	metrics.FeedsFetched.WithLabelValues("success").Inc()
 
-	for i := range result.Articles {
-		result.Articles[i].FeedURL = feed.URL
-		if _, upsertErr := s.store.UpsertArticle(ctx, &result.Articles[i]); upsertErr != nil {
-			s.logger.Error("failed to upsert article", "error", upsertErr, "url", result.Articles[i].URL)
-		} else {
-			metrics.ArticlesUpserted.Inc()
-		}
+	for _, article := range result.Articles {
+		article.FeedURL = feed.URL
+	}
+	if err := s.store.UpsertArticlesBatch(ctx, result.Articles); err != nil {
+		s.logger.Error("failed to upsert articles", "error", err, "feed", feed.URL)
+	} else {
+		metrics.ArticlesUpserted.Add(float64(len(result.Articles)))
 	}
 
 	if err := s.store.MarkFeedFetched(ctx, feed.URL, newEtag, newLastModified); err != nil {

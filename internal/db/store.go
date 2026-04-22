@@ -56,6 +56,10 @@ func (a *FeedStoreAdapter) UpsertArticle(ctx context.Context, article *feed.Arti
 	return a.db.UpsertArticle(ctx, dbArticle)
 }
 
+func (a *FeedStoreAdapter) UpsertArticlesBatch(ctx context.Context, articles []feed.Article) error {
+	return a.db.UpsertArticlesBatch(ctx, articles)
+}
+
 func (a *FeedStoreAdapter) MarkFeedFetched(ctx context.Context, feedURL, etag, lastModified string) error {
 	return a.db.MarkFeedFetched(ctx, feedURL, etag, lastModified)
 }

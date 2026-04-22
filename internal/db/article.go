@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"pkg.rbrt.fr/glean/internal/feed"
 )
 
 type Article struct {
@@ -50,6 +52,56 @@ func (db *DB) UpsertArticle(ctx context.Context, article *Article) (int64, error
 		`, article.FeedURL, article.GUID).Scan(&id)
 	}
 	return id, err
+}
+
+func (db *DB) UpsertArticlesBatch(ctx context.Context, articles []feed.Article) error {
+	if len(articles) == 0 {
+		return nil
+	}
+
+	err := upsertArticlesBatch(ctx, db, articles)
+	if err != nil {
+		err = upsertArticlesBatch(ctx, db, articles)
+	}
+	return err
+}
+
+func upsertArticlesBatch(ctx context.Context, db *DB, articles []feed.Article) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO articles (feed_url, guid, title, url, author, summary, content, published, updated)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(feed_url, guid) DO NOTHING
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, a := range articles {
+		url := sql.NullString{String: a.URL, Valid: a.URL != ""}
+		author := sql.NullString{String: a.Author, Valid: a.Author != ""}
+		summary := sql.NullString{String: a.Summary, Valid: a.Summary != ""}
+		content := sql.NullString{String: a.Content, Valid: a.Content != ""}
+		var published, updated sql.NullTime
+		if !a.Published.IsZero() {
+			published = sql.NullTime{Time: a.Published, Valid: true}
+		}
+		if !a.Updated.IsZero() {
+			updated = sql.NullTime{Time: a.Updated, Valid: true}
+		}
+
+		if _, err := stmt.ExecContext(ctx, a.FeedURL, a.GUID, a.Title, url, author, summary, content, published, updated); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (db *DB) GetArticle(ctx context.Context, id int64) (*Article, error) {

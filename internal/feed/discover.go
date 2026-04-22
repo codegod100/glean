@@ -116,21 +116,42 @@ func findFavicon(ctx context.Context, base *url.URL, links []string) string {
 	origin.RawQuery = ""
 	origin.Fragment = ""
 
+	type result struct {
+		url  string
+		found bool
+	}
+	found := make(chan result, 1)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	for _, path := range faviconPaths {
-		u, _ := url.Parse(path)
-		resolved := origin.ResolveReference(u)
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, resolved.String(), nil)
-		if err != nil {
-			continue
+		go func(path string) {
+			u, _ := url.Parse(path)
+			resolved := origin.ResolveReference(u)
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, resolved.String(), nil)
+			if err != nil {
+				return
+			}
+			resp, err := discoverClient.Do(req)
+			if err != nil {
+				return
+			}
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK && imageContentTypes.matches(resp.Header.Get("Content-Type")) {
+				select {
+				case found <- result{url: cleanFavicon(resolved.String()), found: true}:
+				default:
+				}
+			}
+		}(path)
+	}
+
+	select {
+	case r := <-found:
+		if r.found {
+			return r.url
 		}
-		resp, err := discoverClient.Do(req)
-		if err != nil {
-			continue
-		}
-		resp.Body.Close()
-		if resp.StatusCode == http.StatusOK && imageContentTypes.matches(resp.Header.Get("Content-Type")) {
-			return cleanFavicon(resolved.String())
-		}
+	case <-ctx.Done():
 	}
 	return ""
 }

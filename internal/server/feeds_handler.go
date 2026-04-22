@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -371,31 +370,6 @@ func (s *Server) handleRetryFeed(w http.ResponseWriter, r *http.Request) {
 
 	s.render(w, r, "dead-feeds.html", map[string]any{
 		"DeadFeeds": deadFeeds,
-	})
-}
-
-func (s *Server) handleDiscoverFeedURL(w http.ResponseWriter, r *http.Request) {
-	siteURL := r.URL.Query().Get("url")
-	if siteURL == "" {
-		http.Error(w, "url required", http.StatusBadRequest)
-		return
-	}
-
-	result, err := feed.Discover(r.Context(), siteURL)
-	if err != nil {
-		s.logger.Error("feed discovery failed", "error", err, "url", siteURL)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	type discoveryResponse struct {
-		FeedURLs []string `json:"feed_urls"`
-		Favicon  string   `json:"favicon"`
-	}
-	json.NewEncoder(w).Encode(discoveryResponse{
-		FeedURLs: result.FeedURLs,
-		Favicon:  result.Favicon,
 	})
 }
 

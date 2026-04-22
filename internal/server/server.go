@@ -161,7 +161,6 @@ func (s *Server) setupRoutes() {
 		r.Post("/refresh", s.handleRefreshFeeds)
 		r.Post("/retry", s.handleRetryFeed)
 		r.Get("/list", s.handleFeedList)
-		r.Get("/discover-url", s.handleDiscoverFeedURL)
 		r.Post("/clear", s.handleClearAllSubscriptions)
 		r.Post("/dismiss", s.handleDismissFeedRecommendation)
 	})

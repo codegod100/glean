@@ -224,7 +224,7 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 		JOIN articles a ON a.feed_url = la.feed_url AND a.url = la.article_url
 		LEFT JOIN feeds f ON f.feed_url = la.feed_url
 		LEFT JOIN social_likes sl ON sl.feed_url = la.feed_url AND sl.article_url = la.article_url
-		ORDER BY score DESC
+		ORDER BY score DESC, a.published DESC
 		LIMIT ?
 	`, userDID, userDID, userDID, userDID, userDID, userDID, w.WLike, w.WSocial, limit)
 	if err != nil {

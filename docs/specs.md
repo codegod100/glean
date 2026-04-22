@@ -844,7 +844,6 @@ The server renders HTML fragments that htmx swaps into the page. No JSON API nee
 | `/dashboard`                   | GET    | Main dashboard: unread articles, recommendations sidebar |
 | `/feeds`                       | GET    | Manage RSS subscriptions (OPML import for onboarding)    |
 | `/feeds/list`                  | GET    | Feed list fragment (htmx partial)                        |
-| `/feeds/discover-url`          | GET    | Discover feed URL from a website                         |
 | `/feeds/opml/upload`           | POST   | Upload OPML file to bulk-import subscriptions            |
 | `/feeds/opml/download`         | GET    | Export subscriptions as OPML (offboarding)               |
 | `/feeds/add`                   | POST   | Add a single feed URL                                    |
