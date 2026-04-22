@@ -30,7 +30,7 @@
             <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2 flex-wrap">
                     <span class="font-bold text-spot-text truncate">{{if .FeedTitle}}{{.FeedTitle}}{{else}}{{.FeedURL}}{{end}}</span>
-                    {{if .Category.Valid}}<span class="text-xs bg-spot-hover text-spot-secondary px-2 py-0.5 rounded-full shrink-0">{{.Category.String}}</span>{{end}}
+                    {{if and .Category.Valid .Category.String}}<span class="text-xs bg-spot-hover text-spot-secondary px-2 py-0.5 rounded-full shrink-0">{{.Category.String}}</span>{{end}}
                 </div>
                 <div class="text-xs text-spot-muted truncate mt-0.5">{{.FeedURL}}</div>
             </div>
