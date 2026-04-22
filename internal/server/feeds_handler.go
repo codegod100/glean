@@ -277,8 +277,9 @@ func (s *Server) handleOPMLDownload(w http.ResponseWriter, r *http.Request) {
 	var feedURLs []feed.FeedURL
 	for _, sub := range subs {
 		feedURLs = append(feedURLs, feed.FeedURL{
-			URL:   sub.FeedURL,
-			Title: sub.FeedTitle,
+			URL:      sub.FeedURL,
+			Title:    sub.FeedTitle,
+			Category: sub.Category.String,
 		})
 	}
 

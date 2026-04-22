@@ -104,6 +104,8 @@ func GenerateOPML(feeds []FeedURL, title string) ([]byte, error) {
 	}
 	opml.Head.Title = title
 
+	categoryMap := make(map[string][]Outline)
+	var categories []string
 	for _, f := range feeds {
 		outline := Outline{
 			Text:    f.Title,
@@ -111,7 +113,23 @@ func GenerateOPML(feeds []FeedURL, title string) ([]byte, error) {
 			XMLURL:  f.URL,
 			HTMLURL: f.SiteURL,
 		}
-		opml.Body.Outlines = append(opml.Body.Outlines, outline)
+		if f.Category != "" {
+			categoryMap[f.Category] = append(categoryMap[f.Category], outline)
+			if !contains(categories, f.Category) {
+				categories = append(categories, f.Category)
+			}
+		} else {
+			opml.Body.Outlines = append(opml.Body.Outlines, outline)
+		}
+	}
+
+	for _, cat := range categories {
+		parent := Outline{
+			Text:     cat,
+			Title:    cat,
+			Outlines: categoryMap[cat],
+		}
+		opml.Body.Outlines = append(opml.Body.Outlines, parent)
 	}
 
 	var buf bytes.Buffer
@@ -124,4 +142,13 @@ func GenerateOPML(feeds []FeedURL, title string) ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
+}
+
+func contains(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
