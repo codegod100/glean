@@ -16,7 +16,7 @@
             {{if .Article.Published.Valid}}<span>{{.Article.Published.Time.Format "Jan 2, 2006 15:04"}}</span>{{end}}
             {{if .Feed}}
             <a href="/articles?feed={{.Feed.FeedURL}}" class="inline-flex items-center gap-1 hover:text-spot-green transition">
-                {{if .Feed.FaviconURL.Valid}}<img src="{{.Feed.FaviconURL.String}}" class="w-4 h-4 rounded">{{end}}
+                {{if .Feed}}{{template "favicon" dict "src" .Feed.FaviconURL.String "size" "w-4 h-4"}}{{end}}
                 {{if .Feed.Title.Valid}}{{.Feed.Title.String}}{{else}}{{.Feed.FeedURL}}{{end}}
             </a>
             {{end}}

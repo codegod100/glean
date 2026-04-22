@@ -7,7 +7,7 @@
                 <a href="/articles/{{.ID}}" class="font-bold text-spot-text hover:text-spot-green transition text-lg leading-tight">{{.Title}}</a>
             </div>
             <div class="text-sm text-spot-secondary mt-1 flex items-center gap-2">
-                {{if .FeedFaviconURL.Valid}}<img src="{{.FeedFaviconURL.String}}" class="w-4 h-4 rounded shrink-0" loading="lazy">{{end}}
+                {{template "favicon" dict "src" .FeedFaviconURL.String "size" "w-4 h-4"}}
                 {{if .Author.Valid}}{{if .Author.String}}<span>{{.Author.String}}</span>{{end}}{{end}}
                 {{if .Published.Valid}}<span>{{.Published.Time.Format "Jan 2, 2006 15:04"}}</span>{{end}}
                 <span class="text-spot-muted"><a href="/articles?feed={{.FeedURL}}" class="hover:text-spot-green transition">{{if .FeedTitle}}{{.FeedTitle}}{{else}}{{.FeedURL}}{{end}}</a></span>
