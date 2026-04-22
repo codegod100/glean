@@ -10,6 +10,19 @@ import (
 	"time"
 )
 
+type imageContentTypePrefixes []string
+
+func (p imageContentTypePrefixes) matches(contentType string) bool {
+	for _, prefix := range p {
+		if strings.HasPrefix(contentType, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+var imageContentTypes = imageContentTypePrefixes{"image/"}
+
 type DiscoveryResult struct {
 	FeedURLs []string
 	Favicon  string
@@ -92,7 +105,9 @@ func findFavicon(ctx context.Context, base *url.URL, links []string) string {
 			continue
 		}
 		if u, err := base.Parse(href); err == nil {
-			return cleanFavicon(u.String())
+			if checkContentType(ctx, u.String()) {
+				return cleanFavicon(u.String())
+			}
 		}
 	}
 
@@ -104,7 +119,7 @@ func findFavicon(ctx context.Context, base *url.URL, links []string) string {
 	for _, path := range faviconPaths {
 		u, _ := url.Parse(path)
 		resolved := origin.ResolveReference(u)
-		req, err := http.NewRequestWithContext(ctx, http.MethodHead, resolved.String(), nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, resolved.String(), nil)
 		if err != nil {
 			continue
 		}
@@ -113,11 +128,24 @@ func findFavicon(ctx context.Context, base *url.URL, links []string) string {
 			continue
 		}
 		resp.Body.Close()
-		if resp.StatusCode == http.StatusOK {
+		if resp.StatusCode == http.StatusOK && imageContentTypes.matches(resp.Header.Get("Content-Type")) {
 			return cleanFavicon(resolved.String())
 		}
 	}
 	return ""
+}
+
+func checkContentType(ctx context.Context, url string) bool {
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
+	if err != nil {
+		return false
+	}
+	resp, err := discoverClient.Do(req)
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusOK && imageContentTypes.matches(resp.Header.Get("Content-Type"))
 }
 
 func extractHref(link string) string {
