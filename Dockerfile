@@ -10,8 +10,10 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
-RUN npx tailwindcss -i ./static/input.css -o ./static/output.css --minify \
-    && CGO_ENABLED=1 go build -tags fts5 -ldflags="-s -w" -o /glean .
+RUN npx tailwindcss -i ./static/input.css -o ./static/output.css --minify
+
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=1 go build -tags fts5 -ldflags="-s -w" -o /glean .
 
 FROM alpine:3.21
 

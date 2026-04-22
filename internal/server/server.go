@@ -405,6 +405,10 @@ func (s *Server) refreshUserFeeds(ctx context.Context, userDID string) {
 		return
 	}
 
+	// Fetch each feed once, even if many users subscribe to the same feed.
+	// Dead feeds (error_count >= 25) are intentionally retried here so a new
+	// user's subscriptions get a chance to succeed before being gated by the
+	// scheduler's error_count filter.
 	seen := make(map[string]bool, len(subs))
 	for _, sub := range subs {
 		if seen[sub.FeedURL] {

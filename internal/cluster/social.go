@@ -49,7 +49,7 @@ func (e *Engine) ComputeFollowDistancesIncremental(ctx context.Context) error {
 
 	var lastComputed string
 	err = e.db.QueryRowContext(ctx, `
-		SELECT COALESCE(MAX(updated_at), '1970-01-01') FROM user_similarity
+		SELECT COALESCE(MAX(computed_at), '1970-01-01') FROM user_similarity
 	`).Scan(&lastComputed)
 	if err != nil {
 		return err
