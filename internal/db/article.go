@@ -158,7 +158,8 @@ func (db *DB) ListArticles(ctx context.Context, userDID, feedURL string, limit, 
 		args = []any{userDID, userDID, userDID}
 	}
 
-	query += ` ORDER BY a.published DESC LIMIT ? OFFSET ?`
+	// Future-published articles (e.g., scheduled) sort last
+	query += ` ORDER BY (CASE WHEN a.published > 'now' THEN 1 ELSE 0 END), a.published DESC LIMIT ? OFFSET ?`
 	args = append(args, limit, offset)
 
 	rows, err := db.QueryContext(ctx, query, args...)
@@ -221,7 +222,8 @@ func (db *DB) ListUnreadArticles(ctx context.Context, userDID, feedURL string, l
 		args = []any{userDID, userDID, userDID}
 	}
 
-	query += ` ORDER BY a.published DESC LIMIT ? OFFSET ?`
+	// Future-published articles (e.g., scheduled) sort last
+	query += ` ORDER BY (CASE WHEN a.published > 'now' THEN 1 ELSE 0 END), a.published DESC LIMIT ? OFFSET ?`
 	args = append(args, limit, offset)
 
 	rows, err := db.QueryContext(ctx, query, args...)
@@ -284,7 +286,8 @@ func (db *DB) ListReadArticles(ctx context.Context, userDID, feedURL string, lim
 		args = []any{userDID, userDID, userDID}
 	}
 
-	query += ` ORDER BY a.published DESC LIMIT ? OFFSET ?`
+	// Future-published articles (e.g., scheduled) sort last
+	query += ` ORDER BY (CASE WHEN a.published > 'now' THEN 1 ELSE 0 END), a.published DESC LIMIT ? OFFSET ?`
 	args = append(args, limit, offset)
 
 	rows, err := db.QueryContext(ctx, query, args...)

@@ -255,7 +255,8 @@ func (db *DB) ListTrendingArticlesForUser(ctx context.Context, userDID, since st
 		    UNION SELECT f.target_did FROM follows f WHERE f.user_did = ?
 		  )
 		GROUP BY ar.id
-		ORDER BY like_count DESC, annotation_count DESC, ar.published DESC
+		-- Future-published articles (e.g., scheduled) sort last
+		ORDER BY like_count DESC, annotation_count DESC, (CASE WHEN ar.published > 'now' THEN 1 ELSE 0 END), ar.published DESC
 		LIMIT ? OFFSET ?
 	`, since, userDID, since, userDID, userDID, userDID, userDID, userDID, limit, offset)
 	if err != nil {
@@ -291,7 +292,8 @@ func (db *DB) ListTrendingArticles(ctx context.Context, userDID, since string, l
 		LEFT JOIN likes ul ON ul.feed_url = l.feed_url AND ul.article_url = l.article_url AND ul.author_did = ?
 		WHERE l.created_at >= ?
 		GROUP BY ar.id
-		ORDER BY like_count DESC, annotation_count DESC, ar.published DESC
+		-- Future-published articles (e.g., scheduled) sort last
+		ORDER BY like_count DESC, annotation_count DESC, (CASE WHEN ar.published > 'now' THEN 1 ELSE 0 END), ar.published DESC
 		LIMIT ? OFFSET ?
 	`, since, userDID, since, limit, offset)
 	if err != nil {
