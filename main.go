@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -25,6 +26,7 @@ func main() {
 	syncInterval := flag.Duration("sync-interval", envDuration("GLEAN_SYNC_INTERVAL", 1*time.Hour), "PDS sync interval")
 	clusterInterval := flag.Duration("cluster-interval", envDuration("GLEAN_CLUSTER_INTERVAL", 10*time.Minute), "cluster recomputation interval")
 	collectionDirURL := flag.String("collection-dir", envOr("GLEAN_COLLECTION_DIR_URL", ""), "collection directory URL for startup backfill")
+	backfillConcurrency := flag.Int("backfill-concurrency", envInt("GLEAN_BACKFILL_CONCURRENCY", 5), "max concurrent backfill workers")
 	flag.Parse()
 
 	atproto.InitIdentity(envOr("GLEAN_PLC_URL", "https://didplc.glean.at"))
@@ -70,7 +72,7 @@ func main() {
 		srv.PeriodicSync(ctx, *syncInterval)
 	}()
 	go func() {
-		srv.BackfillFromCollectionDir(ctx, *collectionDirURL)
+		srv.BackfillFromCollectionDir(ctx, *collectionDirURL, *backfillConcurrency)
 	}()
 	go func() {
 		if err := jetstream.Start(ctx); err != nil && ctx.Err() == nil {
@@ -121,6 +123,15 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 	if v := os.Getenv(key); v != "" {
 		if d, err := time.ParseDuration(v); err == nil {
 			return d
+		}
+	}
+	return fallback
+}
+
+func envInt(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
 		}
 	}
 	return fallback

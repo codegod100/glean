@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -441,7 +442,7 @@ func (s *Server) PeriodicSync(ctx context.Context, interval time.Duration) {
 	}
 }
 
-func (s *Server) BackfillFromCollectionDir(ctx context.Context, collectionDirURL string) {
+func (s *Server) BackfillFromCollectionDir(ctx context.Context, collectionDirURL string, concurrency int) {
 	if collectionDirURL == "" {
 		return
 	}
@@ -469,36 +470,48 @@ func (s *Server) BackfillFromCollectionDir(ctx context.Context, collectionDirURL
 
 	s.logger.Info("collection directory backfill", "total", len(dids), "missing", len(missing))
 
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
+
 	for _, did := range missing {
 		if ctx.Err() != nil {
-			return
+			break
 		}
 
-		handle := did
-		if ident, err := atproto.ResolveIdentity(ctx, did); err == nil {
-			handle = ident.Handle.String()
-		}
+		sem <- struct{}{}
+		wg.Add(1)
 
-		if _, err := s.db.CreateUser(ctx, did, handle, "", ""); err != nil {
-			s.logger.Error("failed to create user during backfill", "error", err, "did", did)
-			continue
-		}
+		go func(did string) {
+			defer func() { <-sem }()
+			defer wg.Done()
 
-		pdsURL, err := atproto.ResolvePDSEndpoint(ctx, did)
-		if err != nil {
-			s.logger.Error("failed to resolve PDS for backfill", "error", err, "did", did)
-			continue
-		}
+			handle := did
+			if ident, err := atproto.ResolveIdentity(ctx, did); err == nil {
+				handle = ident.Handle.String()
+			}
 
-		client := atproto.NewUnauthenticatedClient(pdsURL)
-		sync := atproto.NewSync(s.db, client, s.logger)
-		if err := sync.Run(ctx, did); err != nil {
-			s.logger.Error("backfill sync failed", "error", err, "did", did)
-		}
+			if _, err := s.db.CreateUser(ctx, did, handle, "", ""); err != nil {
+				s.logger.Error("failed to create user during backfill", "error", err, "did", did)
+				return
+			}
 
-		s.refreshUserFeeds(ctx, did)
+			pdsURL, err := atproto.ResolvePDSEndpoint(ctx, did)
+			if err != nil {
+				s.logger.Error("failed to resolve PDS for backfill", "error", err, "did", did)
+				return
+			}
+
+			client := atproto.NewUnauthenticatedClient(pdsURL)
+			sync := atproto.NewSync(s.db, client, s.logger)
+			if err := sync.Run(ctx, did); err != nil {
+				s.logger.Error("backfill sync failed", "error", err, "did", did)
+			}
+
+			s.refreshUserFeeds(ctx, did)
+		}(did)
 	}
 
+	wg.Wait()
 	s.logger.Info("collection directory backfill complete")
 }
 
