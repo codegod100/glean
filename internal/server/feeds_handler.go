@@ -87,10 +87,11 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		siteURL := result.Feed.SiteURL
-		if siteURL != "" {
+		if result.Feed.FaviconURL != "" {
+			_ = s.db.UpdateFeedFavicon(r.Context(), feedURL, result.Feed.FaviconURL)
+		} else if result.Feed.SiteURL != "" {
 			go func() {
-				discResult, err := feed.Discover(context.Background(), siteURL)
+				discResult, err := feed.Discover(context.Background(), result.Feed.SiteURL)
 				if err == nil && discResult.Favicon != "" {
 					_ = s.db.UpdateFeedFavicon(context.Background(), feedURL, discResult.Favicon)
 				}
@@ -237,6 +238,15 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 		if upsertErr := s.db.UpsertFeed(r.Context(), f); upsertErr != nil {
 			s.logger.Error("failed to upsert feed", "error", upsertErr)
 			continue
+		}
+
+		if fu.SiteURL != "" {
+			go func(feedURL, siteURL string) {
+				discResult, err := feed.Discover(context.Background(), siteURL)
+				if err == nil && discResult.Favicon != "" {
+					_ = s.db.UpdateFeedFavicon(context.Background(), feedURL, discResult.Favicon)
+				}
+			}(fu.URL, fu.SiteURL)
 		}
 
 		var subURI, subCID string

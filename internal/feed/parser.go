@@ -17,6 +17,7 @@ type Feed struct {
 	SiteURL      string
 	Description  string
 	Type         string
+	FaviconURL   string
 	ETag         string
 	LastModified string
 }
@@ -44,7 +45,10 @@ type rssFeed struct {
 		Title       string `xml:"title"`
 		Link        string `xml:"link"`
 		Description string `xml:"description"`
-		Items       []struct {
+		Image       struct {
+			URL string `xml:"url"`
+		} `xml:"image"`
+		Items []struct {
 			Title       string `xml:"title"`
 			Link        string `xml:"link"`
 			GUID        string `xml:"guid"`
@@ -65,6 +69,8 @@ type atomFeed struct {
 	XMLName  xml.Name   `xml:"feed"`
 	Title    string     `xml:"title"`
 	Link     []atomLink `xml:"link"`
+	Icon     string     `xml:"icon"`
+	Logo     string     `xml:"logo"`
 	Subtitle string     `xml:"subtitle"`
 	Entry    []struct {
 		Title   string     `xml:"title"`
@@ -103,6 +109,7 @@ type jsonFeed struct {
 	Title       string `json:"title"`
 	HomePageURL string `json:"home_page_url"`
 	Description string `json:"description"`
+	Favicon     string `json:"favicon"`
 	Items       []struct {
 		ID          string `json:"id"`
 		URL         string `json:"url"`
@@ -144,6 +151,7 @@ func parseJSONFeed(data []byte, feedURL string) (*ParseResult, error) {
 			Title:       jf.Title,
 			SiteURL:     jf.HomePageURL,
 			Description: jf.Description,
+			FaviconURL:  jf.Favicon,
 			Type:        "json",
 		},
 	}
@@ -214,6 +222,7 @@ func convertRSS(rss *rssFeed, feedURL string) *ParseResult {
 			Title:       rss.Channel.Title,
 			SiteURL:     rss.Channel.Link,
 			Description: rss.Channel.Description,
+			FaviconURL:  rss.Channel.Image.URL,
 			Type:        "rss",
 		},
 	}
@@ -272,12 +281,18 @@ func convertRDF(rdf *rdfFeed, feedURL string) *ParseResult {
 }
 
 func convertAtom(atom *atomFeed, feedURL string) *ParseResult {
+	favicon := atom.Icon
+	if favicon == "" {
+		favicon = atom.Logo
+	}
+
 	result := &ParseResult{
 		Feed: Feed{
 			URL:         feedURL,
 			Title:       atom.Title,
 			SiteURL:     pickAtomLink(atom.Link),
 			Description: atom.Subtitle,
+			FaviconURL:  favicon,
 			Type:        "atom",
 		},
 	}

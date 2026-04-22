@@ -182,9 +182,15 @@ func (s *Scheduler) FetchFeed(ctx context.Context, feed *Feed) {
 		s.logger.Error("failed to update feed fetch result", "error", err, "feed", feed.URL)
 	}
 
-	if feed.SiteURL != "" {
+	if result != nil && result.Feed.FaviconURL != "" {
+		_ = s.store.UpdateFeedFavicon(ctx, feed.URL, result.Feed.FaviconURL)
+	} else if feed.FaviconURL == "" {
+		siteURL := feed.SiteURL
+		if siteURL == "" {
+			siteURL = feed.URL
+		}
 		go func() {
-			discResult, err := Discover(context.Background(), feed.SiteURL)
+			discResult, err := Discover(context.Background(), siteURL)
 			if err == nil && discResult.Favicon != "" {
 				_ = s.store.UpdateFeedFavicon(context.Background(), feed.URL, discResult.Favicon)
 			}

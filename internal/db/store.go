@@ -29,6 +29,7 @@ func (a *FeedStoreAdapter) GetFeedsToFetch(ctx context.Context, olderThan time.D
 			SiteURL:      df.SiteURL.String,
 			Description:  df.Description.String,
 			Type:         df.FeedType.String,
+			FaviconURL:   df.FaviconURL.String,
 			ETag:         df.Etag.String,
 			LastModified: df.LastModified.String,
 		})
