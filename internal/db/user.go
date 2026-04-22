@@ -72,6 +72,17 @@ func (db *DB) ListUserDIDs(ctx context.Context) (map[string]bool, error) {
 	return dids, rows.Err()
 }
 
+func (db *DB) UpdateUserProfile(ctx context.Context, did, displayName, avatarURL string) error {
+	_, err := db.ExecContext(ctx, `
+		UPDATE users SET
+			display_name = COALESCE(NULLIF(?, ''), display_name),
+			avatar_url = COALESCE(NULLIF(?, ''), avatar_url),
+			updated_at = CURRENT_TIMESTAMP
+		WHERE did = ?
+	`, displayName, avatarURL, did)
+	return err
+}
+
 func (db *DB) ListUsers(ctx context.Context) ([]*User, error) {
 	rows, err := db.QueryContext(ctx, `
 		SELECT did, handle, display_name, avatar_url, indexed_at, updated_at

@@ -3,11 +3,8 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
-	"os"
 
 	"github.com/bluesky-social/indigo/atproto/syntax"
 
@@ -95,7 +92,15 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		handle = ident.Handle.String()
 	}
 
-	displayName, avatarURL := s.fetchUserProfile(r.Context(), sessData)
+	client := s.pdsClientFromSession(sessData)
+
+	var displayName, avatarURL string
+	if client != nil {
+		if dn, avatar, err := client.GetProfile(r.Context(), did); err == nil {
+			displayName = dn
+			avatarURL = avatar
+		}
+	}
 
 	user, err := s.db.CreateUser(r.Context(), did, handle, displayName, avatarURL)
 	if err != nil {
@@ -125,31 +130,9 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	s.syncUserInBackground(user.DID, s.pdsClientFromSession(sessData))
+	s.syncUserInBackground(user.DID, client)
 
 	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
-}
-
-func (s *Server) fetchUserProfile(ctx context.Context, sessData *oauth.ClientSessionData) (string, string) {
-	did := sessData.AccountDID.String()
-
-	session, err := s.oauth.ResumeSession(ctx, sessData.AccountDID, sessData.SessionID)
-	if err != nil {
-		s.logger.Warn("failed to resume session for profile fetch", "error", err)
-		return "", ""
-	}
-
-	var profile struct {
-		DisplayName string `json:"displayName"`
-		Avatar      string `json:"avatar"`
-	}
-
-	nsid, _ := syntax.ParseNSID("app.bsky.actor.getProfile")
-	if err := session.APIClient().Get(ctx, nsid, map[string]any{"actor": did}, &profile); err != nil {
-		s.logger.Warn("failed to fetch profile from PDS", "error", err, "did", did)
-		return "", ""
-	}
-	return profile.DisplayName, profile.Avatar
 }
 
 func (s *Server) pdsClientFromSession(sessData *oauth.ClientSessionData) *atproto.Client {
@@ -187,32 +170,4 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	}
 	s.clearUserSession(w)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
-}
-
-func resolveCallbackURL(r *http.Request) string {
-	scheme := "http"
-	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
-		scheme = "https"
-	}
-	return fmt.Sprintf("%s://%s/auth/callback", scheme, r.Host)
-}
-
-func resolveClientID(r *http.Request) string {
-	cid := os.Getenv("GLEAN_OAUTH_CLIENT_ID")
-	if cid != "" {
-		return cid
-	}
-	scheme := "http"
-	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
-		scheme = "https"
-	}
-	return fmt.Sprintf("%s://%s/oauth/client-metadata", scheme, r.Host)
-}
-
-func resolveBaseURL(r *http.Request) *url.URL {
-	scheme := "http"
-	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
-		scheme = "https"
-	}
-	return &url.URL{Scheme: scheme, Host: r.Host}
 }

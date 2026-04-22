@@ -99,3 +99,19 @@ func (c *Client) ListRecords(ctx context.Context, did, collection string, limit 
 	}
 	return records, result.Cursor, nil
 }
+
+func (c *Client) GetProfile(ctx context.Context, did string) (displayName, avatarURL string, err error) {
+	nsid, err := syntax.ParseNSID("app.bsky.actor.getProfile")
+	if err != nil {
+		return "", "", fmt.Errorf("parsing NSID: %w", err)
+	}
+
+	var profile struct {
+		DisplayName string `json:"displayName"`
+		Avatar      string `json:"avatar"`
+	}
+	if err := c.api.Get(ctx, nsid, map[string]any{"actor": did}, &profile); err != nil {
+		return "", "", err
+	}
+	return profile.DisplayName, profile.Avatar, nil
+}

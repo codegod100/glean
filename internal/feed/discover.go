@@ -2,11 +2,10 @@ package feed
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
-	"strings"
 	"time"
 )
 
@@ -16,183 +15,121 @@ type DiscoveryResult struct {
 }
 
 var (
-	linkRe       = regexp.MustCompile(`<link[^>]+>`)
-	hrefRe       = regexp.MustCompile(`href="([^"]*)"`)
-	relFeedRe    = regexp.MustCompile(`rel="(alternate|feed)"`)
-	typeFeedRe   = regexp.MustCompile(`type="([^"]*(?:rss|atom|feed|xml)[^"]*)"`)
-	relIconRe    = regexp.MustCompile(`rel="[^"]*icon[^"]*"`)
-	baseHrefRe   = regexp.MustCompile(`<base[^>]+href="([^"]*)"`)
-	faviconPaths = []string{"/favicon.ico", "/favicon.png", "/apple-touch-icon.png"}
+	linkRe     = regexp.MustCompile(`<link[^>]+>`)
+	hrefRe     = regexp.MustCompile(`href="([^"]*)"`)
+	relFeedRe  = regexp.MustCompile(`rel="(alternate|feed)"`)
+	typeFeedRe = regexp.MustCompile(`type="[^"]*(?:rss|atom|feed|xml)[^"]*"`)
+	relIconRe  = regexp.MustCompile(`rel="[^"]*icon[^"]*"`)
+	baseHrefRe = regexp.MustCompile(`<base[^>]+href="([^"]*)"`)
 
+	faviconPaths  = []string{"/favicon.ico", "/favicon.png", "/apple-touch-icon.png"}
 	discoverClient = &http.Client{Timeout: 15 * time.Second}
 )
 
 func Discover(ctx context.Context, siteURL string) (*DiscoveryResult, error) {
-	result := &DiscoveryResult{}
-
-	favicon := discoverFavicon(ctx, discoverClient, siteURL)
-	if favicon != "" {
-		result.Favicon = favicon
+	base, html := fetchHTML(ctx, siteURL)
+	if base == nil {
+		return &DiscoveryResult{}, nil
 	}
 
-	feeds := discoverFeedLinks(ctx, discoverClient, siteURL)
-	result.FeedURLs = feeds
+	if m := baseHrefRe.FindStringSubmatch(html); len(m) >= 2 && m[1] != "" {
+		if u, err := base.Parse(m[1]); err == nil {
+			base = u
+		}
+	}
 
-	return result, nil
+	links := linkRe.FindAllString(html, -1)
+	return &DiscoveryResult{
+		FeedURLs: findFeedURLs(base, links),
+		Favicon:  findFavicon(ctx, base, links),
+	}, nil
 }
 
-func discoverFeedLinks(ctx context.Context, client *http.Client, siteURL string) []string {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, siteURL, nil)
-	if err != nil {
-		return nil
-	}
-	req.Header.Set("Accept", "text/html")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024*512))
-	if err != nil {
-		return nil
-	}
-
-	html := string(body)
-	baseURL := resolveBaseURL(siteURL, html)
-
+func findFeedURLs(base *url.URL, links []string) []string {
 	var feeds []string
-	links := linkRe.FindAllString(html, -1)
 	for _, link := range links {
 		if !relFeedRe.MatchString(link) && !typeFeedRe.MatchString(link) {
 			continue
 		}
-
-		hrefMatch := hrefRe.FindStringSubmatch(link)
-		if len(hrefMatch) < 2 {
+		href := extractHref(link)
+		if href == "" {
 			continue
 		}
-
-		feedURL := resolveURL(baseURL, hrefMatch[1])
-		if feedURL != "" {
-			feeds = append(feeds, feedURL)
+		if u, err := base.Parse(href); err == nil {
+			feeds = append(feeds, u.String())
 		}
 	}
-
 	return feeds
 }
 
-func discoverFavicon(ctx context.Context, client *http.Client, siteURL string) string {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, siteURL, nil)
-	if err != nil {
-		return tryDefaultFavicons(ctx, client, siteURL)
-	}
-	req.Header.Set("Accept", "text/html")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return tryDefaultFavicons(ctx, client, siteURL)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return tryDefaultFavicons(ctx, client, siteURL)
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024*512))
-	if err != nil {
-		return tryDefaultFavicons(ctx, client, siteURL)
-	}
-
-	html := string(body)
-	baseURL := resolveBaseURL(siteURL, html)
-
-	links := linkRe.FindAllString(html, -1)
+func findFavicon(ctx context.Context, base *url.URL, links []string) string {
 	for _, link := range links {
 		if !relIconRe.MatchString(link) {
 			continue
 		}
-
-		hrefMatch := hrefRe.FindStringSubmatch(link)
-		if len(hrefMatch) < 2 {
+		href := extractHref(link)
+		if href == "" {
 			continue
 		}
-
-		iconURL := resolveURL(baseURL, hrefMatch[1])
-		if iconURL != "" {
-			return iconURL
+		if u, err := base.Parse(href); err == nil {
+			return u.String()
 		}
 	}
 
-	return tryDefaultFavicons(ctx, client, siteURL)
-}
-
-func tryDefaultFavicons(ctx context.Context, client *http.Client, siteURL string) string {
-	parsed := siteURL
-	if !strings.HasPrefix(parsed, "http") {
-		parsed = "https://" + parsed
-	}
-
-	base := parsed
-	idx := strings.Index(base[8:], "/")
-	if idx >= 0 {
-		base = base[:8+idx]
-	}
+	origin := *base
+	origin.Path = ""
+	origin.RawQuery = ""
+	origin.Fragment = ""
 
 	for _, path := range faviconPaths {
-		url := base + path
-		req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
+		u, _ := url.Parse(path)
+		resolved := origin.ResolveReference(u)
+		req, err := http.NewRequestWithContext(ctx, http.MethodHead, resolved.String(), nil)
 		if err != nil {
 			continue
 		}
-
-		resp, err := client.Do(req)
+		resp, err := discoverClient.Do(req)
 		if err != nil {
 			continue
 		}
 		resp.Body.Close()
-
 		if resp.StatusCode == http.StatusOK {
-			return url
+			return resolved.String()
 		}
 	}
-
 	return ""
 }
 
-func resolveBaseURL(siteURL, html string) string {
-	match := baseHrefRe.FindStringSubmatch(html)
-	if len(match) >= 2 && match[1] != "" {
-		return resolveURL(siteURL, match[1])
+func extractHref(link string) string {
+	m := hrefRe.FindStringSubmatch(link)
+	if len(m) >= 2 {
+		return m[1]
 	}
-	return siteURL
+	return ""
 }
 
-func resolveURL(base, ref string) string {
-	if strings.HasPrefix(ref, "http://") || strings.HasPrefix(ref, "https://") {
-		return ref
+func fetchHTML(ctx context.Context, siteURL string) (*url.URL, string) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, siteURL, nil)
+	if err != nil {
+		return nil, ""
+	}
+	req.Header.Set("Accept", "text/html")
+
+	resp, err := discoverClient.Do(req)
+	if err != nil {
+		return nil, ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, ""
 	}
 
-	base = strings.TrimRight(base, "/")
-	if strings.HasPrefix(ref, "//") {
-		return "https:" + ref
-	}
-	if strings.HasPrefix(ref, "/") {
-		idx := strings.Index(base[8:], "/")
-		if idx >= 0 {
-			return base[:8+idx] + ref
-		}
-		return base + ref
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024*512))
+	if err != nil {
+		return nil, ""
 	}
 
-	idx := strings.LastIndex(base, "/")
-	if idx > 8 {
-		return base[:idx+1] + ref
-	}
-	return fmt.Sprintf("%s/%s", base, ref)
+	base := resp.Request.URL
+	return base, string(body)
 }

@@ -266,10 +266,15 @@ func (s *Sync) syncFollows(ctx context.Context, userDID string) error {
 					FollowedAt: db.NullTime(t),
 				}
 
-				var handle string
-				if rec.Subject != userDID {
-					s.db.CreateUser(ctx, rec.Subject, handle, "", "")
+				// auto onboard followers
+				var handle, displayName, avatarURL string
+				if h, dn, avatar, err := FetchProfile(ctx, rec.Subject); err == nil {
+					handle = h
+					displayName = dn
+					avatarURL = avatar
 				}
+
+				s.db.CreateUser(ctx, rec.Subject, handle, displayName, avatarURL)
 			}
 
 			if next == "" || len(records) == 0 {

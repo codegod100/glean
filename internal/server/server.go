@@ -490,7 +490,13 @@ func (s *Server) BackfillFromCollectionDir(ctx context.Context, collectionDirURL
 				handle = ident.Handle.String()
 			}
 
-			if _, err := s.db.CreateUser(ctx, did, handle, "", ""); err != nil {
+			var displayName, avatarURL string
+			if _, dn, avatar, err := atproto.FetchProfile(ctx, did); err == nil {
+				displayName = dn
+				avatarURL = avatar
+			}
+
+			if _, err := s.db.CreateUser(ctx, did, handle, displayName, avatarURL); err != nil {
 				s.logger.Error("failed to create user during backfill", "error", err, "did", did)
 				return
 			}
@@ -545,6 +551,11 @@ func (s *Server) runSyncAll(ctx context.Context) {
 			metrics.SyncErrors.Inc()
 			s.logger.Error("periodic sync failed", "error", err, "did", u.DID)
 		}
+
+		if dn, avatar, err := client.GetProfile(ctx, u.DID); err == nil {
+			_ = s.db.UpdateUserProfile(ctx, u.DID, dn, avatar)
+		}
+
 		metrics.SyncRuns.Inc()
 	}
 }
