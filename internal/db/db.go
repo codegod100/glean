@@ -1,7 +1,6 @@
 package db
 
 import (
-	"context"
 	"database/sql"
 	"math"
 	"strings"
@@ -9,6 +8,20 @@ import (
 
 	"github.com/mattn/go-sqlite3"
 )
+
+func init() {
+	sql.Register("sqlite3_glean", &sqlite3.SQLiteDriver{
+		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+			if err := conn.RegisterFunc("exp", func(x float64) float64 { return math.Exp(x) }, true); err != nil {
+				return err
+			}
+			if err := conn.RegisterFunc("log", func(x float64) float64 { return math.Log(x) }, true); err != nil {
+				return err
+			}
+			return nil
+		},
+	})
+}
 
 func NullStr(s string) sql.NullString {
 	return sql.NullString{String: s, Valid: s != ""}
@@ -34,39 +47,14 @@ type DB struct {
 }
 
 func Open(path string) (*DB, error) {
-	db, err := sql.Open("sqlite3", path+"?_journal_mode=WAL&_busy_timeout=5000")
+	db, err := sql.Open("sqlite3_glean", path+"?_journal_mode=WAL&_busy_timeout=5000")
 	if err != nil {
 		return nil, err
 	}
 
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(2)
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(30 * time.Minute)
-
-	conn, err := db.Conn(context.Background())
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
-
-	err = conn.Raw(func(driverConn any) error {
-		sqliteConn, ok := driverConn.(*sqlite3.SQLiteConn)
-		if !ok {
-			return nil
-		}
-		if err := sqliteConn.RegisterFunc("exp", func(x float64) float64 { return math.Exp(x) }, true); err != nil {
-			return err
-		}
-		if err := sqliteConn.RegisterFunc("log", func(x float64) float64 { return math.Log(x) }, true); err != nil {
-			return err
-		}
-		return nil
-	})
-	_ = conn.Close()
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
 
 	if err := initSchema(db); err != nil {
 		db.Close()
