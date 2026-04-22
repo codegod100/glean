@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"os"
 
 	"github.com/bluesky-social/indigo/atproto/syntax"
@@ -20,7 +21,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAuthStart(w http.ResponseWriter, r *http.Request) {
-	handle := r.FormValue("handle")
+	handle := strings.TrimPrefix(r.FormValue("handle"), "@")
 	if handle == "" {
 		http.Error(w, "handle required", http.StatusBadRequest)
 		return
