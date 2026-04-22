@@ -27,15 +27,16 @@ type PersonRecommendation struct {
 }
 
 type ArticleRecommendation struct {
-	ArticleID int64
-	Title     string
-	URL       string
-	FeedURL   string
-	FeedTitle string
-	Author    string
-	Summary   string
-	Published sql.NullTime
-	Score     float64
+	ArticleID  int64
+	Title      string
+	URL        string
+	FeedURL    string
+	FeedTitle  string
+	FaviconURL string
+	Author     string
+	Summary    string
+	Published  sql.NullTime
+	Score      float64
 }
 
 func (e *Engine) GetFeedRecommendations(ctx context.Context, userDID string, limit int) ([]*FeedRecommendation, error) {
@@ -215,6 +216,7 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 			GROUP BY l.feed_url, l.article_url
 		)
 		SELECT a.id, a.title, COALESCE(a.url, ''), la.feed_url, COALESCE(f.title, ''),
+		       COALESCE(f.favicon_url, ''),
 		       COALESCE(a.author, ''), COALESCE(a.summary, ''), a.published,
 		       COALESCE(la.like_signal, 0) * ?
 		     + COALESCE(sl.social, 0) * ?
@@ -237,7 +239,7 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 	for rows.Next() {
 		rec := &ArticleRecommendation{}
 		if err := rows.Scan(&rec.ArticleID, &rec.Title, &rec.URL, &rec.FeedURL, &rec.FeedTitle,
-			&rec.Author, &rec.Summary, &rec.Published, &rec.Score); err != nil {
+			&rec.FaviconURL, &rec.Author, &rec.Summary, &rec.Published, &rec.Score); err != nil {
 			return nil, err
 		}
 		recs = append(recs, rec)

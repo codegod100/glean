@@ -19,7 +19,7 @@
     <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide mb-3">Recommended feeds</h2>
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {{range .FeedRecommendations}}
-        {{template "recommendation-card.html" (dict "title" .Title "feed_url" .FeedURL "description" .Description "favicon_url" .FaviconURL "subscriber_count" .SubscriberCount "CSRFToken" $.CSRFToken)}}
+        {{template "recommendation-feed-card.html" (dict "title" .Title "feed_url" .FeedURL "description" .Description "favicon_url" .FaviconURL "subscriber_count" .SubscriberCount "CSRFToken" $.CSRFToken)}}
         {{end}}
     </div>
 </div>

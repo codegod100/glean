@@ -50,7 +50,7 @@
             <h2 class="text-lg font-semibold text-spot-text mb-4">Popular feeds to get started</h2>
             <div class="space-y-3">
                 {{range .FeedRecommendations}}
-                {{template "recommendation-card.html" (dict "title" .Title "feed_url" .FeedURL "description" .Description "favicon_url" .FaviconURL "subscriber_count" .SubscriberCount "CSRFToken" $.CSRFToken)}}
+                {{template "recommendation-feed-card.html" (dict "title" .Title "feed_url" .FeedURL "description" .Description "favicon_url" .FaviconURL "subscriber_count" .SubscriberCount "CSRFToken" $.CSRFToken)}}
                 {{end}}
             </div>
         </div>
@@ -68,15 +68,7 @@
             <h2 class="text-lg font-semibold text-spot-text mb-3">Recommended for you</h2>
             <div class="space-y-3">
                 {{range .ArticleRecommendations}}
-                <div class="bg-spot-surface rounded-xl px-5 py-4 hover:bg-spot-hover-50 transition">
-                    <a href="/articles/{{.ArticleID}}" class="font-bold text-spot-text hover:text-spot-green transition text-lg leading-tight">{{.Title}}</a>
-                    <div class="text-sm text-spot-secondary mt-1 flex items-center gap-2">
-                        {{if .Author}}<span>{{.Author}}</span>{{end}}
-                        <span class="text-spot-muted"><a href="/articles?feed={{.FeedURL}}" class="hover:text-spot-green transition">{{.FeedTitle}}</a></span>
-                        {{if .Published.Valid}}<span>{{.Published.Time.Format "Jan 2"}}</span>{{end}}
-                    </div>
-                    {{if .Summary}}<p class="text-sm text-spot-secondary mt-2 line-clamp-2">{{.Summary}}</p>{{end}}
-                </div>
+                {{template "recommendation-article-card.html" .}}
                 {{end}}
             </div>
         </div>
@@ -131,7 +123,7 @@
             <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended feeds</h2>
             <div class="space-y-3">
                 {{range .FeedRecommendations}}
-                {{template "recommendation-card.html" (dict "title" .Title "feed_url" .FeedURL "description" .Description "favicon_url" .FaviconURL "subscriber_count" .SubscriberCount "CSRFToken" $.CSRFToken)}}
+                {{template "recommendation-feed-card.html" (dict "title" .Title "feed_url" .FeedURL "description" .Description "favicon_url" .FaviconURL "subscriber_count" .SubscriberCount "CSRFToken" $.CSRFToken)}}
                 {{end}}
             </div>
         </div>
