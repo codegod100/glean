@@ -15,12 +15,19 @@
                 </div>
             </div>
             <div class="flex items-center gap-3">
-                {{if .FeedUnreadCount}}<span class="text-xs bg-spot-green/20 text-spot-green px-2.5 py-0.5 rounded-full font-bold">{{.FeedUnreadCount}} unread</span>{{end}}
+                {{if not .IsSubscribed}}
+                <form hx-post="/feeds/add" hx-swap="none" hx-on::after-request="if(event.detail.successful) window.location.reload()">
+                    {{csrfInput .CSRFToken}}
+                    <input type="hidden" name="feed_url" value="{{.FeedURL}}">
+                    <button type="submit" class="bg-spot-green text-white rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:brightness-110 transition">Subscribe</button>
+                </form>
+                {{else}}
                 <form hx-post="/articles/mark-all-read" hx-confirm="Mark all articles as read?">
                     {{csrfInput .CSRFToken}}
                     <input type="hidden" name="feed" value="{{.FeedURL}}">
                     <button type="submit" class="border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:border-spot-text transition">Mark all read</button>
                 </form>
+                {{end}}
             </div>
         </div>
         {{if .Feed.Description.Valid}}<p class="text-sm text-spot-secondary mt-2">{{.Feed.Description.String}}</p>{{end}}

@@ -91,8 +91,11 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 		if feed, err := s.db.GetFeed(r.Context(), feedURL); err == nil {
 			data["Feed"] = feed
 		}
-		unreadCount, _ := s.db.GetUnreadCount(r.Context(), user.DID, feedURL)
-		data["FeedUnreadCount"] = unreadCount
+		if _, err := s.db.GetSubscription(r.Context(), user.DID, feedURL); err == nil {
+			data["IsSubscribed"] = true
+		} else {
+			data["IsSubscribed"] = false
+		}
 	}
 
 	if r.Header.Get("HX-Request") == "true" {
