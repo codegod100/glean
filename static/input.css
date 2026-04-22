@@ -4,6 +4,7 @@
 
 @layer base {
   :root {
+    color-scheme: dark;
     --spot-bg: #0a1814;
     --spot-surface: #152b24;
     --spot-hover: #1e3c33;
@@ -23,6 +24,7 @@
   }
 
   [data-theme="light"] {
+    color-scheme: light;
     --spot-bg: #f2f0eb;
     --spot-surface: #ffffff;
     --spot-hover: #edebe9;
