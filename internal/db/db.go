@@ -18,6 +18,16 @@ func init() {
 			if err := conn.RegisterFunc("log", func(x float64) float64 { return math.Log(x) }, true); err != nil {
 				return err
 			}
+			pragmas := []string{
+				`PRAGMA wal_autocheckpoint = 1000`,
+				`PRAGMA temp_store = MEMORY`,
+				`PRAGMA mmap_size = 268435456`,
+			}
+			for _, p := range pragmas {
+				if _, err := conn.Exec(p, nil); err != nil {
+					return err
+				}
+			}
 			return nil
 		},
 	})
@@ -46,8 +56,12 @@ type DB struct {
 	*sql.DB
 }
 
+func (d *DB) Close() error {
+	return d.DB.Close()
+}
+
 func Open(path string) (*DB, error) {
-	db, err := sql.Open("sqlite3_glean", path+"?_journal_mode=WAL&_busy_timeout=5000")
+	db, err := sql.Open("sqlite3_glean", path+"?_journal_mode=WAL&_busy_timeout=30000&_synchronous=NORMAL&_cache_size=-64000&_stmt_cache_size=64&_mutex=no")
 	if err != nil {
 		return nil, err
 	}

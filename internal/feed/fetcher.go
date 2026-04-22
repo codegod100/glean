@@ -120,7 +120,7 @@ func (s *Scheduler) fetchAll(ctx context.Context) {
 		return
 	}
 
-	sem := make(chan struct{}, 10)
+	sem := make(chan struct{}, 3)
 	var wg sync.WaitGroup
 	for _, f := range feeds {
 		wg.Add(1)
