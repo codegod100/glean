@@ -286,23 +286,75 @@ func (e *Engine) ComputeSignalProfiles(ctx context.Context) error {
 		return err
 	}
 
+	if _, err := tx.ExecContext(ctx, `
+		CREATE TEMP TABLE IF NOT EXISTS _user_like_counts (user_did TEXT PRIMARY KEY, cnt INT)
+	`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM _user_like_counts`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO _user_like_counts SELECT author_did, COUNT(*) FROM likes GROUP BY author_did
+	`); err != nil {
+		return err
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		CREATE TEMP TABLE IF NOT EXISTS _user_tag_counts (user_did TEXT PRIMARY KEY, cnt INT)
+	`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM _user_tag_counts`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO _user_tag_counts
+		WITH user_tags AS (
+			SELECT author_did, TRIM(value) AS tag
+			FROM annotations, json_each('["' || REPLACE(tags, ',', '","') || '"]')
+			WHERE tags IS NOT NULL AND tags != ''
+		)
+		SELECT author_did, COUNT(DISTINCT tag) FROM user_tags GROUP BY author_did
+	`); err != nil {
+		return err
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		CREATE TEMP TABLE IF NOT EXISTS _user_top_categories (user_did TEXT PRIMARY KEY, categories TEXT)
+	`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM _user_top_categories`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO _user_top_categories
+		SELECT user_did, '[' || GROUP_CONCAT('{"c":"' || category || '","n":"' || CAST(cnt AS TEXT) || '}') || ']'
+		FROM (
+			SELECT user_did, category, COUNT(*) AS cnt
+			FROM subscriptions
+			WHERE category IS NOT NULL AND category != ''
+			GROUP BY user_did, category
+			ORDER BY COUNT(*) DESC
+			LIMIT 5
+		)
+		GROUP BY user_did
+	`); err != nil {
+		return err
+	}
+
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO user_signal_profiles (user_did, total_likes, total_tags, top_categories)
 		SELECT
 			u.did,
-			(SELECT COUNT(*) FROM likes WHERE author_did = u.did),
-			COALESCE((SELECT COUNT(DISTINCT TRIM(value))
-				FROM annotations, json_each('["' || REPLACE(tags, ',', '","') || '"]')
-				WHERE author_did = u.did AND tags IS NOT NULL AND tags != ''
-			), 0),
-			(SELECT '[' || GROUP_CONCAT('{"c":"' || category || '","n":"' || CAST(cnt AS TEXT) || '}') || ']'
-			 FROM (
-				SELECT category, COUNT(*) AS cnt
-				FROM subscriptions WHERE user_did = u.did AND category IS NOT NULL AND category != ''
-				GROUP BY category ORDER BY cnt DESC LIMIT 5
-			 )
-			)
+			COALESCE(lc.cnt, 0),
+			COALESCE(tc.cnt, 0),
+			COALESCE(cc.categories, '[]')
 		FROM users u
+		LEFT JOIN _user_like_counts lc ON lc.user_did = u.did
+		LEFT JOIN _user_tag_counts tc ON tc.user_did = u.did
+		LEFT JOIN _user_top_categories cc ON cc.user_did = u.did
 	`)
 	if err != nil {
 		return err

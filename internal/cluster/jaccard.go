@@ -133,6 +133,12 @@ func (e *Engine) computeDescriptionSimilarity(ctx context.Context, tx *sql.Tx) e
 		return err
 	}
 
+	if _, err := tx.ExecContext(ctx, `
+		CREATE INDEX IF NOT EXISTS _idx_feed_words_word ON _feed_words(word, feed_url)
+	`); err != nil {
+		return err
+	}
+
 	descInsert := `
 		INSERT OR IGNORE INTO feed_similarity (feed_a, feed_b, jaccard)
 		SELECT feed_a, feed_b, 0 FROM _word_overlap

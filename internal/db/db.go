@@ -207,8 +207,10 @@ var schema = []string{
 		PRIMARY KEY (account_did, session_id)
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_subscriptions_feed ON subscriptions(feed_url)`,
+	`CREATE INDEX IF NOT EXISTS idx_subscriptions_feed_user ON subscriptions(feed_url, user_did)`,
 	`CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_did)`,
 	`CREATE INDEX IF NOT EXISTS idx_subscriptions_uri ON subscriptions(uri)`,
+	`CREATE INDEX IF NOT EXISTS idx_likes_author_feed ON likes(author_did, feed_url, created_at)`,
 	`CREATE INDEX IF NOT EXISTS idx_articles_feed ON articles(feed_url)`,
 	`CREATE INDEX IF NOT EXISTS idx_articles_published ON articles(published DESC)`,
 	`CREATE INDEX IF NOT EXISTS idx_articles_url ON articles(url)`,
@@ -223,6 +225,7 @@ var schema = []string{
 	`CREATE INDEX IF NOT EXISTS idx_follows_target ON follows(target_did)`,
 	`CREATE INDEX IF NOT EXISTS idx_follows_uri ON follows(uri)`,
 	`CREATE INDEX IF NOT EXISTS idx_user_similarity_b ON user_similarity(user_b)`,
+	`CREATE INDEX IF NOT EXISTS idx_user_similarity_a ON user_similarity(user_a)`,
 
 	`CREATE TABLE IF NOT EXISTS dismissed_recommendations (
 		user_did     TEXT NOT NULL REFERENCES users(did),
@@ -275,7 +278,6 @@ var schema = []string{
 	`CREATE INDEX IF NOT EXISTS idx_impressions_last_shown ON recommendation_impressions(last_shown_at)`,
 	`CREATE INDEX IF NOT EXISTS idx_follow_distances_b ON follow_distances(user_b)`,
 	`CREATE INDEX IF NOT EXISTS idx_follow_distances_a_dist ON follow_distances(user_a, distance)`,
-	`CREATE INDEX IF NOT EXISTS idx_likes_author_feed ON likes(author_did, feed_url, created_at)`,
 	`CREATE INDEX IF NOT EXISTS idx_follows_followed_at ON follows(followed_at)`,
 	`CREATE INDEX IF NOT EXISTS idx_users_handle ON users(handle)`,
 	`CREATE VIRTUAL TABLE IF NOT EXISTS articles_fts USING fts5(title, summary, content, author, content=articles, content_rowid=id)`,

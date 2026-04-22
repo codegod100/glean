@@ -15,22 +15,16 @@ func (e *Engine) ComputeFollowDistances(ctx context.Context) error {
 		return err
 	}
 
-	if _, err := tx.ExecContext(ctx, `
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO follow_distances (user_a, user_b, distance)
-		SELECT user_did, target_did, 1
-		FROM follows
-		WHERE user_did != target_did
-	`); err != nil {
-		return err
-	}
-
-	if _, err := tx.ExecContext(ctx, `
-		INSERT OR IGNORE INTO follow_distances (user_a, user_b, distance)
+		SELECT user_did, target_did, 1 FROM follows WHERE user_did != target_did
+		UNION ALL
 		SELECT f1.user_did, f2.target_did, 2
 		FROM follows f1
 		JOIN follows f2 ON f1.target_did = f2.user_did
 		WHERE f1.user_did != f2.target_did
-	`); err != nil {
+	`)
+	if err != nil {
 		return err
 	}
 
