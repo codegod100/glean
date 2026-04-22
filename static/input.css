@@ -4,22 +4,22 @@
 
 @layer base {
   :root {
-    --spot-bg: #0f1f1a;
+    --spot-bg: #0a1814;
     --spot-surface: #152b24;
-    --spot-hover: #1a362e;
-    --spot-hover-50: rgba(26,54,46,0.5);
-    --spot-text: #ffffff;
-    --spot-secondary: rgba(255,255,255,0.70);
-    --spot-body: rgba(255,255,255,0.87);
-    --spot-muted: rgba(255,255,255,0.25);
-    --spot-divider: rgba(255,255,255,0.08);
-    --spot-divider-30: rgba(255,255,255,0.12);
-    --spot-outline: rgba(255,255,255,0.20);
-    --spot-placeholder: rgba(255,255,255,0.30);
+    --spot-hover: #1e3c33;
+    --spot-hover-50: rgba(30,60,51,0.5);
+    --spot-text: #f2f2f2;
+    --spot-secondary: rgba(255,255,255,0.78);
+    --spot-body: rgba(255,255,255,0.92);
+    --spot-muted: rgba(255,255,255,0.42);
+    --spot-divider: rgba(255,255,255,0.12);
+    --spot-divider-30: rgba(255,255,255,0.16);
+    --spot-outline: rgba(255,255,255,0.30);
+    --spot-placeholder: rgba(255,255,255,0.45);
     --spot-active-bg: #ffffff;
     --spot-active-text: #1E3932;
-    --spot-shadow: 0 0 0.5px rgba(0,0,0,0.14), 0 1px 1px rgba(0,0,0,0.24);
-    --spot-shadow-heavy: 0 0 6px rgba(0,0,0,0.24), 0 8px 12px rgba(0,0,0,0.14);
+    --spot-shadow: 0 0 0.5px rgba(0,0,0,0.20), 0 1px 1px rgba(0,0,0,0.30);
+    --spot-shadow-heavy: 0 0 6px rgba(0,0,0,0.30), 0 8px 12px rgba(0,0,0,0.20);
   }
 
   [data-theme="light"] {

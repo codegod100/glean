@@ -30,14 +30,14 @@ Logo is a stylized bee: body with horizontal stripes (like text lines on a page)
 
 | Token              | Value                    | Use                           |
 | ------------------ | ------------------------ | ----------------------------- |
-| `--spot-bg`        | `#0f1f1a`                | Page background, sidebar      |
+| `--spot-bg`        | `#0a1814`                | Page background, sidebar      |
 | `--spot-surface`   | `#152b24`                | Card background               |
-| `--spot-hover`     | `#1a362e`                | Hover state, input background |
-| `--spot-text`      | `#ffffff`                | Primary text                  |
-| `--spot-secondary` | `rgba(255,255,255,0.70)` | Secondary/metadata text       |
-| `--spot-body`      | `rgba(255,255,255,0.87)` | Body copy, article content    |
-| `--spot-muted`     | `rgba(255,255,255,0.25)` | Disabled/tertiary text        |
-| `--spot-divider`   | `rgba(255,255,255,0.08)` | Borders, dividers             |
+| `--spot-hover`     | `#1e3c33`                | Hover state, input background |
+| `--spot-text`      | `#f2f2f2`                | Primary text                  |
+| `--spot-secondary` | `rgba(255,255,255,0.78)` | Secondary/metadata text       |
+| `--spot-body`      | `rgba(255,255,255,0.92)` | Body copy, article content    |
+| `--spot-muted`     | `rgba(255,255,255,0.42)` | Disabled/tertiary text        |
+| `--spot-divider`   | `rgba(255,255,255,0.12)` | Borders, dividers             |
 | `--spot-outline`   | `rgba(255,255,255,0.20)` | Button borders, input borders |
 
 ### Light Theme
