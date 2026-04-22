@@ -255,6 +255,7 @@ func (e *Engine) ComputePeopleRecommendationsOnDemand(ctx context.Context, userD
 		) sim
 		JOIN users u ON u.did = sim.peer_did
 		WHERE u.handle IS NOT NULL AND u.handle != ''
+		  AND EXISTS (SELECT 1 FROM subscriptions s JOIN feeds f ON s.feed_url = f.feed_url WHERE s.user_did = u.did AND f.subscriber_count > 0)
 		ORDER BY sim.jaccard DESC
 		LIMIT ?
 	`, userDID, userDID, limit)
