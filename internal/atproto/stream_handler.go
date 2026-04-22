@@ -222,9 +222,13 @@ func (h *StreamDBHandler) handleSkyreaderSubscription(ctx context.Context, event
 			return nil
 		}
 
-		f := &db.Feed{FeedURL: rec.FeedURL, Title: db.NullStr(rec.Title), SiteURL: db.NullStr(rec.SiteURL)}
+		f := &db.Feed{
+			FeedURL: rec.FeedURL,
+			Title:   db.NullStr(rec.Title),
+			SiteURL: db.NullStr(rec.SiteURL),
+		}
 		_ = h.db.UpsertFeed(ctx, f)
-		err = h.db.CreateSubscription(ctx, event.DID, rec.FeedURL, rec.Title, "", event.URI, event.CID)
+		err = h.db.CreateSubscription(ctx, event.DID, rec.FeedURL, rec.Title, rec.Category, event.URI, event.CID)
 		if errors.Is(err, db.ErrDuplicateSubscription) {
 			return nil
 		}

@@ -89,3 +89,7 @@ func TestFollowRecordMatchesLexicon(t *testing.T) {
 func TestMarginNoteRecordMatchesLexicon(t *testing.T) {
 	assertStructMatchesLexiconPath[MarginNoteRecord](t, lexiconPathFromRoot("at/margin/note.json"))
 }
+
+func TestSkyreaderSubscriptionRecordMatchesLexicon(t *testing.T) {
+	assertStructMatchesLexiconPath[SkyreaderSubscriptionRecord](t, lexiconPathFromRoot("app/skyreader/feed/subscription.json"))
+}
