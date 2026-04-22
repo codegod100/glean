@@ -45,6 +45,21 @@ func Discover(ctx context.Context, siteURL string) (*DiscoveryResult, error) {
 	}, nil
 }
 
+func ResolveFavicon(ctx context.Context, feedURL, siteURL, parsedFavicon string) string {
+	if parsedFavicon != "" {
+		return parsedFavicon
+	}
+	target := siteURL
+	if target == "" {
+		target = feedURL
+	}
+	result, err := Discover(ctx, target)
+	if err != nil {
+		return ""
+	}
+	return result.Favicon
+}
+
 func findFeedURLs(base *url.URL, links []string) []string {
 	var feeds []string
 	for _, link := range links {

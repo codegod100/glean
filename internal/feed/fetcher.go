@@ -185,14 +185,9 @@ func (s *Scheduler) FetchFeed(ctx context.Context, feed *Feed) {
 	if result != nil && result.Feed.FaviconURL != "" {
 		_ = s.store.UpdateFeedFavicon(ctx, feed.URL, result.Feed.FaviconURL)
 	} else if feed.FaviconURL == "" {
-		siteURL := feed.SiteURL
-		if siteURL == "" {
-			siteURL = feed.URL
-		}
 		go func() {
-			discResult, err := Discover(context.Background(), siteURL)
-			if err == nil && discResult.Favicon != "" {
-				_ = s.store.UpdateFeedFavicon(context.Background(), feed.URL, discResult.Favicon)
+			if f := ResolveFavicon(context.Background(), feed.URL, feed.SiteURL, ""); f != "" {
+				_ = s.store.UpdateFeedFavicon(context.Background(), feed.URL, f)
 			}
 		}()
 	}

@@ -87,16 +87,11 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if result.Feed.FaviconURL != "" {
-			_ = s.db.UpdateFeedFavicon(r.Context(), feedURL, result.Feed.FaviconURL)
-		} else if result.Feed.SiteURL != "" {
-			go func() {
-				discResult, err := feed.Discover(context.Background(), result.Feed.SiteURL)
-				if err == nil && discResult.Favicon != "" {
-					_ = s.db.UpdateFeedFavicon(context.Background(), feedURL, discResult.Favicon)
-				}
-			}()
-		}
+		go func() {
+			if f := feed.ResolveFavicon(context.Background(), feedURL, result.Feed.SiteURL, result.Feed.FaviconURL); f != "" {
+				_ = s.db.UpdateFeedFavicon(context.Background(), feedURL, f)
+			}
+		}()
 	}
 
 	var feedTitle string
@@ -240,14 +235,11 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		if fu.SiteURL != "" {
-			go func(feedURL, siteURL string) {
-				discResult, err := feed.Discover(context.Background(), siteURL)
-				if err == nil && discResult.Favicon != "" {
-					_ = s.db.UpdateFeedFavicon(context.Background(), feedURL, discResult.Favicon)
-				}
-			}(fu.URL, fu.SiteURL)
-		}
+		go func(feedURL, siteURL string) {
+			if f := feed.ResolveFavicon(context.Background(), feedURL, siteURL, ""); f != "" {
+				_ = s.db.UpdateFeedFavicon(context.Background(), feedURL, f)
+			}
+		}(fu.URL, fu.SiteURL)
 
 		var subURI, subCID string
 		if client != nil {
