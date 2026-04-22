@@ -35,6 +35,15 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !profileUser.AvatarURL.Valid || profileUser.AvatarURL.String == "" {
+		_, displayName, avatarURL, err := atproto.FetchProfile(r.Context(), did)
+		if err == nil && avatarURL != "" {
+			_ = s.db.UpdateUserProfile(r.Context(), did, displayName, avatarURL)
+			profileUser.DisplayName = nullString(displayName)
+			profileUser.AvatarURL = nullString(avatarURL)
+		}
+	}
+
 	subs, _ := s.db.ListSubscriptions(r.Context(), did, "", 50, 0)
 	annotations, _ := s.db.ListAnnotations(r.Context(), "", "", did, 50, 0)
 	subCount, _ := s.db.GetSubscriptionCount(r.Context(), did)
