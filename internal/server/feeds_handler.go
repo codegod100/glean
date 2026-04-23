@@ -30,9 +30,9 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 		subs = subs[:page.PageSize]
 	}
 
-	allSubs, err := s.dbs.Articles.ListSubscriptions(ctx, user.DID, "", 1000, 0)
+	subCount, err := s.dbs.Articles.GetSubscriptionCount(ctx, user.DID)
 	if err != nil {
-		s.logger.Warn("failed to list all subscriptions", "error", err, "did", user.DID)
+		s.logger.Warn("failed to get subscription count", "error", err, "did", user.DID)
 	}
 
 	feedRecs, err := s.engine.GetFeedRecommendations(ctx, user.DID, 6)
@@ -69,7 +69,7 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "feeds.html", map[string]any{
 		"User":                  user,
 		"Subscriptions":         subs,
-		"SubscriptionCount":     len(allSubs),
+		"SubscriptionCount":     subCount,
 		"Categories":            categories,
 		"Category":              category,
 		"FeedRecommendations":   feedRecs,
