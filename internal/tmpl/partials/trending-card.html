@@ -4,7 +4,7 @@
         <div class="min-w-0 flex-1">
             <a href="/articles/{{.ArticleID}}" class="font-bold text-spot-text hover:text-spot-green transition text-lg leading-tight">{{.Title}}</a>
             <div class="text-sm text-spot-secondary mt-1 flex items-center gap-2">
-                {{if .FaviconURL}}<img src="{{.FaviconURL}}" class="w-4 h-4 rounded shrink-0" loading="lazy">{{end}}
+                {{template "favicon" dict "src" .FaviconURL "size" "w-4 h-4"}}
                 {{if .Author}}<span>{{.Author}}</span>{{end}}
                 <span class="text-spot-muted"><a href="/articles?feed={{.FeedURL}}" class="hover:text-spot-green transition">{{if .FeedTitle}}{{.FeedTitle}}{{else}}{{.FeedURL}}{{end}}</a></span>
             </div>
