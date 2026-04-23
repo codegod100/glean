@@ -381,54 +381,11 @@ func (s *Server) syncUserInBackground(userDID string, client *atproto.Client) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 
-		isNewUser := false
-		if count, err := s.dbs.Articles.GetSubscriptionCount(ctx, userDID); err == nil && count == 0 {
-			isNewUser = true
-		}
-
 		sync := atproto.NewSync(s.dbs.Articles, s.dbs.Users, client, s.logger)
 		if err := sync.Run(ctx, userDID); err != nil {
 			s.logger.Error("background sync failed", "error", err, "did", userDID)
 		}
-
-		if isNewUser {
-			s.refreshUserFeeds(ctx, userDID)
-		}
 	}()
-}
-
-func (s *Server) refreshUserFeeds(ctx context.Context, userDID string) {
-	subs, err := s.dbs.Articles.ListSubscriptions(ctx, userDID, "", 1000, 0)
-	if err != nil {
-		s.logger.Error("failed to list subscriptions for initial fetch", "error", err, "did", userDID)
-		return
-	}
-
-	// Fetch each feed once, even if many users subscribe to the same feed.
-	// Dead feeds (error_count >= 25) are intentionally retried here so a new
-	// user's subscriptions get a chance to succeed before being gated by the
-	// scheduler's error_count filter.
-	seen := make(map[string]bool, len(subs))
-	for _, sub := range subs {
-		if seen[sub.FeedURL] {
-			continue
-		}
-		seen[sub.FeedURL] = true
-
-		f, err := s.dbs.Articles.GetFeed(ctx, sub.FeedURL)
-		if err != nil {
-			continue
-		}
-		s.scheduler.FetchFeed(ctx, &feed.Feed{
-			URL:          f.FeedURL,
-			Title:        f.Title.String,
-			SiteURL:      f.SiteURL.String,
-			Description:  f.Description.String,
-			Type:         f.FeedType.String,
-			ETag:         f.Etag.String,
-			LastModified: f.LastModified.String,
-		})
-	}
 }
 
 func (s *Server) PeriodicSync(ctx context.Context, interval time.Duration) {
