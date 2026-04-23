@@ -1,6 +1,7 @@
 package feed
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -182,8 +183,8 @@ func parseJSONFeed(data []byte, feedURL string) (*ParseResult, error) {
 	return result, nil
 }
 
-func makeXMLDecoder(data []byte) *xml.Decoder {
-	decoder := xml.NewDecoder(strings.NewReader(string(data)))
+func makeXMLDecoder(r io.Reader) *xml.Decoder {
+	decoder := xml.NewDecoder(r)
 	decoder.Strict = false
 	decoder.CharsetReader = func(charset string, input io.Reader) (io.Reader, error) {
 		return htmlcharset.NewReader(input, "text/xml; charset="+charset)
@@ -191,26 +192,44 @@ func makeXMLDecoder(data []byte) *xml.Decoder {
 	return decoder
 }
 
+func detectXMLRoot(data []byte) string {
+	decoder := makeXMLDecoder(bytes.NewReader(data))
+	for {
+		tok, err := decoder.Token()
+		if err != nil {
+			return ""
+		}
+		if se, ok := tok.(xml.StartElement); ok {
+			return se.Name.Local
+		}
+	}
+}
+
 func parseXMLFeed(data []byte, feedURL string) (*ParseResult, error) {
-	var rss rssFeed
-	if err := makeXMLDecoder(data).Decode(&rss); err == nil {
-		if rss.XMLName.Local == "rss" {
-			return convertRSS(&rss, feedURL), nil
-		}
+	root := detectXMLRoot(data)
+	if root == "" {
+		return nil, fmt.Errorf("unable to detect feed format")
 	}
 
-	var atom atomFeed
-	if err := makeXMLDecoder(data).Decode(&atom); err == nil {
-		if atom.XMLName.Local == "feed" {
-			return convertAtom(&atom, feedURL), nil
+	switch root {
+	case "rss":
+		var rss rssFeed
+		if err := makeXMLDecoder(bytes.NewReader(data)).Decode(&rss); err != nil {
+			return nil, fmt.Errorf("parsing RSS feed: %w", err)
 		}
-	}
-
-	var rdf rdfFeed
-	if err := makeXMLDecoder(data).Decode(&rdf); err == nil {
-		if rdf.XMLName.Local == "RDF" {
-			return convertRDF(&rdf, feedURL), nil
+		return convertRSS(&rss, feedURL), nil
+	case "feed":
+		var atom atomFeed
+		if err := makeXMLDecoder(bytes.NewReader(data)).Decode(&atom); err != nil {
+			return nil, fmt.Errorf("parsing Atom feed: %w", err)
 		}
+		return convertAtom(&atom, feedURL), nil
+	case "RDF":
+		var rdf rdfFeed
+		if err := makeXMLDecoder(bytes.NewReader(data)).Decode(&rdf); err != nil {
+			return nil, fmt.Errorf("parsing RDF feed: %w", err)
+		}
+		return convertRDF(&rdf, feedURL), nil
 	}
 
 	return nil, fmt.Errorf("unable to detect feed format")
