@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"pkg.rbrt.fr/glean/internal/httpclient"
 )
 
 type imageContentTypePrefixes []string
@@ -37,7 +39,10 @@ var (
 	baseHrefRe = regexp.MustCompile(`<base[^>]+href="([^"]*)"`)
 
 	faviconPaths   = []string{"/favicon.ico", "/favicon.png", "/apple-touch-icon.png"}
-	discoverClient = &http.Client{Timeout: 15 * time.Second}
+	discoverClient = &http.Client{
+		Timeout:   15 * time.Second,
+		Transport: httpclient.NewTransport(),
+	}
 )
 
 func Discover(ctx context.Context, siteURL string) (*DiscoveryResult, error) {
@@ -129,6 +134,7 @@ func findFavicon(ctx context.Context, base *url.URL, links []string) string {
 			if err != nil {
 				return
 			}
+			httpclient.SetDefaultHeaders(req)
 			resp, err := discoverClient.Do(req)
 			if err != nil {
 				return
@@ -158,6 +164,7 @@ func checkContentType(ctx context.Context, url string) bool {
 	if err != nil {
 		return false
 	}
+	httpclient.SetDefaultHeaders(req)
 	resp, err := discoverClient.Do(req)
 	if err != nil {
 		return false
@@ -179,6 +186,7 @@ func fetchHTML(ctx context.Context, siteURL string) (*url.URL, string) {
 	if err != nil {
 		return nil, ""
 	}
+	httpclient.SetDefaultHeaders(req)
 	req.Header.Set("Accept", "text/html")
 
 	resp, err := discoverClient.Do(req)

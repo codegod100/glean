@@ -8,7 +8,13 @@ import (
 	"sync"
 	"time"
 
+	"pkg.rbrt.fr/glean/internal/httpclient"
 	"pkg.rbrt.fr/glean/internal/metrics"
+)
+
+const (
+	maxRetries     = 3
+	baseRetryDelay = 1 * time.Second
 )
 
 type Fetcher struct {
@@ -18,7 +24,8 @@ type Fetcher struct {
 func NewFetcher() *Fetcher {
 	return &Fetcher{
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout:   30 * time.Second,
+			Transport: httpclient.NewTransport(),
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if len(via) >= 10 {
 					return fmt.Errorf("too many redirects")
@@ -30,10 +37,41 @@ func NewFetcher() *Fetcher {
 }
 
 func (f *Fetcher) Fetch(ctx context.Context, feedURL, etag, lastModified string) (*ParseResult, string, string, error) {
+	var lastResp *http.Response
+	var lastErr error
+
+	for attempt := range maxRetries + 1 {
+		if attempt > 0 {
+			backoff := retryBackoff(attempt, lastResp)
+			if err := httpclient.SleepWithContext(ctx, backoff); err != nil {
+				return nil, "", "", err
+			}
+		}
+
+		result, newEtag, newLastModified, resp, err := f.executeRequest(ctx, feedURL, etag, lastModified)
+		lastResp = resp
+		if err == nil {
+			return result, newEtag, newLastModified, nil
+		}
+
+		if resp == nil || !httpclient.IsRetryable(resp.StatusCode) {
+			return nil, "", "", err
+		}
+
+		lastErr = err
+	}
+
+	return nil, "", "", lastErr
+}
+
+func (f *Fetcher) executeRequest(ctx context.Context, feedURL, etag, lastModified string) (*ParseResult, string, string, *http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, feedURL, nil)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("creating request: %w", err)
+		return nil, "", "", nil, fmt.Errorf("creating request: %w", err)
 	}
+
+	httpclient.SetDefaultHeaders(req)
+	req.Header.Set("Accept", httpclient.AcceptFeed)
 
 	if etag != "" {
 		req.Header.Set("If-None-Match", etag)
@@ -44,16 +82,24 @@ func (f *Fetcher) Fetch(ctx context.Context, feedURL, etag, lastModified string)
 
 	resp, err := f.httpClient.Do(req)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("fetching feed: %w", err)
+		return nil, "", "", nil, fmt.Errorf("fetching feed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotModified {
-		return nil, "", "", nil
+		return nil, "", "", resp, nil
+	}
+
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return nil, "", "", resp, fmt.Errorf("rate limited (retry-after: %s)", resp.Header.Get("Retry-After"))
+	}
+
+	if resp.StatusCode >= 500 {
+		return nil, "", "", resp, fmt.Errorf("server error: %d", resp.StatusCode)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, "", "", fmt.Errorf("unexpected status: %d", resp.StatusCode)
+		return nil, "", "", resp, fmt.Errorf("unexpected status: %d", resp.StatusCode)
 	}
 
 	newEtag := resp.Header.Get("ETag")
@@ -61,10 +107,21 @@ func (f *Fetcher) Fetch(ctx context.Context, feedURL, etag, lastModified string)
 
 	result, err := Parse(resp.Body, feedURL)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("parsing feed: %w", err)
+		return nil, "", "", nil, fmt.Errorf("parsing feed: %w", err)
 	}
 
-	return result, newEtag, newLastModified, nil
+	return result, newEtag, newLastModified, resp, nil
+}
+
+func retryBackoff(attempt int, lastResp *http.Response) time.Duration {
+	if lastResp != nil && lastResp.StatusCode == http.StatusTooManyRequests {
+		if v := lastResp.Header.Get("Retry-After"); v != "" {
+			if d := httpclient.ParseRetryAfter(v); d > 0 {
+				return min(d, 10*time.Second)
+			}
+		}
+	}
+	return baseRetryDelay * time.Duration(1<<(attempt-1))
 }
 
 type FeedStore interface {
@@ -101,7 +158,6 @@ func (s *Scheduler) Run(ctx context.Context) error {
 	ticker := time.NewTicker(s.tickInterval)
 	defer ticker.Stop()
 
-	// fetch all at startup
 	s.fetchAll(ctx)
 
 	for {

@@ -3,12 +3,15 @@ package scraper
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
+
+	"pkg.rbrt.fr/glean/internal/httpclient"
 
 	"golang.org/x/net/html"
 )
@@ -22,7 +25,8 @@ type Scraper struct {
 func New(logger *slog.Logger) *Scraper {
 	return &Scraper{
 		client: &http.Client{
-			Timeout: 15 * time.Second,
+			Timeout:   15 * time.Second,
+			Transport: httpclient.NewTransport(),
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if len(via) >= 10 {
 					return fmt.Errorf("too many redirects")
@@ -66,11 +70,36 @@ func (s *Scraper) scrapeArchive(ctx context.Context, articleURL string) (string,
 }
 
 func (s *Scraper) fetch(ctx context.Context, url string) (io.Reader, error) {
+	reader, err := s.doFetch(ctx, url)
+	if err == nil {
+		return reader, nil
+	}
+
+	var se *httpclient.StatusError
+	if !errors.As(err, &se) || !httpclient.IsRetryable(se.StatusCode) {
+		return nil, err
+	}
+
+	backoff := 2 * time.Second
+	if se.RetryAfter > 0 {
+		backoff = min(se.RetryAfter, 5*time.Second)
+	}
+
+	if err := httpclient.SleepWithContext(ctx, backoff); err != nil {
+		return nil, err
+	}
+
+	return s.doFetch(ctx, url)
+}
+
+func (s *Scraper) doFetch(ctx context.Context, url string) (io.Reader, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "Glean/1.0 (RSS Reader)")
+
+	httpclient.SetDefaultHeaders(req)
+	req.Header.Set("Accept", httpclient.AcceptHTML)
 
 	resp, err := s.client.Do(req)
 	if err != nil {
@@ -78,15 +107,19 @@ func (s *Scraper) fetch(ctx context.Context, url string) (io.Reader, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status: %d", resp.StatusCode)
+	if resp.StatusCode == http.StatusOK {
+		data, err := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
+		if err != nil {
+			return nil, fmt.Errorf("reading body: %w", err)
+		}
+		return bytes.NewReader(data), nil
 	}
 
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
-	if err != nil {
-		return nil, fmt.Errorf("reading body: %w", err)
+	se := &httpclient.StatusError{StatusCode: resp.StatusCode}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		se.RetryAfter = httpclient.ParseRetryAfter(resp.Header.Get("Retry-After"))
 	}
-	return bytes.NewReader(data), nil
+	return nil, se
 }
 
 func extractContent(r io.Reader) (string, error) {
