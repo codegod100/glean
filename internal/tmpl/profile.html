@@ -2,10 +2,10 @@
 <div class="max-w-2xl mx-auto">
     <div class="bg-spot-surface rounded-xl p-6 mb-6">
         <div class="flex items-center gap-4">
-            {{if .ProfileUser.AvatarURL.Valid}}<img src="{{.ProfileUser.AvatarURL.String}}" class="w-20 h-20 rounded-full ring-2 ring-spot-divider">{{else}}<div class="w-20 h-20 rounded-full bg-spot-hover flex items-center justify-center text-spot-muted"><svg class="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-7 8-7s8 3 8 7"/></svg></div>{{end}}
+            {{if .ProfileUser.AvatarURL}}<img src="{{.ProfileUser.AvatarURL}}" class="w-20 h-20 rounded-full ring-2 ring-spot-divider">{{else}}<div class="w-20 h-20 rounded-full bg-spot-hover flex items-center justify-center text-spot-muted"><svg class="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-7 8-7s8 3 8 7"/></svg></div>{{end}}
             <div class="min-w-0 flex-1">
                 <h1 class="text-2xl font-bold text-spot-text truncate">
-                    {{if .ProfileUser.DisplayName.Valid}}{{.ProfileUser.DisplayName.String}}{{end}}
+                    {{if .ProfileUser.DisplayName}}{{.ProfileUser.DisplayName}}{{end}}
                 </h1>
                 <p class="flex items-center gap-1.5 text-spot-secondary">@{{.ProfileUser.Handle}}<a href="https://bsky.app/profile/{{.ProfileUser.Handle}}" target="_blank" rel="noopener" class="text-spot-secondary hover:text-spot-green transition"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">{{template "icon-bluesky"}}</svg></a></p>
                 <div class="flex gap-4 mt-3">

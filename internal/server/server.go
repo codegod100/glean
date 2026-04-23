@@ -12,8 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
-	"golang.org/x/sync/errgroup"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -490,26 +488,7 @@ func (s *Server) BackfillFromCollectionDir(ctx context.Context, collectionDirURL
 			defer func() { <-sem }()
 			defer wg.Done()
 
-			g, gCtx := errgroup.WithContext(ctx)
-
-			var handle, displayName, avatarURL string
-			g.Go(func() error {
-				if ident, err := atproto.ResolveIdentity(gCtx, did); err == nil {
-					handle = ident.Handle.String()
-				}
-				return nil
-			})
-			g.Go(func() error {
-				if h, dn, avatar, err := atproto.FetchProfile(gCtx, did); err == nil {
-					handle = h
-					displayName = dn
-					avatarURL = avatar
-				}
-				return nil
-			})
-			_ = g.Wait()
-
-			if _, err := s.dbs.Users.CreateUser(ctx, did, handle, displayName, avatarURL); err != nil {
+			if _, err := s.dbs.Users.CreateUser(ctx, did); err != nil {
 				s.logger.Error("failed to create user during backfill", "error", err, "did", did)
 				return
 			}
@@ -561,10 +540,6 @@ func (s *Server) runSyncAll(ctx context.Context) {
 		if err := sync.Run(ctx, u.DID); err != nil {
 			metrics.SyncErrors.Inc()
 			s.logger.Error("periodic sync failed", "error", err, "did", u.DID)
-		}
-
-		if dn, avatar, err := client.GetProfile(ctx, u.DID); err == nil {
-			_ = s.dbs.Users.UpdateUserProfile(ctx, u.DID, dn, avatar)
 		}
 
 		metrics.SyncRuns.Inc()

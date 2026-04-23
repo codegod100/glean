@@ -248,7 +248,7 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 
 func (e *Engine) ComputePeopleRecommendationsOnDemand(ctx context.Context, userDID string, limit int) ([]*PersonRecommendation, error) {
 	rows, err := e.db.QueryContext(ctx, `
-		SELECT u.did, u.handle, COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''),
+		SELECT u.did,
 		       sim.jaccard, sim.common_feeds, COALESCE(sim.common_likes, 0), COALESCE(sim.common_tags, 0)
 		FROM (
 			SELECT user_b AS peer_did, jaccard, common_feeds, common_likes, common_tags FROM recs.user_similarity WHERE user_a = ?
@@ -256,8 +256,7 @@ func (e *Engine) ComputePeopleRecommendationsOnDemand(ctx context.Context, userD
 			SELECT user_a AS peer_did, jaccard, common_feeds, common_likes, common_tags FROM recs.user_similarity WHERE user_b = ?
 		) sim
 		JOIN main.users u ON u.did = sim.peer_did
-		WHERE u.handle IS NOT NULL AND u.handle != ''
-		  AND EXISTS (SELECT 1 FROM articles.subscriptions s JOIN articles.feeds f ON s.feed_url = f.feed_url WHERE s.user_did = u.did AND f.subscriber_count > 0)
+		WHERE EXISTS (SELECT 1 FROM articles.subscriptions s JOIN articles.feeds f ON s.feed_url = f.feed_url WHERE s.user_did = u.did AND f.subscriber_count > 0)
 		ORDER BY sim.jaccard DESC
 		LIMIT ?
 	`, userDID, userDID, limit)
@@ -269,7 +268,7 @@ func (e *Engine) ComputePeopleRecommendationsOnDemand(ctx context.Context, userD
 	var results []*PersonRecommendation
 	for rows.Next() {
 		rec := &PersonRecommendation{}
-		if err := rows.Scan(&rec.DID, &rec.Handle, &rec.DisplayName, &rec.AvatarURL,
+		if err := rows.Scan(&rec.DID,
 			&rec.Jaccard, &rec.CommonFeeds, &rec.CommonLikes, &rec.CommonTags); err != nil {
 			return nil, err
 		}

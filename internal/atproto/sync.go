@@ -12,9 +12,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
 	"time"
-
-	"golang.org/x/sync/errgroup"
 
 	"pkg.rbrt.fr/glean/internal/db"
 )
@@ -266,30 +266,9 @@ func (s *Sync) syncFollows(ctx context.Context, userDID string) error {
 		return nil
 	}
 
-	g, gCtx := errgroup.WithContext(ctx)
-	g.SetLimit(20)
-
-	dids := make([]string, 0, len(activeFollows))
-	profiles := make([]db.UserData, len(activeFollows))
-	for did := range activeFollows {
-		dids = append(dids, did)
-	}
-
-	for i, did := range dids {
-		g.Go(func() error {
-			if h, dn, avatar, err := FetchProfile(gCtx, did); err == nil {
-				profiles[i] = db.UserData{DID: did, Handle: h, DisplayName: dn, AvatarURL: avatar}
-			} else {
-				profiles[i] = db.UserData{DID: did}
-			}
-			return nil
-		})
-	}
-	if err := g.Wait(); err != nil {
-		return fmt.Errorf("fetch profiles: %w", err)
-	}
-	if err := s.users.BatchCreateUsers(ctx, profiles); err != nil {
+	if err := s.users.BatchCreateUsers(ctx, slices.Collect(maps.Keys(activeFollows))); err != nil {
 		return fmt.Errorf("batch create users: %w", err)
 	}
+
 	return s.users.SyncFollows(ctx, userDID, activeFollows)
 }

@@ -93,7 +93,7 @@ func (h *XRPCHandler) ListAnnotations(w http.ResponseWriter, r *http.Request) {
 	cursor := r.URL.Query().Get("cursor")
 
 	query := `
-		SELECT a.uri, a.cid, u.did, u.handle, a.feed_url, a.article_url,
+		SELECT a.uri, a.cid, u.did, a.feed_url, a.article_url,
 		       a.quote, a.note, a.tags, a.rating, a.created_at
 		FROM annotations a
 		JOIN users u ON a.author_did = u.did
@@ -129,10 +129,10 @@ func (h *XRPCHandler) ListAnnotations(w http.ResponseWriter, r *http.Request) {
 
 	annotations := make([]AnnotationView, 0)
 	for rows.Next() {
-		var uri, did, handle, fURL, artURL, createdAt string
+		var uri, did, fURL, artURL, createdAt string
 		var cid, quote, note, tags sql.NullString
 		var rating sql.NullInt64
-		if err := rows.Scan(&uri, &cid, &did, &handle, &fURL, &artURL, &quote, &note, &tags, &rating, &createdAt); err != nil {
+		if err := rows.Scan(&uri, &cid, &did, &fURL, &artURL, &quote, &note, &tags, &rating, &createdAt); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -147,7 +147,7 @@ func (h *XRPCHandler) ListAnnotations(w http.ResponseWriter, r *http.Request) {
 			CID: cid.String,
 			Author: ActorView{
 				DID:    did,
-				Handle: handle,
+				Handle: ResolveProfile(r.Context(), did).Handle,
 			},
 			Value: AnnotationRecord{
 				CreatedAt:  createdAt,
@@ -179,7 +179,7 @@ func (h *XRPCHandler) ListLikes(w http.ResponseWriter, r *http.Request) {
 	cursor := r.URL.Query().Get("cursor")
 
 	query := `
-		SELECT l.uri, l.cid, u.did, u.handle, l.feed_url, l.article_url, l.created_at
+		SELECT l.uri, l.cid, u.did, l.feed_url, l.article_url, l.created_at
 		FROM likes l
 		JOIN users u ON l.author_did = u.did
 		WHERE 1=1`
@@ -210,9 +210,9 @@ func (h *XRPCHandler) ListLikes(w http.ResponseWriter, r *http.Request) {
 
 	likes := make([]LikeView, 0)
 	for rows.Next() {
-		var uri, did, handle, fURL, artURL, createdAt string
+		var uri, did, fURL, artURL, createdAt string
 		var cid sql.NullString
-		if err := rows.Scan(&uri, &cid, &did, &handle, &fURL, &artURL, &createdAt); err != nil {
+		if err := rows.Scan(&uri, &cid, &did, &fURL, &artURL, &createdAt); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -222,7 +222,7 @@ func (h *XRPCHandler) ListLikes(w http.ResponseWriter, r *http.Request) {
 			CID: cid.String,
 			Author: ActorView{
 				DID:    did,
-				Handle: handle,
+				Handle: ResolveProfile(r.Context(), did).Handle,
 			},
 			Value: LikeRecord{
 				CreatedAt:  createdAt,
@@ -336,7 +336,7 @@ func (h *XRPCHandler) GetRecommendations(w http.ResponseWriter, r *http.Request)
 	for _, rec := range peopleRecs {
 		people = append(people, RecommendedPerson{
 			DID:         rec.DID,
-			Handle:      rec.Handle,
+			Handle:      ResolveProfile(r.Context(), rec.DID).Handle,
 			DisplayName: rec.DisplayName,
 			Avatar:      rec.AvatarURL,
 			Jaccard:     rec.Jaccard,
@@ -370,7 +370,7 @@ func (h *XRPCHandler) ListFeedLists(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-		SELECT u.did, u.handle, COUNT(s.id) as subscription_count
+		SELECT u.did, COUNT(s.id) as subscription_count
 		FROM users u
 		LEFT JOIN subscriptions s ON u.did = s.user_did
 		WHERE u.did IN (` + strings.Join(placeholders, ",") + `)`
@@ -398,9 +398,9 @@ func (h *XRPCHandler) ListFeedLists(w http.ResponseWriter, r *http.Request) {
 	var users []userRow
 
 	for rows.Next() {
-		var did, handle string
+		var did string
 		var subCount int
-		if err := rows.Scan(&did, &handle, &subCount); err != nil {
+		if err := rows.Scan(&did, &subCount); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

@@ -43,6 +43,7 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.logger.Warn("failed to get people recommendations", "error", err, "did", user.DID)
 	}
+	resolvePeopleHandles(ctx, peopleRecs)
 
 	if len(feedRecs) > 0 {
 		impressions := make([]cluster.Impression, len(feedRecs))

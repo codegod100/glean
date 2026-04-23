@@ -93,9 +93,6 @@ func initSchema(db *DB) error {
 var schema = []string{
 	`CREATE TABLE IF NOT EXISTS users (
 		did TEXT PRIMARY KEY,
-		handle TEXT NOT NULL,
-		display_name TEXT,
-		avatar_url TEXT,
 		indexed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`,
@@ -274,7 +271,6 @@ var schema = []string{
 	`CREATE INDEX IF NOT EXISTS idx_follow_distances_b ON follow_distances(user_b)`,
 	`CREATE INDEX IF NOT EXISTS idx_follow_distances_a_dist ON follow_distances(user_a, distance)`,
 	`CREATE INDEX IF NOT EXISTS idx_follows_followed_at ON follows(followed_at)`,
-	`CREATE INDEX IF NOT EXISTS idx_users_handle ON users(handle)`,
 	`CREATE VIRTUAL TABLE IF NOT EXISTS articles_fts USING fts5(title, summary, content, author, content=articles, content_rowid=id)`,
 	`CREATE TRIGGER IF NOT EXISTS articles_ai AFTER INSERT ON articles BEGIN
 		INSERT INTO articles_fts(rowid, title, summary, content, author) VALUES (new.id, new.title, new.summary, new.content, new.author);

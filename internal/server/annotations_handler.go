@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -50,6 +51,7 @@ func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.logger.Warn("failed to list annotations", "error", err, "did", user.DID)
 	}
+	resolveAnnotationHandles(ctx, annotations)
 	annotHasMore := len(annotations) > limit
 	if annotHasMore {
 		annotations = annotations[:limit]
@@ -120,7 +122,7 @@ func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	a.AuthorHandle = user.Handle
+	a.AuthorHandle = atproto.ResolveProfile(r.Context(), user.DID).Handle
 	s.render(w, r, "annotation-card.html", map[string]any{
 		"annotation": a,
 		"userDID":    user.DID,
@@ -164,4 +166,12 @@ func (s *Server) handleDeleteAnnotation(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func resolveAnnotationHandles(ctx context.Context, annotations []*db.Annotation) {
+	for _, a := range annotations {
+		if a.AuthorDID != "" {
+			a.AuthorHandle = atproto.ResolveProfile(ctx, a.AuthorDID).Handle
+		}
+	}
 }

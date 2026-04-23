@@ -42,12 +42,11 @@ func (s *ArticleStore) CreateAnnotation(ctx context.Context, a *Annotation) erro
 func (s *ArticleStore) GetAnnotation(ctx context.Context, id int64) (*Annotation, error) {
 	a := &Annotation{}
 	err := s.db.QueryRowContext(ctx, `
-		SELECT a.id, a.uri, a.author_did, COALESCE(u.handle, ''), a.feed_url, a.article_url, ar.id, a.quote, a.note, a.tags, a.rating, a.created_at, a.cid
+		SELECT a.id, a.uri, a.author_did, a.feed_url, a.article_url, ar.id, a.quote, a.note, a.tags, a.rating, a.created_at, a.cid
 		FROM articles.annotations a
-		LEFT JOIN users u ON a.author_did = u.did
 		LEFT JOIN articles.articles ar ON ar.url = a.article_url AND ar.feed_url = a.feed_url
 		WHERE a.id = ?
-	`, id).Scan(&a.ID, &a.URI, &a.AuthorDID, &a.AuthorHandle, &a.FeedURL, &a.ArticleURL, &a.ArticleID,
+	`, id).Scan(&a.ID, &a.URI, &a.AuthorDID, &a.FeedURL, &a.ArticleURL, &a.ArticleID,
 		&a.Quote, &a.Note, &a.Tags, &a.Rating, &a.CreatedAt, &a.CID)
 	if err != nil {
 		return nil, err
@@ -89,9 +88,8 @@ func (s *ArticleStore) ListAnnotations(ctx context.Context, feedURL, articleURL,
 		args = append(args, authorDID)
 	}
 
-	query := `SELECT a.id, a.uri, a.author_did, COALESCE(u.handle, ''), a.feed_url, a.article_url, ar.id, a.quote, a.note, a.tags, a.rating, a.created_at, a.cid
+	query := `SELECT a.id, a.uri, a.author_did, a.feed_url, a.article_url, ar.id, a.quote, a.note, a.tags, a.rating, a.created_at, a.cid
 		FROM articles.annotations a
-		LEFT JOIN users u ON a.author_did = u.did
 		LEFT JOIN articles.articles ar ON ar.url = a.article_url AND ar.feed_url = a.feed_url`
 	if len(conds) > 0 {
 		query += ` WHERE ` + strings.Join(conds, " AND ")
@@ -108,7 +106,7 @@ func (s *ArticleStore) ListAnnotations(ctx context.Context, feedURL, articleURL,
 	var annotations []*Annotation
 	for rows.Next() {
 		a := &Annotation{}
-		if err := rows.Scan(&a.ID, &a.URI, &a.AuthorDID, &a.AuthorHandle, &a.FeedURL, &a.ArticleURL, &a.ArticleID,
+		if err := rows.Scan(&a.ID, &a.URI, &a.AuthorDID, &a.FeedURL, &a.ArticleURL, &a.ArticleID,
 			&a.Quote, &a.Note, &a.Tags, &a.Rating, &a.CreatedAt, &a.CID); err != nil {
 			return nil, err
 		}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/bluesky-social/indigo/atproto/identity"
 	"github.com/bluesky-social/indigo/atproto/syntax"
+	"pkg.rbrt.fr/glean/internal/httpclient"
 )
 
 type (
@@ -26,12 +27,8 @@ func InitIdentity(plcURL string) {
 	base := identity.BaseDirectory{
 		PLCURL: plcURL,
 		HTTPClient: http.Client{
-			Timeout: 10 * time.Second,
-			Transport: &http.Transport{
-				Proxy:           http.ProxyFromEnvironment,
-				IdleConnTimeout: 1000 * time.Millisecond,
-				MaxIdleConns:    100,
-			},
+			Timeout:   10 * time.Second,
+			Transport: httpclient.NewTransport(),
 		},
 		Resolver: net.Resolver{
 			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
@@ -43,6 +40,7 @@ func InitIdentity(plcURL string) {
 		SkipDNSDomainSuffixes: []string{".bsky.social"},
 		UserAgent:             "glean/1.0",
 	}
+
 	directory = identity.NewCacheDirectory(&base, 250_000, 24*time.Hour, 2*time.Minute, 5*time.Minute)
 }
 
@@ -112,4 +110,35 @@ func ResolvePDSEndpoint(ctx context.Context, did string) (string, error) {
 	}
 
 	return pds, nil
+}
+
+type Profile struct {
+	Handle      string
+	DisplayName string
+	AvatarURL   string
+}
+
+func ResolveProfile(ctx context.Context, did string) Profile {
+	ident, err := ResolveIdentity(ctx, did)
+	if err != nil {
+		return Profile{}
+	}
+
+	p := Profile{
+		DisplayName: ident.Handle.String(),
+		Handle:      ident.Handle.String(),
+	}
+
+	h, dn, avatar, err := FetchProfile(ctx, did)
+	if err != nil {
+		return p
+	}
+
+	if h != "" {
+		p.Handle = h
+	}
+	p.DisplayName = dn
+	p.AvatarURL = avatar
+
+	return p
 }

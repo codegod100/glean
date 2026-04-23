@@ -13,9 +13,9 @@ func seedFollowData(t *testing.T, ctx context.Context, dbs *Databases) (userDID,
 	userDID = "did:test:follower"
 	targetDID = "did:test:followed"
 
-	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, userDID, "follower")
+	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, userDID)
 	assert.NilError(t, err)
-	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, targetDID, "followed")
+	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, targetDID)
 	assert.NilError(t, err)
 
 	return userDID, targetDID
@@ -83,7 +83,7 @@ func TestListFollows(t *testing.T) {
 	userDID, _ := seedFollowData(t, ctx, dbs)
 
 	target2 := "did:test:followed2"
-	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, target2, "followed2")
+	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, target2)
 	assert.NilError(t, err)
 
 	err = dbs.Users.UpsertFollow(ctx, userDID, "did:test:followed", "uri1", "cid1")
@@ -102,7 +102,7 @@ func TestListFollowers(t *testing.T) {
 	_, targetDID := seedFollowData(t, ctx, dbs)
 
 	follower2 := "did:test:follower2"
-	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, follower2, "follower2")
+	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, follower2)
 	assert.NilError(t, err)
 
 	err = dbs.Users.UpsertFollow(ctx, "did:test:follower", targetDID, "uri1", "cid1")
@@ -121,7 +121,7 @@ func TestGetFollowDIDs(t *testing.T) {
 	userDID, _ := seedFollowData(t, ctx, dbs)
 
 	target2 := "did:test:followed2"
-	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, target2, "followed2")
+	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, target2)
 	assert.NilError(t, err)
 
 	err = dbs.Users.UpsertFollow(ctx, userDID, "did:test:followed", "uri1", "cid1")

@@ -33,7 +33,7 @@ func (s *Server) handleAuthStart(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "could not resolve handle", http.StatusInternalServerError)
 			return
 		}
-		user, createErr := s.dbs.Users.CreateUser(r.Context(), did, handle, "", "")
+		user, createErr := s.dbs.Users.CreateUser(r.Context(), did)
 		if createErr != nil {
 			http.Error(w, createErr.Error(), http.StatusInternalServerError)
 			return
@@ -67,7 +67,7 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.dbs.Users.CreateUser(r.Context(), did, handle, "", "")
+	user, err := s.dbs.Users.CreateUser(r.Context(), did)
 	if err != nil {
 		s.logger.Error("failed to create user", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -87,22 +87,10 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	did := sessData.AccountDID.String()
-	handle := did
-	if ident, err := s.oauth.Dir.LookupDID(r.Context(), sessData.AccountDID); err == nil {
-		handle = ident.Handle.String()
-	}
 
 	client := s.pdsClientFromSession(sessData)
 
-	var displayName, avatarURL string
-	if client != nil {
-		if dn, avatar, err := client.GetProfile(r.Context(), did); err == nil {
-			displayName = dn
-			avatarURL = avatar
-		}
-	}
-
-	user, err := s.dbs.Users.CreateUser(r.Context(), did, handle, displayName, avatarURL)
+	user, err := s.dbs.Users.CreateUser(r.Context(), did)
 	if err != nil {
 		s.logger.Error("failed to create user", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)

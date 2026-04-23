@@ -7,35 +7,15 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func TestUpdateUserProfile_SetsFields(t *testing.T) {
+func TestGetUser(t *testing.T) {
 	ctx := context.Background()
 	dbs := setupTestDB(t)
 
-	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, "did:test:profile", "tester")
+	u, err := dbs.Users.CreateUser(ctx, "did:test:profile")
 	assert.NilError(t, err)
+	assert.Equal(t, u.DID, "did:test:profile")
 
-	err = dbs.Users.UpdateUserProfile(ctx, "did:test:profile", "Display Name", "https://cdn.bsky.app/img/avatar.png")
+	got, err := dbs.Users.GetUser(ctx, "did:test:profile")
 	assert.NilError(t, err)
-
-	u, err := dbs.Users.GetUser(ctx, "did:test:profile")
-	assert.NilError(t, err)
-	assert.Equal(t, u.DisplayName.String, "Display Name")
-	assert.Equal(t, u.AvatarURL.String, "https://cdn.bsky.app/img/avatar.png")
-}
-
-func TestUpdateUserProfile_DoesNotOverwriteWithEmpty(t *testing.T) {
-	ctx := context.Background()
-	dbs := setupTestDB(t)
-
-	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did, handle, display_name, avatar_url) VALUES (?, ?, ?, ?)`,
-		"did:test:profile2", "tester2", "Existing Name", "https://old.avatar/url")
-	assert.NilError(t, err)
-
-	err = dbs.Users.UpdateUserProfile(ctx, "did:test:profile2", "", "")
-	assert.NilError(t, err)
-
-	u, err := dbs.Users.GetUser(ctx, "did:test:profile2")
-	assert.NilError(t, err)
-	assert.Equal(t, u.DisplayName.String, "Existing Name")
-	assert.Equal(t, u.AvatarURL.String, "https://old.avatar/url")
+	assert.Equal(t, got.DID, "did:test:profile")
 }

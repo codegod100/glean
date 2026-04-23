@@ -33,7 +33,7 @@ func seedArticleReadState(t *testing.T, ctx context.Context, dbs *Databases) (us
 	userDID = "did:test:user1"
 	feedURL = "https://example.com/feed.xml"
 
-	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, userDID, "user1")
+	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, userDID)
 	assert.NilError(t, err)
 
 	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO articles.feeds (feed_url, title) VALUES (?, ?)`, feedURL, "Test Feed")
@@ -196,7 +196,7 @@ func seedSearchData(t *testing.T, ctx context.Context, dbs *Databases) (userDID,
 	userDID = "did:test:searcher"
 	feedURL = "https://search.example.com/feed.xml"
 
-	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, userDID, "searcher")
+	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, userDID)
 	assert.NilError(t, err)
 
 	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO articles.feeds (feed_url, title) VALUES (?, ?)`, feedURL, "Tech Blog")

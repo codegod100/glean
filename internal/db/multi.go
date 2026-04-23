@@ -125,9 +125,6 @@ func initRecsSchema(db *DB) error {
 var usersSchema = []string{
 	`CREATE TABLE IF NOT EXISTS users (
 		did TEXT PRIMARY KEY,
-		handle TEXT NOT NULL,
-		display_name TEXT,
-		avatar_url TEXT,
 		indexed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`,
@@ -157,7 +154,6 @@ var usersSchema = []string{
 	`CREATE INDEX IF NOT EXISTS idx_follows_target ON follows(target_did)`,
 	`CREATE INDEX IF NOT EXISTS idx_follows_uri ON follows(uri)`,
 	`CREATE INDEX IF NOT EXISTS idx_follows_followed_at ON follows(followed_at)`,
-	`CREATE INDEX IF NOT EXISTS idx_users_handle ON users(handle)`,
 }
 
 var articlesSchema = []string{

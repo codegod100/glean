@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 
+	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/db"
 )
 
@@ -39,6 +40,10 @@ func (s *Server) getUserFromSession(r *http.Request) *db.User {
 		return nil
 	}
 
+	p := atproto.ResolveProfile(r.Context(), user.DID)
+	user.Handle = p.Handle
+	user.DisplayName = p.DisplayName
+	user.AvatarURL = p.AvatarURL
 	return user
 }
 

@@ -96,7 +96,7 @@
             {{if .User}}
             <div class="flex items-center gap-2">
                 <a href="/profile/{{.User.DID}}" class="flex items-center gap-2 flex-1 min-w-0 px-2 py-1.5 rounded-md hover:bg-spot-hover-50 transition">
-                    {{if .User.AvatarURL.Valid}}<img src="{{.User.AvatarURL.String}}" class="w-7 h-7 rounded-full shrink-0">{{end}}
+                    {{if .User.AvatarURL}}<img src="{{.User.AvatarURL}}" class="w-7 h-7 rounded-full shrink-0">{{end}}
                     <span class="text-sm font-medium truncate text-spot-text">@{{.User.Handle}}</span>
                 </a>
                 <form method="POST" action="/auth/logout" class="shrink-0">
@@ -142,7 +142,7 @@
             {{template "logo-text"}}
             {{if .User}}
             <a href="/profile/{{.User.DID}}" class="flex items-center gap-2">
-                {{if .User.AvatarURL.Valid}}<img src="{{.User.AvatarURL.String}}" class="w-7 h-7 rounded-full">{{end}}
+                {{if .User.AvatarURL}}<img src="{{.User.AvatarURL}}" class="w-7 h-7 rounded-full">{{end}}
                 <span class="text-xs text-spot-secondary">@{{.User.Handle}}</span>
             </a>
             {{else}}

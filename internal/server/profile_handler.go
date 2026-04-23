@@ -17,18 +17,13 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(param, "did:") {
 		did = param
 	} else {
-		profileUser, err := s.dbs.Users.GetUserByHandle(ctx, param)
-		if err == nil {
-			did = profileUser.DID
-		} else {
-			resolved, err := atproto.ResolveHandle(ctx, param)
-			if err != nil {
-				s.logger.Warn("failed to resolve handle", "error", err, "handle", param)
-				http.Error(w, "handle not found", http.StatusNotFound)
-				return
-			}
-			did = resolved
+		resolved, err := atproto.ResolveHandle(ctx, param)
+		if err != nil {
+			s.logger.Warn("failed to resolve handle", "error", err, "handle", param)
+			http.Error(w, "handle not found", http.StatusNotFound)
+			return
 		}
+		did = resolved
 	}
 
 	profileUser, err := s.dbs.Users.GetUser(ctx, did)
@@ -38,16 +33,10 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !profileUser.AvatarURL.Valid || profileUser.AvatarURL.String == "" {
-		_, displayName, avatarURL, err := atproto.FetchProfile(ctx, did)
-		if err == nil && avatarURL != "" {
-			if err := s.dbs.Users.UpdateUserProfile(ctx, did, displayName, avatarURL); err != nil {
-				s.logger.Warn("failed to update user profile", "error", err, "did", did)
-			}
-			profileUser.DisplayName = nullString(displayName)
-			profileUser.AvatarURL = nullString(avatarURL)
-		}
-	}
+	p := atproto.ResolveProfile(ctx, did)
+	profileUser.Handle = p.Handle
+	profileUser.DisplayName = p.DisplayName
+	profileUser.AvatarURL = p.AvatarURL
 
 	subs, err := s.dbs.Articles.ListSubscriptions(ctx, did, "", 50, 0)
 	if err != nil {
@@ -58,6 +47,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.logger.Warn("failed to list annotations", "error", err, "did", did)
 	}
+	resolveAnnotationHandles(ctx, annotations)
 
 	subCount, err := s.dbs.Articles.GetSubscriptionCount(ctx, did)
 	if err != nil {

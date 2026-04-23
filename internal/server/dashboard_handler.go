@@ -1,9 +1,11 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"time"
 
+	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/cluster"
 )
 
@@ -41,6 +43,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.logger.Warn("failed to get people recommendations", "error", err, "did", user.DID)
 	}
+	resolvePeopleHandles(ctx, peopleRecs)
 
 	feedRecs, err := s.engine.GetFeedRecommendations(ctx, user.DID, 5)
 	if err != nil {
@@ -109,4 +112,13 @@ func (s *Server) handleDismissArticleRecommendation(w http.ResponseWriter, r *ht
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func resolvePeopleHandles(ctx context.Context, people []*cluster.PersonRecommendation) {
+	for _, p := range people {
+		prof := atproto.ResolveProfile(ctx, p.DID)
+		p.Handle = prof.Handle
+		p.DisplayName = prof.DisplayName
+		p.AvatarURL = prof.AvatarURL
+	}
 }

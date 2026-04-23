@@ -40,13 +40,9 @@ func setupClusterTestDB(t *testing.T) *db.Databases {
 func seedClusterData(t *testing.T, ctx context.Context, dbs *db.Databases) {
 	t.Helper()
 
-	users := []struct{ did, handle string }{
-		{"did:test:alice", "alice"},
-		{"did:test:bob", "bob"},
-		{"did:test:carol", "carol"},
-	}
-	for _, u := range users {
-		_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, u.did, u.handle)
+	users := []string{"did:test:alice", "did:test:bob", "did:test:carol"}
+	for _, did := range users {
+		_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, did)
 		assert.NilError(t, err)
 	}
 
@@ -430,7 +426,7 @@ func TestColdStartRecommendations(t *testing.T) {
 	_, err = dbs.DB().ExecContext(ctx, `UPDATE articles.feeds SET subscriber_count = 2 WHERE feed_url = 'https://b.com/feed'`)
 	assert.NilError(t, err)
 
-	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, "did:test:newuser", "newuser")
+	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, "did:test:newuser")
 	assert.NilError(t, err)
 
 	recs, err := engine.ColdStartRecommendations(ctx, "did:test:newuser", 10)
@@ -513,9 +509,9 @@ func TestDescriptionBasedFeedSimilarity(t *testing.T) {
 	ctx := context.Background()
 	dbs := setupClusterTestDB(t)
 
-	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, "did:test:alice", "alice")
+	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, "did:test:alice")
 	assert.NilError(t, err)
-	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, "did:test:bob", "bob")
+	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, "did:test:bob")
 	assert.NilError(t, err)
 
 	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO articles.feeds (feed_url, title, site_url, description, feed_type) VALUES (?, ?, ?, ?, 'rss')`,

@@ -12,41 +12,31 @@ func TestBatchCreateUsers_InsertsAll(t *testing.T) {
 	ctx := context.Background()
 	dbs := setupTestDB(t)
 
-	data := []UserData{
-		{DID: "did:test:u1", Handle: "user1", DisplayName: "User One", AvatarURL: "https://avatar1.png"},
-		{DID: "did:test:u2", Handle: "user2", DisplayName: "User Two"},
-	}
-	err := dbs.Users.BatchCreateUsers(ctx, data)
+	err := dbs.Users.BatchCreateUsers(ctx, []string{"did:test:u1", "did:test:u2"})
 	assert.NilError(t, err)
 
 	u1, err := dbs.Users.GetUser(ctx, "did:test:u1")
 	assert.NilError(t, err)
-	assert.Equal(t, u1.Handle, "user1")
-	assert.Equal(t, u1.DisplayName.String, "User One")
+	assert.Equal(t, u1.DID, "did:test:u1")
 
 	u2, err := dbs.Users.GetUser(ctx, "did:test:u2")
 	assert.NilError(t, err)
-	assert.Equal(t, u2.Handle, "user2")
-	assert.Equal(t, u2.DisplayName.String, "User Two")
+	assert.Equal(t, u2.DID, "did:test:u2")
 }
 
-func TestBatchCreateUsers_UpsertsExisting(t *testing.T) {
+func TestBatchCreateUsers_IgnoresExisting(t *testing.T) {
 	ctx := context.Background()
 	dbs := setupTestDB(t)
 
-	_, err := dbs.Users.CreateUser(ctx, "did:test:u1", "old-handle", "", "")
+	_, err := dbs.Users.CreateUser(ctx, "did:test:u1")
 	assert.NilError(t, err)
 
-	data := []UserData{
-		{DID: "did:test:u1", Handle: "new-handle", DisplayName: "New Name"},
-	}
-	err = dbs.Users.BatchCreateUsers(ctx, data)
+	err = dbs.Users.BatchCreateUsers(ctx, []string{"did:test:u1"})
 	assert.NilError(t, err)
 
 	u, err := dbs.Users.GetUser(ctx, "did:test:u1")
 	assert.NilError(t, err)
-	assert.Equal(t, u.Handle, "new-handle")
-	assert.Equal(t, u.DisplayName.String, "New Name")
+	assert.Equal(t, u.DID, "did:test:u1")
 }
 
 func TestBatchCreateUsers_Empty(t *testing.T) {
@@ -57,30 +47,10 @@ func TestBatchCreateUsers_Empty(t *testing.T) {
 	assert.NilError(t, err)
 }
 
-func TestBatchCreateUsers_DoesNotOverwriteWithEmpty(t *testing.T) {
-	ctx := context.Background()
-	dbs := setupTestDB(t)
-
-	_, err := dbs.Users.CreateUser(ctx, "did:test:u1", "handle", "Existing Name", "https://avatar.png")
-	assert.NilError(t, err)
-
-	data := []UserData{
-		{DID: "did:test:u1", Handle: "", DisplayName: "", AvatarURL: ""},
-	}
-	err = dbs.Users.BatchCreateUsers(ctx, data)
-	assert.NilError(t, err)
-
-	u, err := dbs.Users.GetUser(ctx, "did:test:u1")
-	assert.NilError(t, err)
-	assert.Equal(t, u.Handle, "handle")
-	assert.Equal(t, u.DisplayName.String, "Existing Name")
-	assert.Equal(t, u.AvatarURL.String, "https://avatar.png")
-}
-
 func seedSubscriptionData(t *testing.T, ctx context.Context, dbs *Databases) (userDID string) {
 	t.Helper()
 	userDID = "did:test:subuser"
-	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, userDID, "subuser")
+	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, userDID)
 	assert.NilError(t, err)
 	return userDID
 }
