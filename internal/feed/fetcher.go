@@ -49,6 +49,10 @@ func (f *Fetcher) Fetch(ctx context.Context, feedURL string) (*ParseResult, erro
 			}
 		}
 
+		if lastResp != nil {
+			lastResp.Body.Close()
+		}
+
 		result, resp, err := f.executeRequest(ctx, feedURL)
 		lastResp = resp
 		if err == nil {
@@ -79,18 +83,6 @@ func (f *Fetcher) executeRequest(ctx context.Context, feedURL string) (*ParseRes
 		return nil, nil, fmt.Errorf("fetching feed: %w", err)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusTooManyRequests {
-		return nil, resp, fmt.Errorf("rate limited (retry-after: %s)", resp.Header.Get("Retry-After"))
-	}
-
-	if resp.StatusCode >= 500 {
-		return nil, resp, fmt.Errorf("server error: %d", resp.StatusCode)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, resp, fmt.Errorf("unexpected status: %d", resp.StatusCode)
-	}
 
 	result, err := Parse(resp.Body, feedURL)
 	if err != nil {
@@ -159,12 +151,13 @@ func (s *Scheduler) Run(ctx context.Context) error {
 }
 
 func (s *Scheduler) fetchAll(ctx context.Context, olderThan time.Duration) {
-	feeds, err := s.store.GetFeedsToFetch(ctx, olderThan, 10_000)
+	feeds, err := s.store.GetFeedsToFetch(ctx, olderThan, 1000)
 	if err != nil {
 		s.logger.Error("failed to get feeds", "error", err)
 		return
 	}
 
+	start := time.Now()
 	s.logger.Info("fetching feeds", "count", len(feeds), "older_than", olderThan)
 
 	g, gCtx := errgroup.WithContext(ctx)
@@ -176,11 +169,14 @@ func (s *Scheduler) fetchAll(ctx context.Context, olderThan time.Duration) {
 		})
 	}
 	_ = g.Wait()
+
+	s.logger.Info("fetching feeds complete", "duration", time.Since(start).Seconds())
 }
 
 func (s *Scheduler) FetchFeed(ctx context.Context, feed *Feed) {
 	call := &fetchCall{done: make(chan struct{})}
 	if actual, loaded := s.inFlight.LoadOrStore(feed.URL, call); loaded {
+		s.logger.Debug("feed already in flight, skipping", "feed", feed.URL)
 		select {
 		case <-actual.(*fetchCall).done:
 		case <-ctx.Done():

@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"pkg.rbrt.fr/glean/internal/feed"
@@ -32,18 +33,21 @@ func (a *FeedStoreAdapter) RecordFetchError(ctx context.Context, feedURL, lastEr
 }
 
 func (a *FeedStoreAdapter) StoreFetchResult(ctx context.Context, feedURL string, articles []feed.Article, faviconURL string) error {
-	if err := a.store.MarkFeedFetched(ctx, feedURL); err != nil {
-		return err
-	}
 	if len(articles) > 0 {
 		if err := a.store.UpsertArticlesBatch(ctx, articles); err != nil {
-			return err
+			return fmt.Errorf("failed to save articles: %w", err)
 		}
 	}
+
+	if err := a.store.MarkFeedFetched(ctx, feedURL); err != nil {
+		return fmt.Errorf("failed to mark as fetched: %w", err)
+	}
+
 	if faviconURL != "" {
 		if err := a.store.UpdateFeedFavicon(ctx, feedURL, faviconURL); err != nil {
-			return err
+			return fmt.Errorf("failed to save favicon: %w", err)
 		}
 	}
+
 	return nil
 }
