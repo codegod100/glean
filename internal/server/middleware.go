@@ -4,10 +4,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
-
-	"github.com/go-chi/chi/v5/middleware"
 )
 
 func (s *Server) sessionMiddleware(next http.Handler) http.Handler {
@@ -33,7 +32,9 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 
 func csrfToken() string {
 	b := make([]byte, 32)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
 	return hex.EncodeToString(b)
 }
 
@@ -82,15 +83,19 @@ func (s *Server) csrfMiddleware(next http.Handler) http.Handler {
 }
 
 func sameOrigin(origin, host string) bool {
-	return strings.HasPrefix(origin, "http://"+host) || strings.HasPrefix(origin, "https://"+host)
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	return u.Host == host
 }
 
 func (s *Server) realIPLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		sw := &statusWriter{ResponseWriter: w}
 
-		next.ServeHTTP(ww, r)
+		next.ServeHTTP(sw, r)
 
 		ip := r.RemoteAddr
 		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
@@ -106,9 +111,26 @@ func (s *Server) realIPLogger(next http.Handler) http.Handler {
 			"method", r.Method,
 			"url", scheme+"://"+r.Host+r.RequestURI,
 			"from", ip,
-			"status", ww.Status(),
-			"bytes", ww.BytesWritten(),
+			"status", sw.status,
+			"bytes", sw.bytes,
 			"duration", time.Since(start).Round(time.Microsecond),
 		)
 	})
+}
+
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+	bytes  int
+}
+
+func (w *statusWriter) WriteHeader(code int) {
+	w.status = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *statusWriter) Write(b []byte) (int, error) {
+	n, err := w.ResponseWriter.Write(b)
+	w.bytes += n
+	return n, err
 }

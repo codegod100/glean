@@ -30,7 +30,7 @@ func (s *Server) getUserFromSession(r *http.Request) *db.User {
 		return nil
 	}
 
-	data, err := decodeSession(cookie.Value)
+	data, err := decodeSession(s.sessionKey, cookie.Value)
 	if err != nil {
 		return nil
 	}
@@ -49,7 +49,7 @@ func (s *Server) getUserFromSession(r *http.Request) *db.User {
 
 func (s *Server) setUserSession(w http.ResponseWriter, user *db.User) {
 	data := sessionData{DID: user.DID}
-	encoded, err := encodeSession(data)
+	encoded, err := encodeSession(s.sessionKey, data)
 	if err != nil {
 		s.logger.Error("failed to encode session", "error", err)
 		return
@@ -89,14 +89,14 @@ func (s *Server) getSessionData(r *http.Request) *sessionData {
 	if err != nil {
 		return nil
 	}
-	data, err := decodeSession(cookie.Value)
+	data, err := decodeSession(s.sessionKey, cookie.Value)
 	if err != nil {
 		return nil
 	}
 	return data
 }
 
-func sessionKey() []byte {
+func loadSessionKey() []byte {
 	key := os.Getenv("GLEAN_SESSION_KEY")
 	if key == "" {
 		key = "default-dev-key-change-in-production"
@@ -104,13 +104,13 @@ func sessionKey() []byte {
 	return []byte(key)
 }
 
-func encodeSession(data sessionData) (string, error) {
+func encodeSession(key []byte, data sessionData) (string, error) {
 	payload, err := json.Marshal(data)
 	if err != nil {
 		return "", err
 	}
 
-	mac := hmac.New(sha256.New, sessionKey())
+	mac := hmac.New(sha256.New, key)
 	mac.Write(payload)
 	sig := mac.Sum(nil)
 
@@ -118,7 +118,7 @@ func encodeSession(data sessionData) (string, error) {
 	return base64.URLEncoding.EncodeToString(raw), nil
 }
 
-func decodeSession(encoded string) (*sessionData, error) {
+func decodeSession(key []byte, encoded string) (*sessionData, error) {
 	raw, err := base64.URLEncoding.DecodeString(encoded)
 	if err != nil {
 		return nil, errInvalidSession
@@ -131,7 +131,7 @@ func decodeSession(encoded string) (*sessionData, error) {
 	payload := raw[:len(raw)-sha256.Size]
 	sig := raw[len(raw)-sha256.Size:]
 
-	mac := hmac.New(sha256.New, sessionKey())
+	mac := hmac.New(sha256.New, key)
 	mac.Write(payload)
 	expectedSig := mac.Sum(nil)
 

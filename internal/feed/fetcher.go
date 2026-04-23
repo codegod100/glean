@@ -203,7 +203,10 @@ func (s *Scheduler) fetchAll(ctx context.Context, olderThan time.Duration) {
 func (s *Scheduler) FetchFeed(ctx context.Context, feed *Feed) {
 	call := &fetchCall{done: make(chan struct{})}
 	if actual, loaded := s.inFlight.LoadOrStore(feed.URL, call); loaded {
-		<-actual.(*fetchCall).done
+		select {
+		case <-actual.(*fetchCall).done:
+		case <-ctx.Done():
+		}
 		return
 	}
 	defer func() {

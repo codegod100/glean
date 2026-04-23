@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/cluster"
 	"pkg.rbrt.fr/glean/internal/db"
@@ -259,6 +261,8 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 	feedURLs := feed.ExtractFeedURLs(opml)
 	var added int
 	client := s.pdsClientForUser(r)
+
+	var favGoroutines []struct{ feedURL, siteURL string }
 	for _, fu := range feedURLs {
 		f := &db.Feed{
 			FeedURL:     fu.URL,
@@ -271,13 +275,7 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		go func(feedURL, siteURL string) {
-			if fav := feed.ResolveFavicon(context.Background(), feedURL, siteURL); fav != "" {
-				if err := s.dbs.Articles.UpdateFeedFavicon(context.Background(), feedURL, fav); err != nil {
-					s.logger.Warn("failed to update favicon", "error", err, "feed", feedURL)
-				}
-			}
-		}(fu.URL, fu.SiteURL)
+		favGoroutines = append(favGoroutines, struct{ feedURL, siteURL string }{fu.URL, fu.SiteURL})
 
 		var subURI, subCID string
 		if client != nil {
@@ -304,6 +302,20 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 		}
 		added++
 	}
+
+	go func() {
+		g, ctx := errgroup.WithContext(context.Background())
+		g.SetLimit(5)
+		for _, fav := range favGoroutines {
+			g.Go(func() error {
+				if f := feed.ResolveFavicon(ctx, fav.feedURL, fav.siteURL); f != "" {
+					_ = s.dbs.Articles.UpdateFeedFavicon(ctx, fav.feedURL, f)
+				}
+				return nil
+			})
+		}
+		_ = g.Wait()
+	}()
 
 	w.Header().Set("HX-Redirect", "/feeds")
 	w.WriteHeader(http.StatusOK)
@@ -385,15 +397,7 @@ func (s *Server) refreshUserFeeds(ctx context.Context, userDID string) {
 			s.logger.Warn("failed to get feed", "error", err, "feed", sub.FeedURL)
 			continue
 		}
-		ff := &feed.Feed{
-			URL:          f.FeedURL,
-			Title:        f.Title.String,
-			SiteURL:      f.SiteURL.String,
-			Description:  f.Description.String,
-			Type:         f.FeedType.String,
-			ETag:         f.Etag.String,
-			LastModified: f.LastModified.String,
-		}
+		ff := f.ToFeed()
 		s.scheduler.FetchFeed(ctx, ff)
 	}
 }
@@ -411,15 +415,7 @@ func (s *Server) handleRetryFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ff := &feed.Feed{
-		URL:          f.FeedURL,
-		Title:        f.Title.String,
-		SiteURL:      f.SiteURL.String,
-		Description:  f.Description.String,
-		Type:         f.FeedType.String,
-		ETag:         f.Etag.String,
-		LastModified: f.LastModified.String,
-	}
+	ff := f.ToFeed()
 	s.scheduler.FetchFeed(r.Context(), ff)
 
 	user := currentUser(r)

@@ -29,8 +29,8 @@ func (h *XRPCHandler) ListSubscriptions(w http.ResponseWriter, r *http.Request) 
 
 	query := `
 		SELECT s.id, f.feed_url, COALESCE(s.title, f.title), s.category, s.added_at
-		FROM subscriptions s
-		JOIN feeds f ON s.feed_url = f.feed_url
+		FROM articles.subscriptions s
+		JOIN articles.feeds f ON s.feed_url = f.feed_url
 		WHERE s.user_did = ?`
 	args := []any{repo}
 
@@ -95,7 +95,7 @@ func (h *XRPCHandler) ListAnnotations(w http.ResponseWriter, r *http.Request) {
 	query := `
 		SELECT a.uri, a.cid, u.did, a.feed_url, a.article_url,
 		       a.quote, a.note, a.tags, a.rating, a.created_at
-		FROM annotations a
+		FROM articles.annotations a
 		JOIN users u ON a.author_did = u.did
 		WHERE 1=1`
 	args := []any{}
@@ -180,7 +180,7 @@ func (h *XRPCHandler) ListLikes(w http.ResponseWriter, r *http.Request) {
 
 	query := `
 		SELECT l.uri, l.cid, u.did, l.feed_url, l.article_url, l.created_at
-		FROM likes l
+		FROM articles.likes l
 		JOIN users u ON l.author_did = u.did
 		WHERE 1=1`
 	args := []any{}
@@ -250,8 +250,8 @@ func (h *XRPCHandler) GetTrending(w http.ResponseWriter, r *http.Request) {
 
 	query := `
 		SELECT l.feed_url, l.article_url, a.title, COUNT(*) as like_count
-		FROM likes l
-		LEFT JOIN articles a ON l.article_url = a.url
+		FROM articles.likes l
+		LEFT JOIN articles.articles a ON l.article_url = a.url
 		WHERE 1=1`
 	args := []any{}
 
@@ -372,7 +372,7 @@ func (h *XRPCHandler) ListFeedLists(w http.ResponseWriter, r *http.Request) {
 	query := `
 		SELECT u.did, COUNT(s.id) as subscription_count
 		FROM users u
-		LEFT JOIN subscriptions s ON u.did = s.user_did
+		LEFT JOIN articles.subscriptions s ON u.did = s.user_did
 		WHERE u.did IN (` + strings.Join(placeholders, ",") + `)`
 
 	if cursor != "" {
@@ -417,8 +417,8 @@ func (h *XRPCHandler) ListFeedLists(w http.ResponseWriter, r *http.Request) {
 		}
 		subRows, err := h.db.QueryContext(r.Context(), `
 			SELECT s.user_did, s.feed_url, COALESCE(s.title, f.title), s.category
-			FROM subscriptions s
-			JOIN feeds f ON s.feed_url = f.feed_url
+			FROM articles.subscriptions s
+			JOIN articles.feeds f ON s.feed_url = f.feed_url
 			WHERE s.user_did IN (`+strings.Join(ph, ",")+`)
 			ORDER BY s.user_did, s.added_at DESC
 		`, args...)

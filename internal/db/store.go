@@ -22,16 +22,7 @@ func (a *FeedStoreAdapter) GetFeedsToFetch(ctx context.Context, olderThan time.D
 	}
 	var feeds []*feed.Feed
 	for _, df := range dbFeeds {
-		feeds = append(feeds, &feed.Feed{
-			URL:          df.FeedURL,
-			Title:        df.Title.String,
-			SiteURL:      df.SiteURL.String,
-			Description:  df.Description.String,
-			Type:         df.FeedType.String,
-			FaviconURL:   df.FaviconURL.String,
-			ETag:         df.Etag.String,
-			LastModified: df.LastModified.String,
-		})
+		feeds = append(feeds, df.ToFeed())
 	}
 	return feeds, nil
 }

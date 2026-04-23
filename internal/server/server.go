@@ -68,6 +68,7 @@ type Server struct {
 	scraper     *scraper.Scraper
 	clientID    string
 	callbackURL string
+	sessionKey  []byte
 }
 
 func New(dbs *db.Databases, clientID, callbackURL, addr string, scheduler *feed.Scheduler, engine *cluster.Engine, logger *slog.Logger) *Server {
@@ -98,6 +99,7 @@ func New(dbs *db.Databases, clientID, callbackURL, addr string, scheduler *feed.
 		scraper:     scraper.New(logger),
 		clientID:    clientID,
 		callbackURL: callbackURL,
+		sessionKey:  loadSessionKey(),
 	}
 
 	s.setupMiddleware()

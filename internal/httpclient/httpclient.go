@@ -26,7 +26,7 @@ var dnsResolver = &net.Resolver{
 }
 
 var (
-	transportOnce sync.Once
+	transportOnce   sync.Once
 	sharedTransport *http.Transport
 )
 

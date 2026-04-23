@@ -102,7 +102,7 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		PDSURL:    sessData.HostURL,
 		SessionID: sessData.SessionID,
 	}
-	encoded, err := encodeSession(sessionData)
+	encoded, err := encodeSession(s.sessionKey, sessionData)
 	if err != nil {
 		s.logger.Error("failed to encode session", "error", err)
 		s.renderError(w, r, http.StatusInternalServerError, "Session error", "Could not create your session. Please try again.")

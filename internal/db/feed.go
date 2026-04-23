@@ -6,6 +6,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	"pkg.rbrt.fr/glean/internal/feed"
 )
 
 var ErrDuplicateSubscription = errors.New("already subscribed to this feed")
@@ -26,6 +28,19 @@ type Feed struct {
 	FaviconURL              sql.NullString
 }
 
+func (f *Feed) ToFeed() *feed.Feed {
+	return &feed.Feed{
+		URL:          f.FeedURL,
+		Title:        f.Title.String,
+		SiteURL:      f.SiteURL.String,
+		Description:  f.Description.String,
+		Type:         f.FeedType.String,
+		FaviconURL:   f.FaviconURL.String,
+		ETag:         f.Etag.String,
+		LastModified: f.LastModified.String,
+	}
+}
+
 type Subscription struct {
 	ID          int64
 	UserDID     string
@@ -39,37 +54,34 @@ type Subscription struct {
 	FaviconURL  sql.NullString
 }
 
-func (s *ArticleStore) UpsertFeed(ctx context.Context, feed *Feed) error {
-	return s.BatchUpsertFeeds(ctx, []*Feed{feed})
-}
+const feedSelectCols = `feed_url, title, site_url, description, feed_type,
+	last_fetched_at, last_error, subscriber_count, etag, last_modified,
+	consecutive_empty_fetches, error_count, favicon_url`
 
-func (s *ArticleStore) GetFeed(ctx context.Context, feedURL string) (*Feed, error) {
+func scanFeed(scanner interface{ Scan(...any) error }) (*Feed, error) {
 	f := &Feed{}
-	err := s.db.QueryRowContext(ctx, `
-		SELECT feed_url, title, site_url, description, feed_type,
-			last_fetched_at, last_error, subscriber_count, etag, last_modified,
-			consecutive_empty_fetches, error_count, favicon_url
-		FROM articles.feeds WHERE feed_url = ?
-	`, feedURL).Scan(&f.FeedURL, &f.Title, &f.SiteURL, &f.Description, &f.FeedType,
+	if err := scanner.Scan(&f.FeedURL, &f.Title, &f.SiteURL, &f.Description, &f.FeedType,
 		&f.LastFetchedAt, &f.LastError, &f.SubscriberCount, &f.Etag, &f.LastModified,
-		&f.ConsecutiveEmptyFetches, &f.ErrorCount, &f.FaviconURL)
-	if err != nil {
+		&f.ConsecutiveEmptyFetches, &f.ErrorCount, &f.FaviconURL); err != nil {
 		return nil, err
 	}
 	return f, nil
 }
 
+func (s *ArticleStore) UpsertFeed(ctx context.Context, feed *Feed) error {
+	return s.BatchUpsertFeeds(ctx, []*Feed{feed})
+}
+
+func (s *ArticleStore) GetFeed(ctx context.Context, feedURL string) (*Feed, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT `+feedSelectCols+` FROM articles.feeds WHERE feed_url = ?`, feedURL)
+	return scanFeed(row)
+}
+
 func (s *ArticleStore) GetFeedsToFetch(ctx context.Context, olderThan time.Duration, limit int) ([]*Feed, error) {
 	cutoff := time.Now().Add(-olderThan)
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT feed_url, title, site_url, description, feed_type,
-			last_fetched_at, last_error, subscriber_count, etag, last_modified,
-			consecutive_empty_fetches, error_count, favicon_url
-		FROM articles.feeds
+	rows, err := s.db.QueryContext(ctx, `SELECT `+feedSelectCols+` FROM articles.feeds
 		WHERE subscriber_count > 0 AND error_count < 25 AND (last_fetched_at IS NULL OR last_fetched_at <= ?)
-		ORDER BY last_fetched_at ASC NULLS FIRST
-		LIMIT ?
-	`, cutoff, limit)
+		ORDER BY last_fetched_at ASC NULLS FIRST LIMIT ?`, cutoff, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -77,10 +89,8 @@ func (s *ArticleStore) GetFeedsToFetch(ctx context.Context, olderThan time.Durat
 
 	var feeds []*Feed
 	for rows.Next() {
-		f := &Feed{}
-		if err := rows.Scan(&f.FeedURL, &f.Title, &f.SiteURL, &f.Description, &f.FeedType,
-			&f.LastFetchedAt, &f.LastError, &f.SubscriberCount, &f.Etag, &f.LastModified,
-			&f.ConsecutiveEmptyFetches, &f.ErrorCount, &f.FaviconURL); err != nil {
+		f, err := scanFeed(rows)
+		if err != nil {
 			return nil, err
 		}
 		feeds = append(feeds, f)
@@ -135,13 +145,6 @@ func (s *ArticleStore) updateSubscriptionURI(ctx context.Context, userDID, feedU
 		UPDATE articles.subscriptions SET uri = ?, cid = ? WHERE user_did = ? AND feed_url = ?
 	`, uri, cid, userDID, feedURL)
 	return err
-}
-
-func uriOrNil(v string) any {
-	if v == "" {
-		return nil
-	}
-	return v
 }
 
 func nilIfEmpty(v string) any {
@@ -306,15 +309,9 @@ func (s *ArticleStore) UpdateFeedFavicon(ctx context.Context, feedURL, faviconUR
 }
 
 func (s *ArticleStore) ListDeadFeeds(ctx context.Context, userDID string, threshold int) ([]*Feed, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT f.feed_url, f.title, f.site_url, f.description, f.feed_type,
-			f.last_fetched_at, f.last_error, f.subscriber_count, f.etag, f.last_modified,
-			f.consecutive_empty_fetches, f.error_count, f.favicon_url
-		FROM articles.feeds f
+	rows, err := s.db.QueryContext(ctx, `SELECT `+feedSelectCols+` FROM articles.feeds f
 		JOIN articles.subscriptions s ON s.feed_url = f.feed_url AND s.user_did = ?
-		WHERE f.error_count >= ?
-		ORDER BY f.error_count DESC
-	`, userDID, threshold)
+		WHERE f.error_count >= ? ORDER BY f.error_count DESC`, userDID, threshold)
 	if err != nil {
 		return nil, err
 	}
@@ -322,10 +319,8 @@ func (s *ArticleStore) ListDeadFeeds(ctx context.Context, userDID string, thresh
 
 	var feeds []*Feed
 	for rows.Next() {
-		f := &Feed{}
-		if err := rows.Scan(&f.FeedURL, &f.Title, &f.SiteURL, &f.Description, &f.FeedType,
-			&f.LastFetchedAt, &f.LastError, &f.SubscriberCount, &f.Etag, &f.LastModified,
-			&f.ConsecutiveEmptyFetches, &f.ErrorCount, &f.FaviconURL); err != nil {
+		f, err := scanFeed(rows)
+		if err != nil {
 			return nil, err
 		}
 		feeds = append(feeds, f)
@@ -334,14 +329,8 @@ func (s *ArticleStore) ListDeadFeeds(ctx context.Context, userDID string, thresh
 }
 
 func (s *ArticleStore) ListAllFeeds(ctx context.Context, limit, offset int) ([]*Feed, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT feed_url, title, site_url, description, feed_type,
-			last_fetched_at, last_error, subscriber_count, etag, last_modified,
-			consecutive_empty_fetches, error_count, favicon_url
-		FROM articles.feeds
-		ORDER BY subscriber_count DESC
-		LIMIT ? OFFSET ?
-	`, limit, offset)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+feedSelectCols+` FROM articles.feeds
+		ORDER BY subscriber_count DESC LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -349,10 +338,8 @@ func (s *ArticleStore) ListAllFeeds(ctx context.Context, limit, offset int) ([]*
 
 	var feeds []*Feed
 	for rows.Next() {
-		f := &Feed{}
-		if err := rows.Scan(&f.FeedURL, &f.Title, &f.SiteURL, &f.Description, &f.FeedType,
-			&f.LastFetchedAt, &f.LastError, &f.SubscriberCount, &f.Etag, &f.LastModified,
-			&f.ConsecutiveEmptyFetches, &f.ErrorCount, &f.FaviconURL); err != nil {
+		f, err := scanFeed(rows)
+		if err != nil {
 			return nil, err
 		}
 		feeds = append(feeds, f)
@@ -457,7 +444,7 @@ func (s *ArticleStore) BatchReconcileSubscriptions(ctx context.Context, userDID 
 			}
 			continue
 		}
-		result, err := insertStmt.ExecContext(ctx, userDID, sub.FeedURL, nilIfEmpty(sub.Title), sub.Category, uriOrNil(sub.URI), uriOrNil(sub.CID))
+		result, err := insertStmt.ExecContext(ctx, userDID, sub.FeedURL, nilIfEmpty(sub.Title), sub.Category, nilIfEmpty(sub.URI), nilIfEmpty(sub.CID))
 		if err != nil {
 			return err
 		}
@@ -472,15 +459,9 @@ func (s *ArticleStore) BatchReconcileSubscriptions(ctx context.Context, userDID 
 }
 
 func (s *ArticleStore) ListUnsubscribedFeeds(ctx context.Context, userDID string, limit, offset int) ([]*Feed, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT feed_url, title, site_url, description, feed_type,
-			last_fetched_at, last_error, subscriber_count, etag, last_modified,
-			consecutive_empty_fetches, error_count, favicon_url
-		FROM articles.feeds
+	rows, err := s.db.QueryContext(ctx, `SELECT `+feedSelectCols+` FROM articles.feeds
 		WHERE feed_url NOT IN (SELECT feed_url FROM articles.subscriptions WHERE user_did = ?)
-		ORDER BY subscriber_count DESC
-		LIMIT ? OFFSET ?
-	`, userDID, limit, offset)
+		ORDER BY subscriber_count DESC LIMIT ? OFFSET ?`, userDID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -488,10 +469,8 @@ func (s *ArticleStore) ListUnsubscribedFeeds(ctx context.Context, userDID string
 
 	var feeds []*Feed
 	for rows.Next() {
-		f := &Feed{}
-		if err := rows.Scan(&f.FeedURL, &f.Title, &f.SiteURL, &f.Description, &f.FeedType,
-			&f.LastFetchedAt, &f.LastError, &f.SubscriberCount, &f.Etag, &f.LastModified,
-			&f.ConsecutiveEmptyFetches, &f.ErrorCount, &f.FaviconURL); err != nil {
+		f, err := scanFeed(rows)
+		if err != nil {
 			return nil, err
 		}
 		feeds = append(feeds, f)

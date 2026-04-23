@@ -173,7 +173,6 @@ func resolveAnnotationHandles(ctx context.Context, annotations []*db.Annotation)
 	g, gCtx := errgroup.WithContext(ctx)
 	g.SetLimit(5)
 	for _, a := range annotations {
-		a := a
 		g.Go(func() error {
 			if a.AuthorDID != "" {
 				a.AuthorHandle = atproto.ResolveProfile(gCtx, a.AuthorDID).Handle

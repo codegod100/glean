@@ -12,18 +12,9 @@ import (
 	"pkg.rbrt.fr/glean/internal/httpclient"
 )
 
-type imageContentTypePrefixes []string
-
-func (p imageContentTypePrefixes) matches(contentType string) bool {
-	for _, prefix := range p {
-		if strings.HasPrefix(contentType, prefix) {
-			return true
-		}
-	}
-	return false
+func isImageContentType(ct string) bool {
+	return strings.HasPrefix(ct, "image/")
 }
-
-var imageContentTypes = imageContentTypePrefixes{"image/"}
 
 type DiscoveryResult struct {
 	FeedURLs []string
@@ -140,7 +131,7 @@ func findFavicon(ctx context.Context, base *url.URL, links []string) string {
 				return
 			}
 			resp.Body.Close()
-			if resp.StatusCode == http.StatusOK && imageContentTypes.matches(resp.Header.Get("Content-Type")) {
+			if resp.StatusCode == http.StatusOK && isImageContentType(resp.Header.Get("Content-Type")) {
 				select {
 				case found <- result{url: cleanFavicon(resolved.String()), found: true}:
 				default:
@@ -170,7 +161,7 @@ func checkContentType(ctx context.Context, url string) bool {
 		return false
 	}
 	resp.Body.Close()
-	return resp.StatusCode == http.StatusOK && imageContentTypes.matches(resp.Header.Get("Content-Type"))
+	return resp.StatusCode == http.StatusOK && isImageContentType(resp.Header.Get("Content-Type"))
 }
 
 func extractHref(link string) string {

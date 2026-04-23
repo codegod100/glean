@@ -120,7 +120,6 @@ func resolvePeopleHandles(ctx context.Context, people []*cluster.PersonRecommend
 	g, gCtx := errgroup.WithContext(ctx)
 	g.SetLimit(5)
 	for _, p := range people {
-		p := p
 		g.Go(func() error {
 			prof := atproto.ResolveProfile(gCtx, p.DID)
 			p.Handle = prof.Handle
