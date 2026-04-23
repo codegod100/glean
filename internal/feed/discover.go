@@ -63,10 +63,7 @@ func cleanFavicon(s string) string {
 	return strings.TrimRight(s, "/")
 }
 
-func ResolveFavicon(ctx context.Context, feedURL, siteURL, parsedFavicon string) string {
-	if parsedFavicon != "" {
-		return cleanFavicon(parsedFavicon)
-	}
+func ResolveFavicon(ctx context.Context, feedURL, siteURL string) string {
 	target := siteURL
 	if target == "" {
 		target = feedURL
@@ -117,7 +114,7 @@ func findFavicon(ctx context.Context, base *url.URL, links []string) string {
 	origin.Fragment = ""
 
 	type result struct {
-		url  string
+		url   string
 		found bool
 	}
 	found := make(chan result, 1)

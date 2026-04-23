@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"io"
+	"slices"
 	"strings"
 )
 
@@ -115,7 +116,7 @@ func GenerateOPML(feeds []FeedURL, title string) ([]byte, error) {
 		}
 		if f.Category != "" {
 			categoryMap[f.Category] = append(categoryMap[f.Category], outline)
-			if !contains(categories, f.Category) {
+			if !slices.Contains(categories, f.Category) {
 				categories = append(categories, f.Category)
 			}
 		} else {
@@ -142,13 +143,4 @@ func GenerateOPML(feeds []FeedURL, title string) ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
-}
-
-func contains(slice []string, s string) bool {
-	for _, v := range slice {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }

@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"time"
 
 	"pkg.rbrt.fr/glean/internal/feed"
@@ -37,37 +36,23 @@ func (a *FeedStoreAdapter) GetFeedsToFetch(ctx context.Context, olderThan time.D
 	return feeds, nil
 }
 
-func (a *FeedStoreAdapter) UpsertArticle(ctx context.Context, article *feed.Article) (int64, error) {
-	dbArticle := &Article{
-		FeedURL: article.FeedURL,
-		GUID:    article.GUID,
-		Title:   article.Title,
-		Summary: sql.NullString{String: article.Summary, Valid: article.Summary != ""},
-		Content: sql.NullString{String: article.Content, Valid: article.Content != ""},
-		Author:  sql.NullString{String: article.Author, Valid: article.Author != ""},
-		URL:     sql.NullString{String: article.URL, Valid: article.URL != ""},
-	}
-	if !article.Published.IsZero() {
-		dbArticle.Published = sql.NullTime{Time: article.Published, Valid: true}
-	}
-	if !article.Updated.IsZero() {
-		dbArticle.Updated = sql.NullTime{Time: article.Updated, Valid: true}
-	}
-	return a.db.UpsertArticle(ctx, dbArticle)
-}
-
-func (a *FeedStoreAdapter) UpsertArticlesBatch(ctx context.Context, articles []feed.Article) error {
-	return a.db.UpsertArticlesBatch(ctx, articles)
-}
-
-func (a *FeedStoreAdapter) MarkFeedFetched(ctx context.Context, feedURL, etag, lastModified string) error {
-	return a.db.MarkFeedFetched(ctx, feedURL, etag, lastModified)
-}
-
-func (a *FeedStoreAdapter) MarkFeedFetchError(ctx context.Context, feedURL, lastError string) error {
+func (a *FeedStoreAdapter) RecordFetchError(ctx context.Context, feedURL, lastError string) error {
 	return a.db.MarkFeedFetchError(ctx, feedURL, lastError)
 }
 
-func (a *FeedStoreAdapter) UpdateFeedFavicon(ctx context.Context, feedURL, faviconURL string) error {
-	return a.db.UpdateFeedFavicon(ctx, feedURL, faviconURL)
+func (a *FeedStoreAdapter) StoreFetchResult(ctx context.Context, feedURL, etag, lastModified string, articles []feed.Article, faviconURL string) error {
+	if err := a.db.MarkFeedFetched(ctx, feedURL, etag, lastModified); err != nil {
+		return err
+	}
+	if len(articles) > 0 {
+		if err := a.db.UpsertArticlesBatch(ctx, articles); err != nil {
+			return err
+		}
+	}
+	if faviconURL != "" {
+		if err := a.db.UpdateFeedFavicon(ctx, feedURL, faviconURL); err != nil {
+			return err
+		}
+	}
+	return nil
 }

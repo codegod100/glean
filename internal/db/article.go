@@ -37,36 +37,11 @@ type ReadState struct {
 	ReadAt    sql.NullTime
 }
 
-func (db *DB) UpsertArticle(ctx context.Context, article *Article) (int64, error) {
-	var id int64
-	err := db.QueryRowContext(ctx, `
-		INSERT INTO articles (feed_url, guid, title, url, author, summary, content, published, updated)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(feed_url, guid) DO NOTHING
-		RETURNING id
-	`, article.FeedURL, article.GUID, article.Title, article.URL, article.Author,
-		article.Summary, article.Content, article.Published, article.Updated).Scan(&id)
-	if err == sql.ErrNoRows {
-		err = db.QueryRowContext(ctx, `
-			SELECT id FROM articles WHERE feed_url = ? AND guid = ?
-		`, article.FeedURL, article.GUID).Scan(&id)
-	}
-	return id, err
-}
-
 func (db *DB) UpsertArticlesBatch(ctx context.Context, articles []feed.Article) error {
 	if len(articles) == 0 {
 		return nil
 	}
 
-	err := upsertArticlesBatch(ctx, db, articles)
-	if err != nil {
-		err = upsertArticlesBatch(ctx, db, articles)
-	}
-	return err
-}
-
-func upsertArticlesBatch(ctx context.Context, db *DB, articles []feed.Article) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err

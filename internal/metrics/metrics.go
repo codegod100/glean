@@ -6,10 +6,15 @@ import (
 )
 
 var (
-	FeedsFetched = promauto.NewCounterVec(prometheus.CounterOpts{
+	FeedsFetched = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "glean_feeds_fetched_total",
 		Help: "Total number of feed fetch attempts",
-	}, []string{"status"})
+	})
+
+	FeedsFetchedLast = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "glean_feeds_fetched_last_timestamp_seconds",
+		Help: "Unix timestamp of last feed fetch",
+	})
 
 	FeedsFetchedDuration = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name:    "glean_feed_fetch_duration_seconds",

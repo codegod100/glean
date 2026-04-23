@@ -72,30 +72,32 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if result != nil {
-		f := &db.Feed{
-			FeedURL:     feedURL,
-			Title:       nullString(result.Feed.Title),
-			SiteURL:     nullString(result.Feed.SiteURL),
-			Description: nullString(result.Feed.Description),
-			FeedType:    nullString(result.Feed.Type),
-		}
-		if err := s.db.UpsertFeed(r.Context(), f); err != nil {
-			s.logger.Error("failed to upsert feed", "error", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		go func() {
-			if f := feed.ResolveFavicon(context.Background(), feedURL, result.Feed.SiteURL, result.Feed.FaviconURL); f != "" {
-				_ = s.db.UpdateFeedFavicon(context.Background(), feedURL, f)
-			}
-		}()
-	}
-
 	var feedTitle string
+	var faviconURL string
 	if result != nil {
 		feedTitle = result.Feed.Title
+		faviconURL = result.Feed.FaviconURL
+		if faviconURL == "" {
+			go func() {
+				if f := feed.ResolveFavicon(context.Background(), feedURL, result.Feed.SiteURL); f != "" {
+					_ = s.db.UpdateFeedFavicon(context.Background(), feedURL, f)
+				}
+			}()
+		}
+	}
+
+	f := &db.Feed{
+		FeedURL:     feedURL,
+		Title:       nullString(feedTitle),
+		SiteURL:     nullString(result.Feed.SiteURL),
+		Description: nullString(result.Feed.Description),
+		FeedType:    nullString(result.Feed.Type),
+		FaviconURL:  nullString(faviconURL),
+	}
+	if err := s.db.UpsertFeed(r.Context(), f); err != nil {
+		s.logger.Error("failed to upsert feed", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	var subURI, subCID string
@@ -235,8 +237,8 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		go func(feedURL, siteURL string) {
-			if f := feed.ResolveFavicon(context.Background(), feedURL, siteURL, ""); f != "" {
-				_ = s.db.UpdateFeedFavicon(context.Background(), feedURL, f)
+			if fav := feed.ResolveFavicon(context.Background(), feedURL, siteURL); fav != "" {
+				_ = s.db.UpdateFeedFavicon(context.Background(), feedURL, fav)
 			}
 		}(fu.URL, fu.SiteURL)
 

@@ -328,9 +328,9 @@ A background scheduler polls subscribed feeds on a fixed 5-minute tick. Feeds ar
 
 ### 4.2 Fetch Schedule
 
-The scheduler uses a single fixed interval with in-flight deduplication:
+The scheduler uses a configurable tick interval with in-flight deduplication:
 
-- **Tick interval**: The scheduler checks for stale feeds every 5 minutes
+- **Tick interval**: The scheduler checks for stale feeds every `GLEAN_FETCH_INTERVAL` (default 5 minutes)
 - **Staleness threshold**: Feeds not fetched in the last 30 minutes are eligible
 - **Subscriber filter**: Only feeds with `subscriber_count > 0` are fetched
 - **In-flight dedup**: If a feed is already being fetched (e.g., manual refresh and background scheduler overlap), the second caller waits for the first to complete rather than fetching again

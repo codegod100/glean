@@ -130,7 +130,7 @@ func (jc *JetstreamConsumer) Start(ctx context.Context) error {
 			return ctx.Err()
 		}
 		if err != nil {
-			jc.logger.Error("jetstream connection error", "error", err)
+			jc.logger.Warn("jetstream connection lost", "error", err)
 			metrics.JetstreamReconnects.Inc()
 		}
 

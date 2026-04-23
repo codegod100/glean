@@ -69,11 +69,8 @@ func (f *Fetcher) Fetch(ctx context.Context, feedURL, etag, lastModified string)
 
 type FeedStore interface {
 	GetFeedsToFetch(ctx context.Context, olderThan time.Duration, limit int) ([]*Feed, error)
-	UpsertArticle(ctx context.Context, article *Article) (int64, error)
-	UpsertArticlesBatch(ctx context.Context, articles []Article) error
-	MarkFeedFetched(ctx context.Context, feedURL, etag, lastModified string) error
-	MarkFeedFetchError(ctx context.Context, feedURL, lastError string) error
-	UpdateFeedFavicon(ctx context.Context, feedURL, faviconURL string) error
+	StoreFetchResult(ctx context.Context, feedURL, etag, lastModified string, articles []Article, faviconURL string) error
+	RecordFetchError(ctx context.Context, feedURL, lastError string) error
 }
 
 type fetchCall struct {
@@ -81,28 +78,28 @@ type fetchCall struct {
 }
 
 type Scheduler struct {
-	fetcher  *Fetcher
-	store    FeedStore
-	logger   *slog.Logger
-	interval time.Duration
-	inFlight sync.Map
+	fetcher       *Fetcher
+	store         FeedStore
+	logger        *slog.Logger
+	tickInterval  time.Duration
+	staleInterval time.Duration
+	inFlight      sync.Map
 }
 
-func NewScheduler(store FeedStore, logger *slog.Logger) *Scheduler {
+func NewScheduler(store FeedStore, logger *slog.Logger, tickInterval, staleInterval time.Duration) *Scheduler {
 	return &Scheduler{
-		fetcher:  NewFetcher(),
-		store:    store,
-		logger:   logger,
-		interval: 30 * time.Minute,
-		inFlight: sync.Map{},
+		fetcher:       NewFetcher(),
+		store:         store,
+		logger:        logger,
+		tickInterval:  tickInterval,
+		staleInterval: staleInterval,
+		inFlight:      sync.Map{},
 	}
 }
 
 func (s *Scheduler) Run(ctx context.Context) error {
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(s.tickInterval)
 	defer ticker.Stop()
-
-	s.fetchAll(ctx)
 
 	for {
 		select {
@@ -115,7 +112,7 @@ func (s *Scheduler) Run(ctx context.Context) error {
 }
 
 func (s *Scheduler) fetchAll(ctx context.Context) {
-	feeds, err := s.store.GetFeedsToFetch(ctx, s.interval, 200)
+	feeds, err := s.store.GetFeedsToFetch(ctx, s.staleInterval, 500)
 	if err != nil {
 		s.logger.Error("failed to get feeds", "error", err)
 		return
@@ -151,45 +148,34 @@ func (s *Scheduler) FetchFeed(ctx context.Context, feed *Feed) {
 	start := time.Now()
 	result, newEtag, newLastModified, err := s.fetcher.Fetch(ctx, feed.URL, feed.ETag, feed.LastModified)
 	metrics.FeedsFetchedDuration.Observe(time.Since(start).Seconds())
+	metrics.FeedsFetched.Inc()
+	metrics.FeedsFetchedLast.Set(float64(time.Now().Unix()))
 	if err != nil {
-		metrics.FeedsFetched.WithLabelValues("error").Inc()
 		s.logger.Error("failed to fetch feed", "error", err, "feed", feed.URL)
-		if updErr := s.store.MarkFeedFetchError(ctx, feed.URL, err.Error()); updErr != nil {
-			s.logger.Error("failed to update feed fetch error", "error", updErr, "feed", feed.URL)
-		}
+		s.store.RecordFetchError(ctx, feed.URL, err.Error())
 		return
 	}
 
 	if result == nil {
-		metrics.FeedsFetched.WithLabelValues("not_modified").Inc()
-		if updErr := s.store.MarkFeedFetched(ctx, feed.URL, feed.ETag, feed.LastModified); updErr != nil {
-			s.logger.Error("failed to update feed fetch result", "error", updErr, "feed", feed.URL)
+		s.logger.Info("fetched articles", "feed", feed.URL, "count", 0)
+		if err := s.store.StoreFetchResult(ctx, feed.URL, newEtag, newLastModified, nil, ""); err != nil {
+			s.logger.Error("failed to store feed fetch result", "error", err, "feed", feed.URL)
 		}
 		return
 	}
 
-	metrics.FeedsFetched.WithLabelValues("success").Inc()
-
-	for _, article := range result.Articles {
-		article.FeedURL = feed.URL
+	faviconURL := result.Feed.FaviconURL
+	if faviconURL == "" && feed.FaviconURL == "" {
+		faviconURL = ResolveFavicon(context.Background(), feed.URL, feed.SiteURL)
 	}
-	if err := s.store.UpsertArticlesBatch(ctx, result.Articles); err != nil {
-		s.logger.Error("failed to upsert articles", "error", err, "feed", feed.URL)
+
+	if err := s.store.StoreFetchResult(ctx, feed.URL, newEtag, newLastModified, result.Articles, faviconURL); err != nil {
+		s.logger.Error("failed to store feed fetch result", "error", err, "feed", feed.URL)
 	} else {
-		metrics.ArticlesUpserted.Add(float64(len(result.Articles)))
-	}
-
-	if err := s.store.MarkFeedFetched(ctx, feed.URL, newEtag, newLastModified); err != nil {
-		s.logger.Error("failed to update feed fetch result", "error", err, "feed", feed.URL)
-	}
-
-	if result != nil && result.Feed.FaviconURL != "" {
-		_ = s.store.UpdateFeedFavicon(ctx, feed.URL, result.Feed.FaviconURL)
-	} else if feed.FaviconURL == "" {
-		go func() {
-			if f := ResolveFavicon(context.Background(), feed.URL, feed.SiteURL, ""); f != "" {
-				_ = s.store.UpdateFeedFavicon(context.Background(), feed.URL, f)
-			}
-		}()
+		articleCount := len(result.Articles)
+		s.logger.Info("fetched articles", "feed", feed.URL, "count", articleCount)
+		if articleCount > 0 {
+			metrics.ArticlesUpserted.Add(float64(articleCount))
+		}
 	}
 }
