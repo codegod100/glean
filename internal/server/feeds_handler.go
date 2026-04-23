@@ -338,11 +338,12 @@ func (s *Server) handleOPMLDownload(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleFeedList(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
-	subs, err := s.dbs.Articles.ListSubscriptions(r.Context(), user.DID, "", 100, 0)
+	category := r.URL.Query().Get("category")
+	subs, err := s.dbs.Articles.ListSubscriptions(r.Context(), user.DID, category, 100, 0)
 	if err != nil {
 		s.logger.Warn("failed to list subscriptions", "error", err, "did", user.DID)
 	}
-	s.render(w, r, "feeds.html", map[string]any{
+	s.render(w, r, "feed-list.html", map[string]any{
 		"User":          user,
 		"Subscriptions": subs,
 	})
@@ -350,11 +351,28 @@ func (s *Server) handleFeedList(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleRefreshFeeds(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
+	ctx := r.Context()
 
-	subs, err := s.dbs.Articles.ListSubscriptions(r.Context(), user.DID, "", 100, 0)
+	go s.refreshUserFeeds(context.WithoutCancel(ctx), user.DID)
+
+	category := r.URL.Query().Get("category")
+	subs, err := s.dbs.Articles.ListSubscriptions(ctx, user.DID, category, 100, 0)
 	if err != nil {
 		s.logger.Warn("failed to list subscriptions", "error", err, "did", user.DID)
 	}
+	s.render(w, r, "feed-list.html", map[string]any{
+		"User":          user,
+		"Subscriptions": subs,
+	})
+}
+
+func (s *Server) refreshUserFeeds(ctx context.Context, userDID string) {
+	subs, err := s.dbs.Articles.ListSubscriptions(ctx, userDID, "", 100, 0)
+	if err != nil {
+		s.logger.Warn("failed to list subscriptions for refresh", "error", err, "did", userDID)
+		return
+	}
+
 	seen := make(map[string]bool)
 	for _, sub := range subs {
 		if seen[sub.FeedURL] {
@@ -362,7 +380,7 @@ func (s *Server) handleRefreshFeeds(w http.ResponseWriter, r *http.Request) {
 		}
 		seen[sub.FeedURL] = true
 
-		f, err := s.dbs.Articles.GetFeed(r.Context(), sub.FeedURL)
+		f, err := s.dbs.Articles.GetFeed(ctx, sub.FeedURL)
 		if err != nil {
 			s.logger.Warn("failed to get feed", "error", err, "feed", sub.FeedURL)
 			continue
@@ -376,17 +394,8 @@ func (s *Server) handleRefreshFeeds(w http.ResponseWriter, r *http.Request) {
 			ETag:         f.Etag.String,
 			LastModified: f.LastModified.String,
 		}
-		s.scheduler.FetchFeed(r.Context(), ff)
+		s.scheduler.FetchFeed(ctx, ff)
 	}
-
-	subs, err = s.dbs.Articles.ListSubscriptions(r.Context(), user.DID, "", 100, 0)
-	if err != nil {
-		s.logger.Warn("failed to list subscriptions", "error", err, "did", user.DID)
-	}
-	s.render(w, r, "feed-list.html", map[string]any{
-		"User":          user,
-		"Subscriptions": subs,
-	})
 }
 
 func (s *Server) handleRetryFeed(w http.ResponseWriter, r *http.Request) {

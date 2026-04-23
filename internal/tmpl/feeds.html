@@ -2,14 +2,20 @@
 <div class="flex items-center justify-between gap-3 mb-2 flex-wrap">
     <h1 class="text-2xl font-bold text-spot-text">Feeds <span class="text-base font-normal text-spot-secondary">({{.SubscriptionCount}})</span></h1>
     <div class="flex items-center gap-3">
-        <button hx-post="/feeds/refresh" hx-target="#feed-list" hx-swap="innerHTML"
-                hx-indicator="#refresh-indicator"
-                class="border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:border-spot-text transition">
+        <button id="refresh-btn"
+                hx-post="/feeds/refresh" hx-target="#feed-list" hx-swap="innerHTML"
+                hx-on::before-request="gleanRefreshStart()"
+                hx-on::after-request="gleanRefreshPoll()"
+                class="border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:border-spot-text transition disabled:opacity-50">
             Refresh feeds
         </button>
-        <span id="refresh-indicator" class="htmx-indicator text-sm text-spot-secondary">Fetching...</span>
+        <span id="refresh-indicator" class="text-sm text-spot-secondary" style="display:none">Refreshing feeds...</span>
     </div>
 </div>
+<script>
+function gleanRefreshStart(){document.getElementById('refresh-indicator').style.display='inline';document.getElementById('refresh-btn').disabled=true}
+function gleanRefreshPoll(){setTimeout(function(){htmx.ajax('GET','/feeds/list',{target:'#feed-list',swap:'innerHTML'});document.getElementById('refresh-indicator').style.display='none';document.getElementById('refresh-btn').disabled=false},5000)}
+</script>
 <p class="text-sm text-spot-secondary mb-6">Manage your RSS and Atom subscriptions.</p>
 
 {{template "dead-feeds.html" (dict "DeadFeeds" .DeadFeeds "CSRFToken" .CSRFToken)}}
