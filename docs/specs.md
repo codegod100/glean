@@ -13,7 +13,7 @@ The core idea: your RSS subscriptions are a strong signal about your interests. 
 | Layer            | Technology                                                      |
 | ---------------- | --------------------------------------------------------------- |
 | Backend          | Go                                                              |
-| Database         | SQLite (3 files: users, articles, recs via `mattn/go-sqlite3`) |
+| Database         | SQLite (3 files: users, articles, recs via `mattn/go-sqlite3`)  |
 | Frontend         | htmx + TailwindCSS                                              |
 | Auth             | AT Protocol OAuth / DID resolution (configurable PLC directory) |
 | AT Protocol role | AppView for `at.glean.*` lexicons                               |
@@ -374,7 +374,7 @@ Glean stores article content locally so the reading experience is fast and consi
 ```sql
 CREATE TABLE articles (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    feed_url    TEXT NOT NULL REFERENCES feeds(feed_url),
+    feed_url    TEXT NOT NULL,
     guid        TEXT NOT NULL,
     title       TEXT NOT NULL DEFAULT '',
     url         TEXT,
@@ -400,8 +400,8 @@ Read/unread state is tracked per user per article:
 
 ```sql
 CREATE TABLE read_state (
-    user_did    TEXT NOT NULL REFERENCES users(did),
-    article_id  INTEGER NOT NULL REFERENCES articles(id),
+    user_did    TEXT NOT NULL,
+    article_id  INTEGER NOT NULL,
     is_read     BOOLEAN NOT NULL DEFAULT 0,
     read_at     DATETIME,
     PRIMARY KEY (user_did, article_id)
@@ -477,24 +477,23 @@ Glean runs as a single Go binary that fills three roles: **AppView** (indexing `
 
 Glean uses three separate SQLite database files to reduce write-lock contention. Each is opened with its own connection pool:
 
-| File | Contents | ATTACH alias |
-|------|----------|-------------|
-| `<base>_users` | Users, follows, OAuth | `main` (primary) |
-| `<base>_articles` | Feeds, subscriptions, articles, read state, likes, annotations | `articles` |
-| `<base>_recs` | Similarity scores, impressions, dismissals, signal weights | `recs` |
+| File              | Contents                                                       | ATTACH alias     |
+| ----------------- | -------------------------------------------------------------- | ---------------- |
+| `<base>_users`    | Users, follows, OAuth                                          | `main` (primary) |
+| `<base>_articles` | Feeds, subscriptions, articles, read state, likes, annotations | `articles`       |
+| `<base>_recs`     | Similarity scores, impressions, dismissals, signal weights     | `recs`           |
 
 The users connection pool uses a custom SQLite driver with a `ConnectHook` that ATTACHes the articles and recs databases on every new connection. This allows the cluster engine to run cross-database queries using schema prefixes (`articles.subscriptions`, `recs.user_similarity`, `main.follows`).
 
-The articles and recs connections are independent pools used by the service layer for single-database operations.
+Foreign key constraints are not used because SQLite does not support foreign keys across ATTACHed databases. Referential integrity is enforced by the application layer.
 
 ### 6.1 Users (`<base>_users`)
+
+Profile data (handle, display name, avatar) is resolved on-the-fly via AT Protocol identity resolution rather than stored locally.
 
 ```sql
 CREATE TABLE users (
     did         TEXT PRIMARY KEY,
-    handle      TEXT NOT NULL,
-    display_name TEXT,
-    avatar_url  TEXT,
     indexed_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -507,7 +506,7 @@ Indexed from `at.glean.subscription` records on user PDS.
 ```sql
 CREATE TABLE subscriptions (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_did    TEXT NOT NULL REFERENCES users(did),
+    user_did    TEXT NOT NULL,
     feed_url    TEXT NOT NULL,
     title       TEXT,
     category    TEXT,
@@ -537,8 +536,6 @@ CREATE TABLE feeds (
     subscriber_count INTEGER NOT NULL DEFAULT 0,
     etag            TEXT,
     last_modified   TEXT,
-    fetch_interval_minutes INTEGER NOT NULL DEFAULT 30,
-    next_fetch_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     consecutive_empty_fetches INTEGER NOT NULL DEFAULT 0,
     error_count     INTEGER NOT NULL DEFAULT 0,
     favicon_url     TEXT
@@ -552,13 +549,14 @@ Fetched from RSS feeds. Only fetched for feeds that have local subscribers.
 ```sql
 CREATE TABLE articles (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    feed_url    TEXT NOT NULL REFERENCES feeds(feed_url),
+    feed_url    TEXT NOT NULL,
     guid        TEXT NOT NULL,
     title       TEXT NOT NULL DEFAULT '',
     url         TEXT,
     author      TEXT,
     summary     TEXT,
     content     TEXT,
+    full_content TEXT,
     published   DATETIME,
     updated     DATETIME,
     fetched_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -573,8 +571,8 @@ CREATE INDEX idx_articles_published ON articles(published DESC);
 
 ```sql
 CREATE TABLE read_state (
-    user_did    TEXT NOT NULL REFERENCES users(did),
-    article_id  INTEGER NOT NULL REFERENCES articles(id),
+    user_did    TEXT NOT NULL,
+    article_id  INTEGER NOT NULL,
     is_read     BOOLEAN NOT NULL DEFAULT 0,
     read_at     DATETIME,
     PRIMARY KEY (user_did, article_id)
@@ -591,7 +589,7 @@ Local mirror of AT Protocol lexicon records for fast querying.
 CREATE TABLE annotations (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     uri         TEXT NOT NULL UNIQUE,
-    author_did  TEXT NOT NULL REFERENCES users(did),
+    author_did  TEXT NOT NULL,
     feed_url    TEXT NOT NULL,
     article_url TEXT NOT NULL,
     quote       TEXT,
@@ -605,7 +603,7 @@ CREATE TABLE annotations (
 CREATE TABLE likes (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     uri         TEXT NOT NULL UNIQUE,
-    author_did  TEXT NOT NULL REFERENCES users(did),
+    author_did  TEXT NOT NULL,
     feed_url    TEXT NOT NULL,
     article_url TEXT NOT NULL,
     created_at  DATETIME NOT NULL,
@@ -620,8 +618,8 @@ Stores precomputed similarity data to avoid recalculating on every request.
 
 ```sql
 CREATE TABLE feed_similarity (
-    feed_a     TEXT NOT NULL REFERENCES feeds(feed_url),
-    feed_b     TEXT NOT NULL REFERENCES feeds(feed_url),
+    feed_a     TEXT NOT NULL,
+    feed_b     TEXT NOT NULL,
     jaccard    REAL NOT NULL,
     computed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (feed_a, feed_b),
@@ -629,10 +627,12 @@ CREATE TABLE feed_similarity (
 );
 
 CREATE TABLE user_similarity (
-    user_a     TEXT NOT NULL REFERENCES users(did),
-    user_b     TEXT NOT NULL REFERENCES users(did),
+    user_a     TEXT NOT NULL,
+    user_b     TEXT NOT NULL,
     jaccard    REAL NOT NULL,
     common_feeds INTEGER NOT NULL,
+    common_likes INTEGER NOT NULL DEFAULT 0,
+    common_tags INTEGER NOT NULL DEFAULT 0,
     computed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_a, user_b),
     CHECK(user_a < user_b)
@@ -645,7 +645,7 @@ Tracks follow relationships between users (from `app.bsky.graph.follow` and `sh.
 
 ```sql
 CREATE TABLE follows (
-    user_did    TEXT NOT NULL REFERENCES users(did),
+    user_did    TEXT NOT NULL,
     target_did  TEXT NOT NULL,
     uri         TEXT,
     cid         TEXT,
@@ -673,18 +673,20 @@ CREATE TABLE oauth_sessions (
 );
 ```
 
+## 7. Recommendations
+
 Glean uses a multi-signal recommendation system that combines subscription overlap, like patterns, social graph distance, and user behavior feedback.
 
 ### 7.1 Signals
 
-| Signal | Source | Weight (default) | Description |
-|--------|--------|-------------------|-------------|
-| Subscription | `subscriptions` | 1.0 | Jaccard over subscriber sets between similar users |
-| Like | `likes` | 0.5 | Time-decayed like co-occurrence (30-day half-life) |
-| Tag | `annotations.tags` | 0.3 | Jaccard over annotation tag sets |
-| Social | `follow_distances` | 0.7 | Follow distance: 1-hop=1.0, 2-hop=0.3 |
-| Popularity | `feeds.subscriber_count` | 0.2 | `log(1 + subscribers) / log(1 + max)` |
-| Category | `subscriptions.category` | 0.4 | Boost feeds matching user's existing categories |
+| Signal       | Source                   | Weight (default) | Description                                        |
+| ------------ | ------------------------ | ---------------- | -------------------------------------------------- |
+| Subscription | `subscriptions`          | 1.0              | Jaccard over subscriber sets between similar users |
+| Like         | `likes`                  | 0.5              | Time-decayed like co-occurrence (30-day half-life) |
+| Tag          | `annotations.tags`       | 0.3              | Jaccard over annotation tag sets                   |
+| Social       | `follow_distances`       | 0.7              | Follow distance: 1-hop=1.0, 2-hop=0.3              |
+| Popularity   | `feeds.subscriber_count` | 0.2              | `log(1 + subscribers) / log(1 + max)`              |
+| Category     | `subscriptions.category` | 0.4              | Boost feeds matching user's existing categories    |
 
 ### 7.2 Feed Co-occurrence (Jaccard Similarity)
 
@@ -721,6 +723,7 @@ score = sub_signal * w_sub
 ```
 
 Where:
+
 - `sub_signal = SUM(jaccard(target, U))` for similar users U subscribed to feed
 - `like_signal = SUM(jaccard(target, U) * time_decay)` for likes in that feed by similar users
 - `social_signal = SUM(distance_weight)` from follow_distances
@@ -794,11 +797,11 @@ A background goroutine runs on a configurable schedule (`GLEAN_CLUSTER_INTERVAL`
 
 Jetstream ingestion and record indexing happen in a separate persistent goroutine (the Jetstream consumer), not in the cron.
 
-### 7.11 New Database Tables
+### 7.11 Recommendation Tables (`<base>_recs`)
 
 ```sql
 CREATE TABLE dismissed_recommendations (
-    user_did     TEXT NOT NULL REFERENCES users(did),
+    user_did     TEXT NOT NULL,
     target_type  TEXT NOT NULL CHECK(target_type IN ('feed', 'article')),
     target_id    TEXT NOT NULL,
     reason       TEXT,
@@ -807,7 +810,7 @@ CREATE TABLE dismissed_recommendations (
 );
 
 CREATE TABLE recommendation_impressions (
-    user_did       TEXT NOT NULL REFERENCES users(did),
+    user_did       TEXT NOT NULL,
     target_type    TEXT NOT NULL CHECK(target_type IN ('feed', 'article')),
     target_id      TEXT NOT NULL,
     first_shown_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -825,7 +828,7 @@ CREATE TABLE follow_distances (
 );
 
 CREATE TABLE user_signal_weights (
-    user_did   TEXT PRIMARY KEY REFERENCES users(did),
+    user_did   TEXT PRIMARY KEY,
     w_sub      REAL NOT NULL DEFAULT 1.0,
     w_like     REAL NOT NULL DEFAULT 0.5,
     w_tag      REAL NOT NULL DEFAULT 0.3,
@@ -836,7 +839,7 @@ CREATE TABLE user_signal_weights (
 );
 
 CREATE TABLE user_signal_profiles (
-    user_did       TEXT PRIMARY KEY REFERENCES users(did),
+    user_did       TEXT PRIMARY KEY,
     total_likes     INTEGER NOT NULL DEFAULT 0,
     total_tags      INTEGER NOT NULL DEFAULT 0,
     top_categories  TEXT,
@@ -861,17 +864,19 @@ The server renders HTML fragments that htmx swaps into the page. No JSON API nee
 | `/feeds/add`                   | POST   | Add a single feed URL                                    |
 | `/feeds/remove`                | DELETE | Remove a feed                                            |
 | `/feeds/refresh`               | POST   | Refresh all subscribed feeds                             |
-| `/feeds/clear`                 | POST   | Clear all subscriptions                                    |
-| `/feeds/dismiss`               | POST   | Dismiss a feed recommendation                              |
+| `/feeds/retry`                 | POST   | Retry a failed feed                                      |
+| `/feeds/clear`                 | POST   | Clear all subscriptions                                  |
+| `/feeds/dismiss`               | POST   | Dismiss a feed recommendation                            |
 | `/articles`                    | GET    | Read articles (paginated, filterable by feed)            |
+| `/articles/new-count`          | GET    | Get count of new articles (for badge updates)            |
 | `/articles/{id}`               | GET    | Article detail view                                      |
 | `/articles/{id}/read`          | POST   | Mark article as read                                     |
 | `/articles/{id}/unread`        | POST   | Mark article as unread                                   |
 | `/articles/{id}/like`          | POST   | Like an article                                          |
 | `/articles/{id}/fetch-content` | POST   | Fetch full article content from original URL             |
-| `/articles/mark-all-read`      | POST   | Mark all articles as read                                   |
-| `/articles/dismiss`            | POST   | Dismiss an article recommendation                           |
-| `/trending`                    | GET    | Community feed: articles ranked by likes                    |
+| `/articles/mark-all-read`      | POST   | Mark all articles as read                                |
+| `/articles/dismiss`            | POST   | Dismiss an article recommendation                        |
+| `/trending`                    | GET    | Community feed: articles ranked by likes                 |
 | `/library`                     | GET    | Liked articles and annotations                           |
 | `/library/create`              | POST   | Create annotation on an article                          |
 | `/library/{id}/delete`         | POST   | Delete an annotation                                     |
@@ -926,6 +931,8 @@ glean/
 │   │   ├── fetcher.go             # Scheduler with dedup + Fetcher
 │   │   ├── discover.go            # Feed auto-discovery from URLs
 │   │   └── opml.go                # OPML import/export
+│   ├── httpclient/
+│   │   └── httpclient.go         # Shared HTTP transport, retry logic, User-Agent
 │   ├── scraper/
 │   │   └── scraper.go             # Full article content scraper
 │   ├── metrics/
@@ -965,6 +972,7 @@ glean/
 │       ├── trending.html          # Trending articles
 │       ├── library.html           # Liked articles + annotations
 │       ├── profile.html           # User profile
+│       ├── error.html             # Error page
 │       ├── 404.html               # Not found page
 │       └── partials/              # Reusable template fragments
 ├── static/
@@ -1051,13 +1059,16 @@ Browser ──GET /discover/feeds──► Server
 
 Glean exposes a `/metrics` endpoint for monitoring. Key metrics:
 
-- **`glean_feeds_fetched_total`** — Feed fetch attempts labeled by status (`success`, `error`, `not_modified`)
+- **`glean_feeds_fetched_total`** — Total feed fetch attempts (counter)
+- **`glean_feeds_fetched_last_timestamp_seconds`** — Unix timestamp of last feed fetch (gauge)
 - **`glean_feed_fetch_duration_seconds`** — Histogram of feed fetch latency
 - **`glean_articles_upserted_total`** — Counter of articles stored from feeds
 - **`glean_jetstream_events_total`** — Jetstream events labeled by collection and action
 - **`glean_jetstream_errors_total`** — Jetstream handler errors
 - **`glean_jetstream_reconnects_total`** — Jetstream reconnection count
 - **`glean_http_requests_total`** — HTTP request counts labeled by method, path, and status
+- **`glean_http_request_duration_seconds`** — HTTP request duration labeled by method and path
+- **`glean_users_active_total`** — Number of users with active sessions
 - **`glean_pds_sync_runs_total`** / **`glean_pds_sync_errors_total`** — PDS sync runs and errors
 - **`glean_cluster_runs_total`** / **`glean_cluster_duration_seconds`** — Recommendation engine runs and timing
 

@@ -46,6 +46,7 @@ Then open `http://localhost:8080`.
 | `GLEAN_CLUSTER_INTERVAL`   | `10m`                      | Cluster recomputation interval (Go duration)              |
 | `GLEAN_FETCH_INTERVAL`     | `5m`                       | Feed fetch scheduler tick interval (Go duration)           |
 | `GLEAN_COLLECTION_DIR_URL` | _(empty)_                  | Collection directory URL for startup backfill              |
+| `GLEAN_BACKFILL_CONCURRENCY` | `5`                      | Max concurrent backfill workers                            |
 | `GLEAN_PLC_URL`            | `https://didplc.glean.at`  | PLC directory URL for DID resolution                      |
 | `GLEAN_OAUTH_CLIENT_ID`    | _(empty)_                  | OAuth client metadata URL (leave empty for localhost dev) |
 | `GLEAN_OAUTH_REDIRECT_URL` | _(empty)_                  | OAuth redirect URL (leave empty for localhost dev)        |
