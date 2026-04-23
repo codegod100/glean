@@ -31,8 +31,8 @@ func (a *FeedStoreAdapter) RecordFetchError(ctx context.Context, feedURL, lastEr
 	return a.store.MarkFeedFetchError(ctx, feedURL, lastError)
 }
 
-func (a *FeedStoreAdapter) StoreFetchResult(ctx context.Context, feedURL, etag, lastModified string, articles []feed.Article, faviconURL string) error {
-	if err := a.store.MarkFeedFetched(ctx, feedURL, etag, lastModified); err != nil {
+func (a *FeedStoreAdapter) StoreFetchResult(ctx context.Context, feedURL string, articles []feed.Article, faviconURL string) error {
+	if err := a.store.MarkFeedFetched(ctx, feedURL); err != nil {
 		return err
 	}
 	if len(articles) > 0 {

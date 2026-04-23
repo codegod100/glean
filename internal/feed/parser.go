@@ -13,14 +13,12 @@ import (
 )
 
 type Feed struct {
-	URL          string
-	Title        string
-	SiteURL      string
-	Description  string
-	Type         string
-	FaviconURL   string
-	ETag         string
-	LastModified string
+	URL         string
+	Title       string
+	SiteURL     string
+	Description string
+	Type        string
+	FaviconURL  string
 }
 
 type Article struct {

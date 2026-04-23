@@ -292,39 +292,7 @@ Glean is first and foremost an RSS reader. It fetches, parses, and stores articl
 
 ### 4.1 Feed Fetching
 
-A background scheduler polls subscribed feeds on a fixed 5-minute tick. Feeds are fetched at most once per cycle regardless of how many users share them.
-
-```
-                    ┌─────────────────────────┐
-                    │     Feed Scheduler      │
-                    │  (background goroutine) │
-                    └────────┬────────────────┘
-                             │ every 5 min
-                    ┌────────▼────────────────┐
-                    │     Feed Fetcher        │
-                    │                         │
-                    │  1. SELECT feeds where   │
-                    │     subscriber_count > 0 │
-                    │     AND not fetched in   │
-                    │     last 30 min         │
-                    │  2. Dedup in-flight:    │
-                    │     skip if already     │
-                    │     being fetched       │
-                    │  3. Respect ETag/If-None│
-                    │     Match / Last-Modified│
-                    │  4. GET feed URL        │
-                    │  5. Parse XML/JSON      │
-                    │  6. Upsert articles     │
-                    │  7. Update feed metadata│
-                    └────────┬────────────────┘
-                             │
-              ┌──────────────┼──────────────┐
-              │              │              │
-     ┌────▼────┐  ┌─────▼─────┐  ┌─────▼─────┐  ┌─────▼─────┐
-     │RSS/XML  │  │RSS1/RDF   │  │Atom/XML   │  │JSON Feed  │
-     │Parser   │  │Parser     │  │Parser     │  │Parser     │
-     └─────────┘  └───────────┘  └───────────┘  └───────────┘
-```
+A background scheduler polls subscribed feeds on a configurable tick. Feeds are fetched at most once per cycle regardless of how many users share them.
 
 ### 4.2 Fetch Schedule
 
@@ -334,7 +302,6 @@ The scheduler uses a configurable tick interval with in-flight deduplication:
 - **Staleness threshold**: Feeds not fetched in the last 30 minutes are eligible
 - **Subscriber filter**: Only feeds with `subscriber_count > 0` are fetched
 - **In-flight dedup**: If a feed is already being fetched (e.g., manual refresh and background scheduler overlap), the second caller waits for the first to complete rather than fetching again
-- **HTTP cache**: Honor `ETag` and `Last-Modified` headers to skip parsing when nothing changed (304 Not Modified)
 - **Error tracking**: `error_count` increments on failure, resets to 0 on success. Feeds with high error counts are surfaced as "dead feeds" to the user.
 
 ```sql
@@ -534,8 +501,6 @@ CREATE TABLE feeds (
     last_fetched_at DATETIME,
     last_error      TEXT,
     subscriber_count INTEGER NOT NULL DEFAULT 0,
-    etag            TEXT,
-    last_modified   TEXT,
     consecutive_empty_fetches INTEGER NOT NULL DEFAULT 0,
     error_count     INTEGER NOT NULL DEFAULT 0,
     favicon_url     TEXT

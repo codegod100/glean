@@ -75,7 +75,7 @@ func (h *StreamDBHandler) handleSubscription(ctx context.Context, event *Event) 
 		return err
 
 	case actionDelete:
-		parsed, ok := ParseRecordURI(event.URI)
+		_, ok := ParseRecordURI(event.URI)
 		if !ok {
 			return nil
 		}
@@ -83,7 +83,6 @@ func (h *StreamDBHandler) handleSubscription(ctx context.Context, event *Event) 
 		if err == nil && sub != nil {
 			return h.articles.DeleteSubscription(ctx, event.DID, sub.FeedURL)
 		}
-		_ = parsed
 	}
 	return nil
 }

@@ -173,8 +173,6 @@ var articlesSchema = []string{
 		last_fetched_at DATETIME,
 		last_error TEXT,
 		subscriber_count INTEGER NOT NULL DEFAULT 0,
-		etag TEXT,
-		last_modified TEXT,
 		consecutive_empty_fetches INTEGER NOT NULL DEFAULT 0,
 		error_count INTEGER NOT NULL DEFAULT 0,
 		favicon_url TEXT

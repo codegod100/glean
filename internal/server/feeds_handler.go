@@ -93,7 +93,7 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, _, _, err := s.fetcher.Fetch(r.Context(), feedURL, "", "")
+	result, err := s.fetcher.Fetch(r.Context(), feedURL)
 	if err != nil {
 		result, feedURL, err = s.discoverFeed(r.Context(), feedURL)
 	}
@@ -463,7 +463,7 @@ func (s *Server) discoverFeed(ctx context.Context, feedURL string) (*feed.ParseR
 	}
 
 	for _, candidate := range discovered.FeedURLs {
-		result, _, _, fetchErr := s.fetcher.Fetch(ctx, candidate, "", "")
+		result, fetchErr := s.fetcher.Fetch(ctx, candidate)
 		if fetchErr == nil && result != nil {
 			return result, candidate, nil
 		}

@@ -37,7 +37,7 @@ func NewFetcher() *Fetcher {
 	}
 }
 
-func (f *Fetcher) Fetch(ctx context.Context, feedURL, etag, lastModified string) (*ParseResult, string, string, error) {
+func (f *Fetcher) Fetch(ctx context.Context, feedURL string) (*ParseResult, error) {
 	var lastResp *http.Response
 	var lastErr error
 
@@ -45,81 +45,59 @@ func (f *Fetcher) Fetch(ctx context.Context, feedURL, etag, lastModified string)
 		if attempt > 0 {
 			backoff := retryBackoff(attempt, lastResp)
 			if err := httpclient.SleepWithContext(ctx, backoff); err != nil {
-				return nil, "", "", err
+				return nil, err
 			}
 		}
 
-		result, newEtag, newLastModified, resp, err := f.executeRequest(ctx, feedURL, etag, lastModified)
+		result, resp, err := f.executeRequest(ctx, feedURL)
 		lastResp = resp
 		if err == nil {
-			return result, newEtag, newLastModified, nil
+			return result, nil
 		}
 
 		if resp != nil && !httpclient.IsRetryable(resp.StatusCode) {
-			return nil, "", "", err
+			return nil, err
 		}
 
 		lastErr = err
 	}
 
-	return nil, "", "", lastErr
+	return nil, lastErr
 }
 
-func (f *Fetcher) executeRequest(ctx context.Context, feedURL, etag, lastModified string) (*ParseResult, string, string, *http.Response, error) {
+func (f *Fetcher) executeRequest(ctx context.Context, feedURL string) (*ParseResult, *http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, feedURL, nil)
 	if err != nil {
-		return nil, "", "", nil, fmt.Errorf("creating request: %w", err)
+		return nil, nil, fmt.Errorf("creating request: %w", err)
 	}
 
 	httpclient.SetDefaultHeaders(req)
 	req.Header.Set("Accept", httpclient.AcceptFeed)
 
-	if etag != "" {
-		req.Header.Set("If-None-Match", etag)
-	}
-	if lastModified != "" {
-		req.Header.Set("If-Modified-Since", lastModified)
-	}
-
 	resp, err := f.httpClient.Do(req)
 	if err != nil {
-		return nil, "", "", nil, fmt.Errorf("fetching feed: %w", err)
+		return nil, nil, fmt.Errorf("fetching feed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusNotModified {
-		newEtag := resp.Header.Get("ETag")
-		if newEtag == "" {
-			newEtag = etag
-		}
-		newLastModified := resp.Header.Get("Last-Modified")
-		if newLastModified == "" {
-			newLastModified = lastModified
-		}
-		return nil, newEtag, newLastModified, resp, nil
-	}
-
 	if resp.StatusCode == http.StatusTooManyRequests {
-		return nil, "", "", resp, fmt.Errorf("rate limited (retry-after: %s)", resp.Header.Get("Retry-After"))
+		return nil, resp, fmt.Errorf("rate limited (retry-after: %s)", resp.Header.Get("Retry-After"))
 	}
 
 	if resp.StatusCode >= 500 {
-		return nil, "", "", resp, fmt.Errorf("server error: %d", resp.StatusCode)
+		return nil, resp, fmt.Errorf("server error: %d", resp.StatusCode)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, "", "", resp, fmt.Errorf("unexpected status: %d", resp.StatusCode)
+		return nil, resp, fmt.Errorf("unexpected status: %d", resp.StatusCode)
 	}
-
-	newEtag := resp.Header.Get("ETag")
-	newLastModified := resp.Header.Get("Last-Modified")
 
 	result, err := Parse(resp.Body, feedURL)
 	if err != nil {
-		return nil, "", "", nil, fmt.Errorf("parsing feed: %w", err)
+		return nil, nil, fmt.Errorf("parsing feed: %w", err)
 	}
 
-	return result, newEtag, newLastModified, resp, nil
+	return result, resp, nil
 }
 
 func retryBackoff(attempt int, lastResp *http.Response) time.Duration {
@@ -135,7 +113,7 @@ func retryBackoff(attempt int, lastResp *http.Response) time.Duration {
 
 type FeedStore interface {
 	GetFeedsToFetch(ctx context.Context, olderThan time.Duration, limit int) ([]*Feed, error)
-	StoreFetchResult(ctx context.Context, feedURL, etag, lastModified string, articles []Article, faviconURL string) error
+	StoreFetchResult(ctx context.Context, feedURL string, articles []Article, faviconURL string) error
 	RecordFetchError(ctx context.Context, feedURL, lastError string) error
 }
 
@@ -165,7 +143,7 @@ func NewScheduler(store FeedStore, logger *slog.Logger, tickInterval, staleInter
 
 func (s *Scheduler) Run(ctx context.Context) error {
 	s.logger.Info("starting initial feed refresh")
-	s.fetchAll(ctx, 0)
+	s.fetchAll(ctx, s.staleInterval)
 
 	ticker := time.NewTicker(s.tickInterval)
 	defer ticker.Stop()
@@ -215,7 +193,7 @@ func (s *Scheduler) FetchFeed(ctx context.Context, feed *Feed) {
 	}()
 
 	start := time.Now()
-	result, newEtag, newLastModified, err := s.fetcher.Fetch(ctx, feed.URL, feed.ETag, feed.LastModified)
+	result, err := s.fetcher.Fetch(ctx, feed.URL)
 	metrics.FeedsFetchedDuration.Observe(time.Since(start).Seconds())
 	metrics.FeedsFetched.Inc()
 	metrics.FeedsFetchedLast.Set(float64(time.Now().Unix()))
@@ -227,7 +205,7 @@ func (s *Scheduler) FetchFeed(ctx context.Context, feed *Feed) {
 
 	if result == nil {
 		s.logger.Info("fetched articles", "feed", feed.URL, "count", 0)
-		if err := s.store.StoreFetchResult(ctx, feed.URL, newEtag, newLastModified, nil, ""); err != nil {
+		if err := s.store.StoreFetchResult(ctx, feed.URL, nil, ""); err != nil {
 			s.logger.Error("failed to store feed fetch result", "error", err, "feed", feed.URL)
 		}
 		return
@@ -238,7 +216,7 @@ func (s *Scheduler) FetchFeed(ctx context.Context, feed *Feed) {
 		faviconURL = ResolveFavicon(context.Background(), feed.URL, feed.SiteURL)
 	}
 
-	if err := s.store.StoreFetchResult(ctx, feed.URL, newEtag, newLastModified, result.Articles, faviconURL); err != nil {
+	if err := s.store.StoreFetchResult(ctx, feed.URL, result.Articles, faviconURL); err != nil {
 		s.logger.Error("failed to store feed fetch result", "error", err, "feed", feed.URL)
 	} else {
 		articleCount := len(result.Articles)

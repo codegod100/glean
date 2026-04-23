@@ -21,8 +21,6 @@ type Feed struct {
 	LastFetchedAt           sql.NullTime
 	LastError               sql.NullString
 	SubscriberCount         int
-	Etag                    sql.NullString
-	LastModified            sql.NullString
 	ConsecutiveEmptyFetches int
 	ErrorCount              int
 	FaviconURL              sql.NullString
@@ -30,14 +28,12 @@ type Feed struct {
 
 func (f *Feed) ToFeed() *feed.Feed {
 	return &feed.Feed{
-		URL:          f.FeedURL,
-		Title:        f.Title.String,
-		SiteURL:      f.SiteURL.String,
-		Description:  f.Description.String,
-		Type:         f.FeedType.String,
-		FaviconURL:   f.FaviconURL.String,
-		ETag:         f.Etag.String,
-		LastModified: f.LastModified.String,
+		URL:         f.FeedURL,
+		Title:       f.Title.String,
+		SiteURL:     f.SiteURL.String,
+		Description: f.Description.String,
+		Type:        f.FeedType.String,
+		FaviconURL:  f.FaviconURL.String,
 	}
 }
 
@@ -54,11 +50,10 @@ type Subscription struct {
 	FaviconURL  sql.NullString
 }
 
-
 func scanFeed(scanner interface{ Scan(...any) error }) (*Feed, error) {
 	f := &Feed{}
 	if err := scanner.Scan(&f.FeedURL, &f.Title, &f.SiteURL, &f.Description, &f.FeedType,
-		&f.LastFetchedAt, &f.LastError, &f.SubscriberCount, &f.Etag, &f.LastModified,
+		&f.LastFetchedAt, &f.LastError, &f.SubscriberCount,
 		&f.ConsecutiveEmptyFetches, &f.ErrorCount, &f.FaviconURL); err != nil {
 		return nil, err
 	}
@@ -95,16 +90,14 @@ func (s *ArticleStore) GetFeedsToFetch(ctx context.Context, olderThan time.Durat
 	return feeds, rows.Err()
 }
 
-func (s *ArticleStore) MarkFeedFetched(ctx context.Context, feedURL, etag, lastModified string) error {
+func (s *ArticleStore) MarkFeedFetched(ctx context.Context, feedURL string) error {
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE articles.feeds SET
-			etag = ?,
-			last_modified = ?,
 			error_count = 0,
 			last_error = '',
 			last_fetched_at = CURRENT_TIMESTAMP
 		WHERE feed_url = ?
-	`, etag, lastModified, feedURL)
+	`, feedURL)
 	return err
 }
 
@@ -226,11 +219,11 @@ func (s *ArticleStore) GetSubscription(ctx context.Context, userDID, feedURL str
 	sub := &Subscription{}
 	err := s.db.QueryRowContext(ctx, `
 		SELECT s.id, s.user_did, s.feed_url, COALESCE(s.title, f.title, ''), s.category, s.added_at,
-		s.uri, s.cid
+		s.uri, s.cid, f.favicon_url
 		FROM articles.subscriptions s
 		LEFT JOIN articles.feeds f ON s.feed_url = f.feed_url
 		WHERE s.user_did = ? AND s.feed_url = ?
-	`, userDID, feedURL).Scan(&sub.ID, &sub.UserDID, &sub.FeedURL, &sub.FeedTitle, &sub.Category, &sub.AddedAt, &sub.URI, &sub.CID)
+	`, userDID, feedURL).Scan(&sub.ID, &sub.UserDID, &sub.FeedURL, &sub.FeedTitle, &sub.Category, &sub.AddedAt, &sub.URI, &sub.CID, &sub.FaviconURL)
 	if err != nil {
 		return nil, err
 	}
