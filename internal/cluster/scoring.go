@@ -36,6 +36,7 @@ type ArticleRecommendation struct {
 	Author     string
 	Summary    string
 	Published  sql.NullTime
+	IsRead     bool
 	Score      float64
 }
 
@@ -218,6 +219,7 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 		SELECT a.id, a.title, COALESCE(a.url, ''), la.feed_url, COALESCE(f.title, ''),
 		       COALESCE(f.favicon_url, ''),
 		       COALESCE(a.author, ''), COALESCE(a.summary, ''), a.published,
+		       COALESCE(rs.is_read, 0),
 		       COALESCE(la.like_signal, 0) * ?
 		     + COALESCE(sl.social, 0) * ?
 		     + EXP(-0.023 * CAST(julianday('now') - julianday(a.published) AS REAL)) * 0.2
@@ -226,9 +228,11 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 		JOIN articles.articles a ON a.feed_url = la.feed_url AND a.url = la.article_url
 		LEFT JOIN articles.feeds f ON f.feed_url = la.feed_url
 		LEFT JOIN social_likes sl ON sl.feed_url = la.feed_url AND sl.article_url = la.article_url
+		LEFT JOIN articles.read_state rs ON rs.article_id = a.id AND rs.user_did = ?
+		WHERE COALESCE(rs.is_read, 0) = 0
 		ORDER BY score DESC, (CASE WHEN a.published > 'now' THEN 1 ELSE 0 END), a.published DESC
 		LIMIT ?
-	`, userDID, userDID, userDID, userDID, userDID, userDID, w.WLike, w.WSocial, limit)
+	`, userDID, userDID, userDID, userDID, userDID, userDID, w.WLike, w.WSocial, userDID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +242,7 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 	for rows.Next() {
 		rec := &ArticleRecommendation{}
 		if err := rows.Scan(&rec.ArticleID, &rec.Title, &rec.URL, &rec.FeedURL, &rec.FeedTitle,
-			&rec.FaviconURL, &rec.Author, &rec.Summary, &rec.Published, &rec.Score); err != nil {
+			&rec.FaviconURL, &rec.Author, &rec.Summary, &rec.Published, &rec.IsRead, &rec.Score); err != nil {
 			return nil, err
 		}
 		recs = append(recs, rec)
