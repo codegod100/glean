@@ -56,7 +56,10 @@
     <div class="space-y-6">
         <div class="bg-spot-surface rounded-xl p-4 space-y-4">
             <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide">Add feed</h2>
-            <form hx-post="/feeds/add" hx-target="#feed-list" hx-swap="beforeend" class="space-y-3">
+            <form hx-post="/feeds/add" hx-target="#feed-list" hx-swap="beforeend"
+                  hx-on::before-request="document.getElementById('add-feed-error').textContent=''"
+                  hx-on::after-request="if(event.detail.successful)this.reset();else document.getElementById('add-feed-error').textContent=event.detail.xhr.responseText"
+                  class="space-y-3">
                 {{csrfInput .CSRFToken}}
                 <input type="url" name="feed_url" placeholder="https://example.com/feed.xml"
                        class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder"
@@ -65,6 +68,7 @@
                        class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
                 <button type="submit" class="w-full bg-spot-green text-white rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Add</button>
             </form>
+            <div id="add-feed-error" class="text-sm text-spot-red"></div>
             <div class="border-t border-spot-divider pt-4 space-y-3">
                 <h2 class="text-xs text-spot-secondary font-bold uppercase tracking-wide">Import / Export</h2>
                 <form hx-post="/feeds/opml/upload" hx-encoding="multipart/form-data" class="flex flex-col gap-2">
