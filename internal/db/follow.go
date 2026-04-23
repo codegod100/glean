@@ -60,8 +60,7 @@ func (s *UserStore) ListFollows(ctx context.Context, userDID string, limit, offs
 
 func (s *UserStore) ListFollowers(ctx context.Context, targetDID string, limit, offset int) ([]*Follow, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT user_did, target_did, uri, cid, followed_at
-		FROM follows WHERE target_did = ?
+		SELECT * FROM follows WHERE target_did = ?
 		ORDER BY followed_at DESC
 		LIMIT ? OFFSET ?
 	`, targetDID, limit, offset)

@@ -221,7 +221,7 @@ func (s *Scheduler) FetchFeed(ctx context.Context, feed *Feed) {
 	metrics.FeedsFetchedLast.Set(float64(time.Now().Unix()))
 	if err != nil {
 		s.logger.Error("failed to fetch feed", "error", err, "feed", feed.URL)
-		s.store.RecordFetchError(ctx, feed.URL, err.Error())
+		_ = s.store.RecordFetchError(ctx, feed.URL, err.Error())
 		return
 	}
 

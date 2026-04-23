@@ -240,7 +240,7 @@ func (s *ArticleStore) GetLikeCount(ctx context.Context, feedURL, articleURL str
 func (s *ArticleStore) GetLike(ctx context.Context, authorDID, feedURL, articleURL string) (*Like, error) {
 	l := &Like{}
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, uri, author_did, feed_url, article_url, created_at, cid FROM articles.likes
+		SELECT * FROM articles.likes
 		WHERE author_did = ? AND feed_url = ? AND article_url = ?
 	`, authorDID, feedURL, articleURL).Scan(&l.ID, &l.URI, &l.AuthorDID, &l.FeedURL, &l.ArticleURL, &l.CreatedAt, &l.CID)
 	if err != nil {

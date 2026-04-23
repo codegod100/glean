@@ -11,6 +11,12 @@ import (
 	"pkg.rbrt.fr/glean/internal/db"
 )
 
+const (
+	actionCreate = "create"
+	actionUpdate = "update"
+	actionDelete = "delete"
+)
+
 var sentinelErrors = []error{db.ErrDuplicateSubscription, db.ErrDuplicateLike}
 
 func isSentinel(err error) bool {
@@ -52,7 +58,7 @@ func (h *StreamDBHandler) Handle(ctx context.Context, event *Event) error {
 
 func (h *StreamDBHandler) handleSubscription(ctx context.Context, event *Event) error {
 	switch event.Type {
-	case "create", "update":
+	case actionCreate, actionUpdate:
 		var rec SubscriptionRecord
 		if err := json.Unmarshal(event.Value, &rec); err != nil {
 			return err
@@ -68,7 +74,7 @@ func (h *StreamDBHandler) handleSubscription(ctx context.Context, event *Event) 
 		}
 		return err
 
-	case "delete":
+	case actionDelete:
 		parsed, ok := ParseRecordURI(event.URI)
 		if !ok {
 			return nil
@@ -84,7 +90,7 @@ func (h *StreamDBHandler) handleSubscription(ctx context.Context, event *Event) 
 
 func (h *StreamDBHandler) handleLike(ctx context.Context, event *Event) error {
 	switch event.Type {
-	case "create":
+	case actionCreate:
 		var rec LikeRecord
 		if err := json.Unmarshal(event.Value, &rec); err != nil {
 			return err
@@ -107,7 +113,7 @@ func (h *StreamDBHandler) handleLike(ctx context.Context, event *Event) error {
 		}
 		return err
 
-	case "delete":
+	case actionDelete:
 		return h.articles.DeleteLike(ctx, event.URI)
 	}
 	return nil
@@ -115,7 +121,7 @@ func (h *StreamDBHandler) handleLike(ctx context.Context, event *Event) error {
 
 func (h *StreamDBHandler) handleAnnotation(ctx context.Context, event *Event) error {
 	switch event.Type {
-	case "create":
+	case actionCreate:
 		var rec AnnotationRecord
 		if err := json.Unmarshal(event.Value, &rec); err != nil {
 			return err
@@ -141,7 +147,7 @@ func (h *StreamDBHandler) handleAnnotation(ctx context.Context, event *Event) er
 		}
 		return h.articles.CreateAnnotation(ctx, a)
 
-	case "delete":
+	case actionDelete:
 		return h.articles.DeleteAnnotation(ctx, event.URI)
 	}
 	return nil
@@ -149,7 +155,7 @@ func (h *StreamDBHandler) handleAnnotation(ctx context.Context, event *Event) er
 
 func (h *StreamDBHandler) handleFollow(ctx context.Context, event *Event) error {
 	switch event.Type {
-	case "create":
+	case actionCreate:
 		var rec FollowRecord
 		if err := json.Unmarshal(event.Value, &rec); err != nil {
 			return err
@@ -159,7 +165,7 @@ func (h *StreamDBHandler) handleFollow(ctx context.Context, event *Event) error 
 		}
 		return h.users.UpsertFollow(ctx, event.DID, rec.Subject, event.URI, event.CID)
 
-	case "delete":
+	case actionDelete:
 		return h.users.DeleteFollowByURI(ctx, event.URI)
 	}
 	return nil
@@ -167,7 +173,7 @@ func (h *StreamDBHandler) handleFollow(ctx context.Context, event *Event) error 
 
 func (h *StreamDBHandler) handleMarginNote(ctx context.Context, event *Event) error {
 	switch event.Type {
-	case "create", "update":
+	case actionCreate, actionUpdate:
 		var rec MarginNoteRecord
 		if err := json.Unmarshal(event.Value, &rec); err != nil {
 			return err
@@ -194,14 +200,14 @@ func (h *StreamDBHandler) handleMarginNote(ctx context.Context, event *Event) er
 		}
 		return h.articles.CreateAnnotation(ctx, a)
 
-	case "delete":
+	case actionDelete:
 	}
 	return nil
 }
 
 func (h *StreamDBHandler) handleSkyreaderSubscription(ctx context.Context, event *Event) error {
 	switch event.Type {
-	case "create", "update":
+	case actionCreate, actionUpdate:
 		var rec SkyreaderSubscriptionRecord
 		if err := json.Unmarshal(event.Value, &rec); err != nil {
 			return err
@@ -217,7 +223,7 @@ func (h *StreamDBHandler) handleSkyreaderSubscription(ctx context.Context, event
 		}
 		return err
 
-	case "delete":
+	case actionDelete:
 	}
 	return nil
 }

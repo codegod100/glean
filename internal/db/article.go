@@ -10,6 +10,8 @@ import (
 	"pkg.rbrt.fr/glean/internal/feed"
 )
 
+const articlesOrderBy = ` ORDER BY (CASE WHEN a.published > 'now' THEN 1 ELSE 0 END), a.published DESC LIMIT ? OFFSET ?`
+
 type ArticleStore struct {
 	db *DB
 }
@@ -142,7 +144,7 @@ func (s *ArticleStore) ListArticles(ctx context.Context, userDID, feedURL string
 	}
 
 	// Future-published articles (e.g., scheduled) sort last
-	query += ` ORDER BY (CASE WHEN a.published > 'now' THEN 1 ELSE 0 END), a.published DESC LIMIT ? OFFSET ?`
+	query += articlesOrderBy
 	args = append(args, limit, offset)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -206,7 +208,7 @@ func (s *ArticleStore) ListUnreadArticles(ctx context.Context, userDID, feedURL 
 	}
 
 	// Future-published articles (e.g., scheduled) sort last
-	query += ` ORDER BY (CASE WHEN a.published > 'now' THEN 1 ELSE 0 END), a.published DESC LIMIT ? OFFSET ?`
+	query += articlesOrderBy
 	args = append(args, limit, offset)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -270,7 +272,7 @@ func (s *ArticleStore) ListReadArticles(ctx context.Context, userDID, feedURL st
 	}
 
 	// Future-published articles (e.g., scheduled) sort last
-	query += ` ORDER BY (CASE WHEN a.published > 'now' THEN 1 ELSE 0 END), a.published DESC LIMIT ? OFFSET ?`
+	query += articlesOrderBy
 	args = append(args, limit, offset)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -339,8 +341,7 @@ func (s *ArticleStore) MarkAllSubscribedRead(ctx context.Context, userDID string
 func (s *ArticleStore) GetReadState(ctx context.Context, userDID string, articleID int64) (*ReadState, error) {
 	rs := &ReadState{}
 	err := s.db.QueryRowContext(ctx, `
-		SELECT user_did, article_id, is_read, read_at
-		FROM articles.read_state WHERE user_did = ? AND article_id = ?
+		SELECT * FROM articles.read_state WHERE user_did = ? AND article_id = ?
 	`, userDID, articleID).Scan(&rs.UserDID, &rs.ArticleID, &rs.IsRead, &rs.ReadAt)
 	if err == sql.ErrNoRows {
 		return &ReadState{UserDID: userDID, ArticleID: articleID}, nil

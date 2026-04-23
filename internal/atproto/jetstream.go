@@ -56,7 +56,7 @@ func (s *jetstreamScheduler) AddWork(ctx context.Context, _ string, evt *models.
 		RKey:       c.RKey,
 		URI:        fmt.Sprintf("at://%s/%s/%s", evt.Did, c.Collection, c.RKey),
 		CID:        c.CID,
-		Value:      json.RawMessage(c.Record),
+		Value:      c.Record,
 	}
 
 	if err := s.handler(ctx, e); err != nil {

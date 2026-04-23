@@ -60,8 +60,7 @@ func (s *UserStore) CreateUser(ctx context.Context, did string) (*User, error) {
 func (s *UserStore) GetUser(ctx context.Context, did string) (*User, error) {
 	u := &User{}
 	err := s.db.QueryRowContext(ctx, `
-		SELECT did, indexed_at, updated_at
-		FROM users WHERE did = ?
+		SELECT * FROM users WHERE did = ?
 	`, did).Scan(&u.DID, &u.IndexedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, err

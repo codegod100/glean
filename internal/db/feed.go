@@ -54,9 +54,6 @@ type Subscription struct {
 	FaviconURL  sql.NullString
 }
 
-const feedSelectCols = `feed_url, title, site_url, description, feed_type,
-	last_fetched_at, last_error, subscriber_count, etag, last_modified,
-	consecutive_empty_fetches, error_count, favicon_url`
 
 func scanFeed(scanner interface{ Scan(...any) error }) (*Feed, error) {
 	f := &Feed{}
@@ -73,13 +70,13 @@ func (s *ArticleStore) UpsertFeed(ctx context.Context, feed *Feed) error {
 }
 
 func (s *ArticleStore) GetFeed(ctx context.Context, feedURL string) (*Feed, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT `+feedSelectCols+` FROM articles.feeds WHERE feed_url = ?`, feedURL)
+	row := s.db.QueryRowContext(ctx, `SELECT * FROM articles.feeds WHERE feed_url = ?`, feedURL)
 	return scanFeed(row)
 }
 
 func (s *ArticleStore) GetFeedsToFetch(ctx context.Context, olderThan time.Duration, limit int) ([]*Feed, error) {
 	cutoff := time.Now().Add(-olderThan)
-	rows, err := s.db.QueryContext(ctx, `SELECT `+feedSelectCols+` FROM articles.feeds
+	rows, err := s.db.QueryContext(ctx, `SELECT * FROM articles.feeds
 		WHERE subscriber_count > 0 AND error_count < 25 AND (last_fetched_at IS NULL OR last_fetched_at <= ?)
 		ORDER BY last_fetched_at ASC NULLS FIRST LIMIT ?`, cutoff, limit)
 	if err != nil {
@@ -309,7 +306,7 @@ func (s *ArticleStore) UpdateFeedFavicon(ctx context.Context, feedURL, faviconUR
 }
 
 func (s *ArticleStore) ListDeadFeeds(ctx context.Context, userDID string, threshold int) ([]*Feed, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+feedSelectCols+` FROM articles.feeds f
+	rows, err := s.db.QueryContext(ctx, `SELECT f.* FROM articles.feeds f
 		JOIN articles.subscriptions s ON s.feed_url = f.feed_url AND s.user_did = ?
 		WHERE f.error_count >= ? ORDER BY f.error_count DESC`, userDID, threshold)
 	if err != nil {
@@ -329,7 +326,7 @@ func (s *ArticleStore) ListDeadFeeds(ctx context.Context, userDID string, thresh
 }
 
 func (s *ArticleStore) ListAllFeeds(ctx context.Context, limit, offset int) ([]*Feed, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+feedSelectCols+` FROM articles.feeds
+	rows, err := s.db.QueryContext(ctx, `SELECT * FROM articles.feeds
 		ORDER BY subscriber_count DESC LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
 		return nil, err
@@ -459,7 +456,7 @@ func (s *ArticleStore) BatchReconcileSubscriptions(ctx context.Context, userDID 
 }
 
 func (s *ArticleStore) ListUnsubscribedFeeds(ctx context.Context, userDID string, limit, offset int) ([]*Feed, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+feedSelectCols+` FROM articles.feeds
+	rows, err := s.db.QueryContext(ctx, `SELECT * FROM articles.feeds
 		WHERE feed_url NOT IN (SELECT feed_url FROM articles.subscriptions WHERE user_did = ?)
 		ORDER BY subscriber_count DESC LIMIT ? OFFSET ?`, userDID, limit, offset)
 	if err != nil {

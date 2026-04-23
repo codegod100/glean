@@ -19,7 +19,7 @@ const (
 
 var dnsResolver = &net.Resolver{
 	PreferGo: true,
-	Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+	Dial: func(ctx context.Context, _, address string) (net.Conn, error) {
 		d := net.Dialer{Timeout: 3 * time.Second}
 		return d.DialContext(ctx, "udp", "1.1.1.1:53")
 	},

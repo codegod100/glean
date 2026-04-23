@@ -130,7 +130,7 @@ func findFavicon(ctx context.Context, base *url.URL, links []string) string {
 			if err != nil {
 				return
 			}
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK && isImageContentType(resp.Header.Get("Content-Type")) {
 				select {
 				case found <- result{url: cleanFavicon(resolved.String()), found: true}:
@@ -160,7 +160,7 @@ func checkContentType(ctx context.Context, url string) bool {
 	if err != nil {
 		return false
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	return resp.StatusCode == http.StatusOK && isImageContentType(resp.Header.Get("Content-Type"))
 }
 

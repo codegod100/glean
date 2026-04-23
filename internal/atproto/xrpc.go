@@ -430,7 +430,7 @@ func (h *XRPCHandler) ListFeedLists(w http.ResponseWriter, r *http.Request) {
 			var did, feedURL, title string
 			var cat sql.NullString
 			if err := subRows.Scan(&did, &feedURL, &title, &cat); err != nil {
-				subRows.Close()
+				_ = subRows.Close()
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -440,7 +440,7 @@ func (h *XRPCHandler) ListFeedLists(w http.ResponseWriter, r *http.Request) {
 				Category: cat.String,
 			})
 		}
-		subRows.Close()
+		_ = subRows.Close()
 	}
 
 	for _, u := range users {

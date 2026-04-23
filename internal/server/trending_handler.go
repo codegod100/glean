@@ -7,16 +7,18 @@ import (
 	"pkg.rbrt.fr/glean/internal/db"
 )
 
+const scopeForMe = "for-me"
+
 func (s *Server) handleTrending(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	ctx := r.Context()
 
 	scope := r.URL.Query().Get("scope")
-	if scope == "for-me" && user == nil {
+	if scope == scopeForMe && user == nil {
 		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
 		return
 	}
-	if scope != "for-me" {
+	if scope != scopeForMe {
 		scope = "all"
 	}
 

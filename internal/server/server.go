@@ -33,6 +33,8 @@ import (
 	"pkg.rbrt.fr/glean/static"
 )
 
+const htmxRequestHeader = "true"
+
 var oauthScopes = []string{
 	"atproto",
 	"blob:*/*",
@@ -314,12 +316,8 @@ func (s *Server) loadTemplates() {
 		"sanitizeHTML": func(input string) template.HTML {
 			return template.HTML(sanitize.HTML(input))
 		},
-		"plainText": func(input string) string {
-			return sanitize.PlainText(input)
-		},
-		"now": func() time.Time {
-			return time.Now()
-		},
+		"plainText": sanitize.PlainText,
+		"now":       time.Now,
 		"activeClass": func(activePath, linkPath string) string {
 			if activePath == linkPath || (len(activePath) > len(linkPath) && activePath[:len(linkPath)+1] == linkPath+"/") {
 				return "bg-spot-hover text-spot-text font-bold"
@@ -515,7 +513,7 @@ func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderError(w http.ResponseWriter, r *http.Request, code int, title, message string) {
-	if r.Header.Get("HX-Request") == "true" {
+	if r.Header.Get("HX-Request") == htmxRequestHeader {
 		w.WriteHeader(code)
 		w.Write([]byte(message))
 		return
@@ -536,7 +534,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		data["CSRFToken"] = cookie.Value
 	}
 
-	if r.Header.Get("HX-Request") == "true" {
+	if r.Header.Get("HX-Request") == htmxRequestHeader {
 		if err := s.templates.ExecuteTemplate(w, name, data); err != nil {
 			s.logger.Error("template error", "error", err, "template", name)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
