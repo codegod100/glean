@@ -55,7 +55,7 @@ func (f *Fetcher) Fetch(ctx context.Context, feedURL, etag, lastModified string)
 			return result, newEtag, newLastModified, nil
 		}
 
-		if resp == nil || !httpclient.IsRetryable(resp.StatusCode) {
+		if resp != nil && !httpclient.IsRetryable(resp.StatusCode) {
 			return nil, "", "", err
 		}
 
@@ -88,7 +88,15 @@ func (f *Fetcher) executeRequest(ctx context.Context, feedURL, etag, lastModifie
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotModified {
-		return nil, "", "", resp, nil
+		newEtag := resp.Header.Get("ETag")
+		if newEtag == "" {
+			newEtag = etag
+		}
+		newLastModified := resp.Header.Get("Last-Modified")
+		if newLastModified == "" {
+			newLastModified = lastModified
+		}
+		return nil, newEtag, newLastModified, resp, nil
 	}
 
 	if resp.StatusCode == http.StatusTooManyRequests {
