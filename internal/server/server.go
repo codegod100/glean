@@ -73,7 +73,7 @@ type Server struct {
 }
 
 func New(dbs *db.Databases, clientID, callbackURL, addr string, scheduler *feed.Scheduler, engine *cluster.Engine, logger *slog.Logger) *Server {
-	oauthStore := db.NewOAuthStore(dbs.Users)
+	oauthStore := db.NewOAuthStore(dbs)
 
 	var config oauth.ClientConfig
 	if clientID == "" {
@@ -202,7 +202,7 @@ func (s *Server) setupRoutes() {
 	s.router.Post("/auth/logout", s.handleAuthLogout)
 	s.router.Get("/oauth/client-metadata", s.handleOAuthClientMetadata)
 
-	xrpc := atproto.NewXRPCHandler(s.dbs.Articles.DB, s.engine)
+	xrpc := atproto.NewXRPCHandler(s.dbs.DB(), s.engine)
 	s.router.Get("/xrpc/at.glean.listSubscriptions", xrpc.ListSubscriptions)
 	s.router.Get("/xrpc/at.glean.listAnnotations", xrpc.ListAnnotations)
 	s.router.Get("/xrpc/at.glean.listLikes", xrpc.ListLikes)

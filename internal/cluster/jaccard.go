@@ -24,6 +24,8 @@ func DefaultConfig() Config {
 	}
 }
 
+// Engine uses *sql.DB directly because it performs cross-schema transactions
+// across main, articles, and recs. Typed stores would add overhead without benefit here.
 type Engine struct {
 	db     *sql.DB
 	logger *slog.Logger

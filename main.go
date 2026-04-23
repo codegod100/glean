@@ -47,7 +47,7 @@ func main() {
 	storeAdapter := db.NewFeedStoreAdapter(dbs.Articles)
 	scheduler := feed.NewScheduler(storeAdapter, logger, *fetchInterval, 30*time.Minute)
 
-	engine := cluster.NewEngine(dbs.Users.DB, logger)
+	engine := cluster.NewEngine(dbs.DB(), logger)
 
 	srv := server.New(dbs, clientID, callbackURL, *addr, scheduler, engine, logger)
 

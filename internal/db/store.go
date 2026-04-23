@@ -8,15 +8,15 @@ import (
 )
 
 type FeedStoreAdapter struct {
-	db *DB
+	store *ArticleStore
 }
 
-func NewFeedStoreAdapter(db *DB) *FeedStoreAdapter {
-	return &FeedStoreAdapter{db: db}
+func NewFeedStoreAdapter(store *ArticleStore) *FeedStoreAdapter {
+	return &FeedStoreAdapter{store: store}
 }
 
 func (a *FeedStoreAdapter) GetFeedsToFetch(ctx context.Context, olderThan time.Duration, limit int) ([]*feed.Feed, error) {
-	dbFeeds, err := a.db.GetFeedsToFetch(ctx, olderThan, limit)
+	dbFeeds, err := a.store.GetFeedsToFetch(ctx, olderThan, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -37,20 +37,20 @@ func (a *FeedStoreAdapter) GetFeedsToFetch(ctx context.Context, olderThan time.D
 }
 
 func (a *FeedStoreAdapter) RecordFetchError(ctx context.Context, feedURL, lastError string) error {
-	return a.db.MarkFeedFetchError(ctx, feedURL, lastError)
+	return a.store.MarkFeedFetchError(ctx, feedURL, lastError)
 }
 
 func (a *FeedStoreAdapter) StoreFetchResult(ctx context.Context, feedURL, etag, lastModified string, articles []feed.Article, faviconURL string) error {
-	if err := a.db.MarkFeedFetched(ctx, feedURL, etag, lastModified); err != nil {
+	if err := a.store.MarkFeedFetched(ctx, feedURL, etag, lastModified); err != nil {
 		return err
 	}
 	if len(articles) > 0 {
-		if err := a.db.UpsertArticlesBatch(ctx, articles); err != nil {
+		if err := a.store.UpsertArticlesBatch(ctx, articles); err != nil {
 			return err
 		}
 	}
 	if faviconURL != "" {
-		if err := a.db.UpdateFeedFavicon(ctx, feedURL, faviconURL); err != nil {
+		if err := a.store.UpdateFeedFavicon(ctx, feedURL, faviconURL); err != nil {
 			return err
 		}
 	}

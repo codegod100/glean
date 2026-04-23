@@ -11,9 +11,10 @@ import (
 )
 
 type Databases struct {
-	Users    *DB
-	Articles *DB
-	Recs     *DB
+	Users    *UserStore
+	Articles *ArticleStore
+
+	db *DB
 }
 
 var multiDriverSeq int64
@@ -21,6 +22,14 @@ var multiDriverSeq int64
 func OpenAll(basePath string) (*Databases, error) {
 	articlesPath := basePath + "_articles"
 	recsPath := basePath + "_recs"
+
+	for _, p := range []string{articlesPath, recsPath} {
+		f, err := sql.Open("sqlite3", p+"?"+DSN)
+		if err != nil {
+			return nil, err
+		}
+		f.Close()
+	}
 
 	seq := atomic.AddInt64(&multiDriverSeq, 1)
 	driverName := fmt.Sprintf("sqlite3_glean_multi_%d", seq)
@@ -52,67 +61,46 @@ func OpenAll(basePath string) (*Databases, error) {
 		},
 	})
 
-	usersDB, err := sql.Open(driverName, basePath+"_users?cache=shared&"+DSN)
+	db, err := sql.Open(driverName, basePath+"_users?cache=shared&"+DSN)
 	if err != nil {
 		return nil, err
 	}
-	usersDB.SetMaxOpenConns(10)
-	usersDB.SetMaxIdleConns(5)
-	usersDB.SetConnMaxLifetime(30 * time.Minute)
-	users := &DB{usersDB}
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(30 * time.Minute)
+	d := &DB{db}
 
-	articles, err := Open(articlesPath)
-	if err != nil {
-		users.Close()
+	if err := initUsersSchema(d); err != nil {
+		d.Close()
 		return nil, err
 	}
 
-	recs, err := Open(recsPath)
-	if err != nil {
-		users.Close()
-		articles.Close()
+	if err := initArticlesSchema(d); err != nil {
+		d.Close()
 		return nil, err
 	}
 
-	if err := initUsersSchema(users); err != nil {
-		users.Close()
-		articles.Close()
-		recs.Close()
-		return nil, err
-	}
-
-	if err := initArticlesSchema(articles); err != nil {
-		users.Close()
-		articles.Close()
-		recs.Close()
-		return nil, err
-	}
-
-	if err := initRecsSchema(recs); err != nil {
-		users.Close()
-		articles.Close()
-		recs.Close()
+	if err := initRecsSchema(d); err != nil {
+		d.Close()
 		return nil, err
 	}
 
 	return &Databases{
-		Users:    users,
-		Articles: articles,
-		Recs:     recs,
+		Users:    NewUserStore(d),
+		Articles: NewArticleStore(d),
+		db:       d,
 	}, nil
 }
 
 func (d *Databases) Close() error {
-	if d.Users != nil {
-		_ = d.Users.Close()
-	}
-	if d.Articles != nil {
-		_ = d.Articles.Close()
-	}
-	if d.Recs != nil {
-		_ = d.Recs.Close()
+	if d.db != nil {
+		_ = d.db.Close()
 	}
 	return nil
+}
+
+func (d *Databases) DB() *sql.DB {
+	return d.db.DB
 }
 
 func initUsersSchema(db *DB) error {
@@ -181,7 +169,7 @@ var usersSchema = []string{
 }
 
 var articlesSchema = []string{
-	`CREATE TABLE IF NOT EXISTS feeds (
+	`CREATE TABLE IF NOT EXISTS articles.feeds (
 		feed_url TEXT PRIMARY KEY,
 		title TEXT,
 		site_url TEXT,
@@ -192,14 +180,12 @@ var articlesSchema = []string{
 		subscriber_count INTEGER NOT NULL DEFAULT 0,
 		etag TEXT,
 		last_modified TEXT,
-		fetch_interval_minutes INTEGER NOT NULL DEFAULT 30,
-		next_fetch_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		consecutive_empty_fetches INTEGER NOT NULL DEFAULT 0,
 		error_count INTEGER NOT NULL DEFAULT 0,
 		favicon_url TEXT
 	)`,
 
-	`CREATE TABLE IF NOT EXISTS subscriptions (
+	`CREATE TABLE IF NOT EXISTS articles.subscriptions (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_did TEXT NOT NULL,
 		feed_url TEXT NOT NULL,
@@ -211,7 +197,7 @@ var articlesSchema = []string{
 		UNIQUE(user_did, feed_url)
 	)`,
 
-	`CREATE TABLE IF NOT EXISTS articles (
+	`CREATE TABLE IF NOT EXISTS articles.articles (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		feed_url TEXT NOT NULL,
 		guid TEXT NOT NULL,
@@ -227,7 +213,7 @@ var articlesSchema = []string{
 		UNIQUE(feed_url, guid)
 	)`,
 
-	`CREATE TABLE IF NOT EXISTS read_state (
+	`CREATE TABLE IF NOT EXISTS articles.read_state (
 		user_did TEXT NOT NULL,
 		article_id INTEGER NOT NULL,
 		is_read BOOLEAN NOT NULL DEFAULT 0,
@@ -235,7 +221,7 @@ var articlesSchema = []string{
 		PRIMARY KEY (user_did, article_id)
 	)`,
 
-	`CREATE TABLE IF NOT EXISTS annotations (
+	`CREATE TABLE IF NOT EXISTS articles.annotations (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		uri TEXT NOT NULL UNIQUE,
 		author_did TEXT NOT NULL,
@@ -249,7 +235,7 @@ var articlesSchema = []string{
 		cid TEXT
 	)`,
 
-	`CREATE TABLE IF NOT EXISTS likes (
+	`CREATE TABLE IF NOT EXISTS articles.likes (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		uri TEXT NOT NULL UNIQUE,
 		author_did TEXT NOT NULL,
@@ -260,37 +246,37 @@ var articlesSchema = []string{
 		UNIQUE(author_did, feed_url, article_url)
 	)`,
 
-	`CREATE INDEX IF NOT EXISTS idx_subscriptions_feed ON subscriptions(feed_url)`,
-	`CREATE INDEX IF NOT EXISTS idx_subscriptions_feed_user ON subscriptions(feed_url, user_did)`,
-	`CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_did)`,
-	`CREATE INDEX IF NOT EXISTS idx_subscriptions_uri ON subscriptions(uri)`,
-	`CREATE INDEX IF NOT EXISTS idx_likes_author_feed ON likes(author_did, feed_url, created_at)`,
-	`CREATE INDEX IF NOT EXISTS idx_articles_feed ON articles(feed_url)`,
-	`CREATE INDEX IF NOT EXISTS idx_articles_published ON articles(published DESC)`,
-	`CREATE INDEX IF NOT EXISTS idx_articles_url ON articles(url)`,
-	`CREATE INDEX IF NOT EXISTS idx_read_state_unread ON read_state(user_did, is_read) WHERE is_read = 0`,
-	`CREATE INDEX IF NOT EXISTS idx_annotations_article ON annotations(article_url)`,
-	`CREATE INDEX IF NOT EXISTS idx_annotations_author ON annotations(author_did)`,
-	`CREATE INDEX IF NOT EXISTS idx_annotations_created_at ON annotations(created_at DESC)`,
-	`CREATE INDEX IF NOT EXISTS idx_likes_article ON likes(feed_url, article_url)`,
-	`CREATE INDEX IF NOT EXISTS idx_likes_author ON likes(author_did)`,
-	`CREATE INDEX IF NOT EXISTS idx_likes_created_at ON likes(created_at DESC)`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_subscriptions_feed ON subscriptions(feed_url)`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_subscriptions_feed_user ON subscriptions(feed_url, user_did)`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_subscriptions_user ON subscriptions(user_did)`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_subscriptions_uri ON subscriptions(uri)`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_likes_author_feed ON likes(author_did, feed_url, created_at)`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_articles_feed ON articles(feed_url)`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_articles_published ON articles(published DESC)`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_articles_url ON articles(url)`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_read_state_unread ON read_state(user_did, is_read) WHERE is_read = 0`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_annotations_article ON annotations(article_url)`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_annotations_author ON annotations(author_did)`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_annotations_created_at ON annotations(created_at DESC)`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_likes_article ON likes(feed_url, article_url)`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_likes_author ON likes(author_did)`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_likes_created_at ON likes(created_at DESC)`,
 
-	`CREATE VIRTUAL TABLE IF NOT EXISTS articles_fts USING fts5(title, summary, content, author, content=articles, content_rowid=id)`,
-	`CREATE TRIGGER IF NOT EXISTS articles_ai AFTER INSERT ON articles BEGIN
+	`CREATE VIRTUAL TABLE IF NOT EXISTS articles.articles_fts USING fts5(title, summary, content, author, content=articles, content_rowid=id)`,
+	`CREATE TRIGGER IF NOT EXISTS articles.articles_ai AFTER INSERT ON articles BEGIN
 		INSERT INTO articles_fts(rowid, title, summary, content, author) VALUES (new.id, new.title, new.summary, new.content, new.author);
 	END`,
-	`CREATE TRIGGER IF NOT EXISTS articles_ad AFTER DELETE ON articles BEGIN
+	`CREATE TRIGGER IF NOT EXISTS articles.articles_ad AFTER DELETE ON articles BEGIN
 		INSERT INTO articles_fts(articles_fts, rowid, title, summary, content, author) VALUES('delete', old.id, old.title, old.summary, old.content, old.author);
 	END`,
-	`CREATE TRIGGER IF NOT EXISTS articles_au AFTER UPDATE ON articles BEGIN
+	`CREATE TRIGGER IF NOT EXISTS articles.articles_au AFTER UPDATE ON articles BEGIN
 		INSERT INTO articles_fts(articles_fts, rowid, title, summary, content, author) VALUES('delete', old.id, old.title, old.summary, old.content, old.author);
 		INSERT INTO articles_fts(rowid, title, summary, content, author) VALUES (new.id, new.title, new.summary, new.content, new.author);
 	END`,
 }
 
 var recsSchema = []string{
-	`CREATE TABLE IF NOT EXISTS feed_similarity (
+	`CREATE TABLE IF NOT EXISTS recs.feed_similarity (
 		feed_a TEXT NOT NULL,
 		feed_b TEXT NOT NULL,
 		jaccard REAL NOT NULL,
@@ -299,7 +285,7 @@ var recsSchema = []string{
 		CHECK(feed_a < feed_b)
 	)`,
 
-	`CREATE TABLE IF NOT EXISTS user_similarity (
+	`CREATE TABLE IF NOT EXISTS recs.user_similarity (
 		user_a TEXT NOT NULL,
 		user_b TEXT NOT NULL,
 		jaccard REAL NOT NULL,
@@ -311,7 +297,7 @@ var recsSchema = []string{
 		CHECK(user_a < user_b)
 	)`,
 
-	`CREATE TABLE IF NOT EXISTS dismissed_recommendations (
+	`CREATE TABLE IF NOT EXISTS recs.dismissed_recommendations (
 		user_did     TEXT NOT NULL,
 		target_type  TEXT NOT NULL CHECK(target_type IN ('feed', 'article')),
 		target_id    TEXT NOT NULL,
@@ -320,7 +306,7 @@ var recsSchema = []string{
 		PRIMARY KEY (user_did, target_type, target_id)
 	)`,
 
-	`CREATE TABLE IF NOT EXISTS recommendation_impressions (
+	`CREATE TABLE IF NOT EXISTS recs.recommendation_impressions (
 		user_did       TEXT NOT NULL,
 		target_type    TEXT NOT NULL CHECK(target_type IN ('feed', 'article')),
 		target_id      TEXT NOT NULL,
@@ -331,14 +317,14 @@ var recsSchema = []string{
 		PRIMARY KEY (user_did, target_type, target_id)
 	)`,
 
-	`CREATE TABLE IF NOT EXISTS follow_distances (
+	`CREATE TABLE IF NOT EXISTS recs.follow_distances (
 		user_a   TEXT NOT NULL,
 		user_b   TEXT NOT NULL,
 		distance INTEGER NOT NULL CHECK(distance IN (1, 2)),
 		PRIMARY KEY (user_a, user_b)
 	)`,
 
-	`CREATE TABLE IF NOT EXISTS user_signal_weights (
+	`CREATE TABLE IF NOT EXISTS recs.user_signal_weights (
 		user_did   TEXT PRIMARY KEY,
 		w_sub      REAL NOT NULL DEFAULT 1.0,
 		w_like     REAL NOT NULL DEFAULT 0.5,
@@ -349,7 +335,7 @@ var recsSchema = []string{
 		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`,
 
-	`CREATE TABLE IF NOT EXISTS user_signal_profiles (
+	`CREATE TABLE IF NOT EXISTS recs.user_signal_profiles (
 		user_did       TEXT PRIMARY KEY,
 		total_likes     INTEGER NOT NULL DEFAULT 0,
 		total_tags      INTEGER NOT NULL DEFAULT 0,
@@ -357,11 +343,11 @@ var recsSchema = []string{
 		updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`,
 
-	`CREATE INDEX IF NOT EXISTS idx_dismissed_user_type ON dismissed_recommendations(user_did, target_type)`,
-	`CREATE INDEX IF NOT EXISTS idx_impressions_user_unacted ON recommendation_impressions(user_did, acted, shown_count)`,
-	`CREATE INDEX IF NOT EXISTS idx_impressions_last_shown ON recommendation_impressions(last_shown_at)`,
-	`CREATE INDEX IF NOT EXISTS idx_follow_distances_b ON follow_distances(user_b)`,
-	`CREATE INDEX IF NOT EXISTS idx_follow_distances_a_dist ON follow_distances(user_a, distance)`,
-	`CREATE INDEX IF NOT EXISTS idx_user_similarity_b ON user_similarity(user_b)`,
-	`CREATE INDEX IF NOT EXISTS idx_user_similarity_a ON user_similarity(user_a)`,
+	`CREATE INDEX IF NOT EXISTS recs.idx_dismissed_user_type ON dismissed_recommendations(user_did, target_type)`,
+	`CREATE INDEX IF NOT EXISTS recs.idx_impressions_user_unacted ON recommendation_impressions(user_did, acted, shown_count)`,
+	`CREATE INDEX IF NOT EXISTS recs.idx_impressions_last_shown ON recommendation_impressions(last_shown_at)`,
+	`CREATE INDEX IF NOT EXISTS recs.idx_follow_distances_b ON follow_distances(user_b)`,
+	`CREATE INDEX IF NOT EXISTS recs.idx_follow_distances_a_dist ON follow_distances(user_a, distance)`,
+	`CREATE INDEX IF NOT EXISTS recs.idx_user_similarity_b ON user_similarity(user_b)`,
+	`CREATE INDEX IF NOT EXISTS recs.idx_user_similarity_a ON user_similarity(user_a)`,
 }

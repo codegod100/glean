@@ -35,17 +35,17 @@ type Like struct {
 	CID        sql.NullString
 }
 
-func (db *DB) CreateAnnotation(ctx context.Context, a *Annotation) error {
-	return db.BatchCreateAnnotations(ctx, []*Annotation{a})
+func (s *ArticleStore) CreateAnnotation(ctx context.Context, a *Annotation) error {
+	return s.BatchCreateAnnotations(ctx, []*Annotation{a})
 }
 
-func (db *DB) GetAnnotation(ctx context.Context, id int64) (*Annotation, error) {
+func (s *ArticleStore) GetAnnotation(ctx context.Context, id int64) (*Annotation, error) {
 	a := &Annotation{}
-	err := db.QueryRowContext(ctx, `
+	err := s.db.QueryRowContext(ctx, `
 		SELECT a.id, a.uri, a.author_did, COALESCE(u.handle, ''), a.feed_url, a.article_url, ar.id, a.quote, a.note, a.tags, a.rating, a.created_at, a.cid
-		FROM annotations a
+		FROM articles.annotations a
 		LEFT JOIN users u ON a.author_did = u.did
-		LEFT JOIN articles ar ON ar.url = a.article_url AND ar.feed_url = a.feed_url
+		LEFT JOIN articles.articles ar ON ar.url = a.article_url AND ar.feed_url = a.feed_url
 		WHERE a.id = ?
 	`, id).Scan(&a.ID, &a.URI, &a.AuthorDID, &a.AuthorHandle, &a.FeedURL, &a.ArticleURL, &a.ArticleID,
 		&a.Quote, &a.Note, &a.Tags, &a.Rating, &a.CreatedAt, &a.CID)
@@ -55,14 +55,14 @@ func (db *DB) GetAnnotation(ctx context.Context, id int64) (*Annotation, error) 
 	return a, nil
 }
 
-func (db *DB) DeleteAnnotation(ctx context.Context, uri string) error {
-	_, err := db.ExecContext(ctx, `DELETE FROM annotations WHERE uri = ?`, uri)
+func (s *ArticleStore) DeleteAnnotation(ctx context.Context, uri string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM articles.annotations WHERE uri = ?`, uri)
 	return err
 }
 
-func (db *DB) AnnotationExists(ctx context.Context, uri string) (bool, error) {
+func (s *ArticleStore) AnnotationExists(ctx context.Context, uri string) (bool, error) {
 	var exists int
-	err := db.QueryRowContext(ctx, `SELECT 1 FROM annotations WHERE uri = ?`, uri).Scan(&exists)
+	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM articles.annotations WHERE uri = ?`, uri).Scan(&exists)
 	if err == sql.ErrNoRows {
 		return false, nil
 	}
@@ -72,7 +72,7 @@ func (db *DB) AnnotationExists(ctx context.Context, uri string) (bool, error) {
 	return true, nil
 }
 
-func (db *DB) ListAnnotations(ctx context.Context, feedURL, articleURL, authorDID string, limit, offset int) ([]*Annotation, error) {
+func (s *ArticleStore) ListAnnotations(ctx context.Context, feedURL, articleURL, authorDID string, limit, offset int) ([]*Annotation, error) {
 	var conds []string
 	var args []any
 
@@ -90,16 +90,16 @@ func (db *DB) ListAnnotations(ctx context.Context, feedURL, articleURL, authorDI
 	}
 
 	query := `SELECT a.id, a.uri, a.author_did, COALESCE(u.handle, ''), a.feed_url, a.article_url, ar.id, a.quote, a.note, a.tags, a.rating, a.created_at, a.cid
-		FROM annotations a
+		FROM articles.annotations a
 		LEFT JOIN users u ON a.author_did = u.did
-		LEFT JOIN articles ar ON ar.url = a.article_url AND ar.feed_url = a.feed_url`
+		LEFT JOIN articles.articles ar ON ar.url = a.article_url AND ar.feed_url = a.feed_url`
 	if len(conds) > 0 {
 		query += ` WHERE ` + strings.Join(conds, " AND ")
 	}
 	query += ` ORDER BY a.created_at DESC LIMIT ? OFFSET ?`
 	args = append(args, limit, offset)
 
-	rows, err := db.QueryContext(ctx, query, args...)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -117,18 +117,18 @@ func (db *DB) ListAnnotations(ctx context.Context, feedURL, articleURL, authorDI
 	return annotations, rows.Err()
 }
 
-func (db *DB) BatchCreateLikes(ctx context.Context, likes []*Like) error {
+func (s *ArticleStore) BatchCreateLikes(ctx context.Context, likes []*Like) error {
 	if len(likes) == 0 {
 		return nil
 	}
-	tx, err := db.BeginTx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
 	stmt, err := tx.PrepareContext(ctx, `
-		INSERT OR IGNORE INTO likes (uri, author_did, feed_url, article_url, created_at, cid)
+		INSERT OR IGNORE INTO articles.likes (uri, author_did, feed_url, article_url, created_at, cid)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
@@ -144,18 +144,18 @@ func (db *DB) BatchCreateLikes(ctx context.Context, likes []*Like) error {
 	return tx.Commit()
 }
 
-func (db *DB) BatchCreateAnnotations(ctx context.Context, annotations []*Annotation) error {
+func (s *ArticleStore) BatchCreateAnnotations(ctx context.Context, annotations []*Annotation) error {
 	if len(annotations) == 0 {
 		return nil
 	}
-	tx, err := db.BeginTx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
 	stmt, err := tx.PrepareContext(ctx, `
-		INSERT OR IGNORE INTO annotations (uri, author_did, feed_url, article_url, quote, note, tags, rating, created_at, cid)
+		INSERT OR IGNORE INTO articles.annotations (uri, author_did, feed_url, article_url, quote, note, tags, rating, created_at, cid)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
@@ -171,30 +171,30 @@ func (db *DB) BatchCreateAnnotations(ctx context.Context, annotations []*Annotat
 	return tx.Commit()
 }
 
-func (db *DB) CreateLike(ctx context.Context, l *Like) error {
-	exists, err := db.HasLiked(ctx, l.AuthorDID, l.FeedURL, l.ArticleURL)
+func (s *ArticleStore) CreateLike(ctx context.Context, l *Like) error {
+	exists, err := s.HasLiked(ctx, l.AuthorDID, l.FeedURL, l.ArticleURL)
 	if err != nil {
 		return err
 	}
 	if exists {
 		return ErrDuplicateLike
 	}
-	return db.BatchCreateLikes(ctx, []*Like{l})
+	return s.BatchCreateLikes(ctx, []*Like{l})
 }
 
-func (db *DB) DeleteLike(ctx context.Context, uri string) error {
-	_, err := db.ExecContext(ctx, `DELETE FROM likes WHERE uri = ?`, uri)
+func (s *ArticleStore) DeleteLike(ctx context.Context, uri string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM articles.likes WHERE uri = ?`, uri)
 	return err
 }
 
-func (db *DB) DeleteLikeByUserArticle(ctx context.Context, authorDID, feedURL, articleURL string) error {
-	_, err := db.ExecContext(ctx, `
-		DELETE FROM likes WHERE author_did = ? AND feed_url = ? AND article_url = ?
+func (s *ArticleStore) DeleteLikeByUserArticle(ctx context.Context, authorDID, feedURL, articleURL string) error {
+	_, err := s.db.ExecContext(ctx, `
+		DELETE FROM articles.likes WHERE author_did = ? AND feed_url = ? AND article_url = ?
 	`, authorDID, feedURL, articleURL)
 	return err
 }
 
-func (db *DB) ListLikes(ctx context.Context, authorDID, feedURL string, limit, offset int) ([]*Like, error) {
+func (s *ArticleStore) ListLikes(ctx context.Context, authorDID, feedURL string, limit, offset int) ([]*Like, error) {
 	var conds []string
 	var args []any
 
@@ -207,14 +207,14 @@ func (db *DB) ListLikes(ctx context.Context, authorDID, feedURL string, limit, o
 		args = append(args, feedURL)
 	}
 
-	query := `SELECT id, uri, author_did, feed_url, article_url, created_at, cid FROM likes`
+	query := `SELECT id, uri, author_did, feed_url, article_url, created_at, cid FROM articles.likes`
 	if len(conds) > 0 {
 		query += ` WHERE ` + strings.Join(conds, " AND ")
 	}
 	query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
 	args = append(args, limit, offset)
 
-	rows, err := db.QueryContext(ctx, query, args...)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -231,18 +231,18 @@ func (db *DB) ListLikes(ctx context.Context, authorDID, feedURL string, limit, o
 	return likes, rows.Err()
 }
 
-func (db *DB) GetLikeCount(ctx context.Context, feedURL, articleURL string) (int, error) {
+func (s *ArticleStore) GetLikeCount(ctx context.Context, feedURL, articleURL string) (int, error) {
 	var count int
-	err := db.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM likes WHERE feed_url = ? AND article_url = ?
+	err := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM articles.likes WHERE feed_url = ? AND article_url = ?
 	`, feedURL, articleURL).Scan(&count)
 	return count, err
 }
 
-func (db *DB) GetLike(ctx context.Context, authorDID, feedURL, articleURL string) (*Like, error) {
+func (s *ArticleStore) GetLike(ctx context.Context, authorDID, feedURL, articleURL string) (*Like, error) {
 	l := &Like{}
-	err := db.QueryRowContext(ctx, `
-		SELECT id, uri, author_did, feed_url, article_url, created_at, cid FROM likes
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, uri, author_did, feed_url, article_url, created_at, cid FROM articles.likes
 		WHERE author_did = ? AND feed_url = ? AND article_url = ?
 	`, authorDID, feedURL, articleURL).Scan(&l.ID, &l.URI, &l.AuthorDID, &l.FeedURL, &l.ArticleURL, &l.CreatedAt, &l.CID)
 	if err != nil {
@@ -251,10 +251,10 @@ func (db *DB) GetLike(ctx context.Context, authorDID, feedURL, articleURL string
 	return l, nil
 }
 
-func (db *DB) HasLiked(ctx context.Context, authorDID, feedURL, articleURL string) (bool, error) {
+func (s *ArticleStore) HasLiked(ctx context.Context, authorDID, feedURL, articleURL string) (bool, error) {
 	var exists int
-	err := db.QueryRowContext(ctx, `
-		SELECT 1 FROM likes WHERE author_did = ? AND feed_url = ? AND article_url = ?
+	err := s.db.QueryRowContext(ctx, `
+		SELECT 1 FROM articles.likes WHERE author_did = ? AND feed_url = ? AND article_url = ?
 	`, authorDID, feedURL, articleURL).Scan(&exists)
 	if err == sql.ErrNoRows {
 		return false, nil
@@ -279,19 +279,19 @@ type TrendingItem struct {
 	HasLiked        bool
 }
 
-func (db *DB) ListTrendingArticlesForUser(ctx context.Context, userDID, since string, limit, offset int) ([]*TrendingItem, error) {
-	rows, err := db.QueryContext(ctx, `
+func (s *ArticleStore) ListTrendingArticlesForUser(ctx context.Context, userDID, since string, limit, offset int) ([]*TrendingItem, error) {
+	rows, err := s.db.QueryContext(ctx, `
 		SELECT ar.id, ar.title, COALESCE(ar.url, ''), COALESCE(ar.author, ''),
 		       COALESCE(ar.summary, ''), l.feed_url, COALESCE(f.title, ''),
 		       COALESCE(f.favicon_url, ''),
 		       COUNT(DISTINCT l.id) AS like_count,
 		       COUNT(DISTINCT a.id) AS annotation_count,
 		       COALESCE(MAX(CASE WHEN ul.id IS NOT NULL THEN 1 ELSE 0 END), 0)
-		FROM likes l
-		JOIN articles ar ON ar.url = l.article_url AND ar.feed_url = l.feed_url
-		LEFT JOIN feeds f ON f.feed_url = l.feed_url
-		LEFT JOIN annotations a ON a.feed_url = l.feed_url AND a.article_url = l.article_url AND a.created_at >= ?
-		LEFT JOIN likes ul ON ul.feed_url = l.feed_url AND ul.article_url = l.article_url AND ul.author_did = ?
+		FROM articles.likes l
+		JOIN articles.articles ar ON ar.url = l.article_url AND ar.feed_url = l.feed_url
+		LEFT JOIN articles.feeds f ON f.feed_url = l.feed_url
+		LEFT JOIN articles.annotations a ON a.feed_url = l.feed_url AND a.article_url = l.article_url AND a.created_at >= ?
+		LEFT JOIN articles.likes ul ON ul.feed_url = l.feed_url AND ul.article_url = l.article_url AND ul.author_did = ?
 		WHERE l.created_at >= ?
 		  AND l.author_did IN (
 		    SELECT CASE WHEN us.user_a = ? THEN us.user_b ELSE us.user_a END
@@ -323,19 +323,19 @@ func (db *DB) ListTrendingArticlesForUser(ctx context.Context, userDID, since st
 	return results, rows.Err()
 }
 
-func (db *DB) ListTrendingArticles(ctx context.Context, userDID, since string, limit, offset int) ([]*TrendingItem, error) {
-	rows, err := db.QueryContext(ctx, `
+func (s *ArticleStore) ListTrendingArticles(ctx context.Context, userDID, since string, limit, offset int) ([]*TrendingItem, error) {
+	rows, err := s.db.QueryContext(ctx, `
 		SELECT ar.id, ar.title, COALESCE(ar.url, ''), COALESCE(ar.author, ''),
 		       COALESCE(ar.summary, ''), l.feed_url, COALESCE(f.title, ''),
 		       COALESCE(f.favicon_url, ''),
 		       COUNT(DISTINCT l.id) AS like_count,
 		       COUNT(DISTINCT a.id) AS annotation_count,
 		       COALESCE(MAX(CASE WHEN ul.id IS NOT NULL THEN 1 ELSE 0 END), 0)
-		FROM likes l
-		JOIN articles ar ON ar.url = l.article_url AND ar.feed_url = l.feed_url
-		LEFT JOIN feeds f ON f.feed_url = l.feed_url
-		LEFT JOIN annotations a ON a.feed_url = l.feed_url AND a.article_url = l.article_url AND a.created_at >= ?
-		LEFT JOIN likes ul ON ul.feed_url = l.feed_url AND ul.article_url = l.article_url AND ul.author_did = ?
+		FROM articles.likes l
+		JOIN articles.articles ar ON ar.url = l.article_url AND ar.feed_url = l.feed_url
+		LEFT JOIN articles.feeds f ON f.feed_url = l.feed_url
+		LEFT JOIN articles.annotations a ON a.feed_url = l.feed_url AND a.article_url = l.article_url AND a.created_at >= ?
+		LEFT JOIN articles.likes ul ON ul.feed_url = l.feed_url AND ul.article_url = l.article_url AND ul.author_did = ?
 		WHERE l.created_at >= ?
 		GROUP BY ar.id
 		-- Future-published articles (e.g., scheduled) sort last
@@ -360,19 +360,19 @@ func (db *DB) ListTrendingArticles(ctx context.Context, userDID, since string, l
 	return results, rows.Err()
 }
 
-func (db *DB) ListLikedArticles(ctx context.Context, userDID string, limit, offset int) ([]*Article, error) {
-	rows, err := db.QueryContext(ctx, `
+func (s *ArticleStore) ListLikedArticles(ctx context.Context, userDID string, limit, offset int) ([]*Article, error) {
+	rows, err := s.db.QueryContext(ctx, `
 		SELECT DISTINCT a.id, a.feed_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 			a.published, a.updated, a.fetched_at,
 			COALESCE(f.title, ''),
 			COALESCE(r.is_read, 0),
 			COALESCE(lc.cnt, 0),
 			1
-		FROM likes l
-		JOIN articles a ON a.url = l.article_url AND a.feed_url = l.feed_url
-		LEFT JOIN feeds f ON f.feed_url = a.feed_url
+		FROM articles.likes l
+		JOIN articles.articles a ON a.url = l.article_url AND a.feed_url = l.feed_url
+		LEFT JOIN articles.feeds f ON f.feed_url = a.feed_url
 		LEFT JOIN read_state r ON r.user_did = ? AND r.article_id = a.id
-		LEFT JOIN (SELECT feed_url, article_url, COUNT(*) as cnt FROM likes GROUP BY feed_url, article_url) lc
+		LEFT JOIN (SELECT feed_url, article_url, COUNT(*) as cnt FROM articles.likes GROUP BY feed_url, article_url) lc
 			ON lc.feed_url = a.feed_url AND lc.article_url = a.url
 		WHERE l.author_did = ?
 		ORDER BY l.created_at DESC

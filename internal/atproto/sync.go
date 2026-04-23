@@ -20,13 +20,13 @@ import (
 )
 
 type Sync struct {
-	articles *db.DB
-	users    *db.DB
+	articles *db.ArticleStore
+	users    *db.UserStore
 	client   *Client
 	logger   *slog.Logger
 }
 
-func NewSync(articles, users *db.DB, client *Client, logger *slog.Logger) *Sync {
+func NewSync(articles *db.ArticleStore, users *db.UserStore, client *Client, logger *slog.Logger) *Sync {
 	return &Sync{articles: articles, users: users, client: client, logger: logger}
 }
 

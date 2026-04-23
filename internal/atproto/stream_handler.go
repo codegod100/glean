@@ -23,12 +23,12 @@ func isSentinel(err error) bool {
 }
 
 type StreamDBHandler struct {
-	articles *db.DB
-	users    *db.DB
+	articles *db.ArticleStore
+	users    *db.UserStore
 	logger   *slog.Logger
 }
 
-func NewStreamDBHandler(articles, users *db.DB, logger *slog.Logger) *StreamDBHandler {
+func NewStreamDBHandler(articles *db.ArticleStore, users *db.UserStore, logger *slog.Logger) *StreamDBHandler {
 	return &StreamDBHandler{articles: articles, users: users, logger: logger}
 }
 

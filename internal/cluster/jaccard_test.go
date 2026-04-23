@@ -46,7 +46,7 @@ func seedClusterData(t *testing.T, ctx context.Context, dbs *db.Databases) {
 		{"did:test:carol", "carol"},
 	}
 	for _, u := range users {
-		_, err := dbs.Users.ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, u.did, u.handle)
+		_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, u.did, u.handle)
 		assert.NilError(t, err)
 	}
 
@@ -58,7 +58,7 @@ func seedClusterData(t *testing.T, ctx context.Context, dbs *db.Databases) {
 		{"https://e.com/feed", "Feed E"},
 	}
 	for _, f := range feeds {
-		_, err := dbs.Articles.ExecContext(ctx, `INSERT INTO feeds (feed_url, title, site_url, description, feed_type, subscriber_count) VALUES (?, ?, ?, '', 'rss', 2)`, f.url, f.title, f.url)
+		_, err := dbs.DB().ExecContext(ctx, `INSERT INTO articles.feeds (feed_url, title, site_url, description, feed_type, subscriber_count) VALUES (?, ?, ?, '', 'rss', 2)`, f.url, f.title, f.url)
 		assert.NilError(t, err)
 	}
 
@@ -74,7 +74,7 @@ func seedClusterData(t *testing.T, ctx context.Context, dbs *db.Databases) {
 		{"did:test:carol", "https://c.com/feed"},
 	}
 	for _, s := range subs {
-		_, err := dbs.Articles.ExecContext(ctx, `INSERT INTO subscriptions (user_did, feed_url) VALUES (?, ?)`, s.user, s.feed)
+		_, err := dbs.DB().ExecContext(ctx, `INSERT INTO articles.subscriptions (user_did, feed_url) VALUES (?, ?)`, s.user, s.feed)
 		assert.NilError(t, err)
 	}
 }
@@ -86,13 +86,13 @@ func seedFollowData(t *testing.T, ctx context.Context, dbs *db.Databases) {
 		{"did:test:bob", "did:test:carol"},
 	}
 	for _, f := range follows {
-		_, err := dbs.Users.ExecContext(ctx, `INSERT OR IGNORE INTO follows (user_did, target_did) VALUES (?, ?)`, f.user, f.target)
+		_, err := dbs.DB().ExecContext(ctx, `INSERT OR IGNORE INTO follows (user_did, target_did) VALUES (?, ?)`, f.user, f.target)
 		assert.NilError(t, err)
 	}
 }
 
 func newTestEngine(dbs *db.Databases) *Engine {
-	return NewEngine(dbs.Users.DB, slog.Default())
+	return NewEngine(dbs.DB(), slog.Default())
 }
 
 func TestComputeFeedSimilarity(t *testing.T) {
@@ -105,7 +105,7 @@ func TestComputeFeedSimilarity(t *testing.T) {
 	assert.NilError(t, err)
 
 	var count int
-	err = dbs.Users.QueryRowContext(ctx, `SELECT COUNT(*) FROM recs.feed_similarity`).Scan(&count)
+	err = dbs.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM recs.feed_similarity`).Scan(&count)
 	assert.NilError(t, err)
 	assert.Assert(t, count > 0, "expected feed similarity pairs")
 }
@@ -120,7 +120,7 @@ func TestComputeUserSimilarity(t *testing.T) {
 	assert.NilError(t, err)
 
 	var count int
-	err = dbs.Users.QueryRowContext(ctx, `SELECT COUNT(*) FROM recs.user_similarity`).Scan(&count)
+	err = dbs.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM recs.user_similarity`).Scan(&count)
 	assert.NilError(t, err)
 	assert.Assert(t, count > 0, "expected user similarity pairs")
 }
@@ -222,14 +222,14 @@ func TestRecordImpressions(t *testing.T) {
 	assert.NilError(t, engine.RecordImpressions(ctx, "did:test:alice", impressions))
 
 	var count int
-	assert.NilError(t, dbs.Users.QueryRowContext(ctx,
+	assert.NilError(t, dbs.DB().QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM recs.recommendation_impressions WHERE user_did = 'did:test:alice'`).Scan(&count))
 	assert.Equal(t, count, 2)
 
 	assert.NilError(t, engine.RecordImpressions(ctx, "did:test:alice", impressions))
 
 	var shownCount int
-	assert.NilError(t, dbs.Users.QueryRowContext(ctx,
+	assert.NilError(t, dbs.DB().QueryRowContext(ctx,
 		`SELECT shown_count FROM recs.recommendation_impressions WHERE user_did = 'did:test:alice' AND target_id = 'https://a.com/feed'`).Scan(&shownCount))
 	assert.Equal(t, shownCount, 2, "shown_count should increment on repeated impression")
 }
@@ -247,7 +247,7 @@ func TestMarkImpressionActed(t *testing.T) {
 	assert.NilError(t, engine.MarkImpressionActed(ctx, "did:test:alice", "feed", "https://a.com/feed"))
 
 	var acted bool
-	assert.NilError(t, dbs.Users.QueryRowContext(ctx,
+	assert.NilError(t, dbs.DB().QueryRowContext(ctx,
 		`SELECT acted FROM recs.recommendation_impressions WHERE user_did = 'did:test:alice' AND target_id = 'https://a.com/feed'`).Scan(&acted))
 	assert.Assert(t, acted, "impression should be marked as acted")
 }
@@ -262,15 +262,15 @@ func TestComputeFollowDistances(t *testing.T) {
 	assert.NilError(t, engine.ComputeFollowDistances(ctx))
 
 	var d1, d2 int
-	assert.NilError(t, dbs.Users.QueryRowContext(ctx,
+	assert.NilError(t, dbs.DB().QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM recs.follow_distances WHERE distance = 1`).Scan(&d1))
-	assert.NilError(t, dbs.Users.QueryRowContext(ctx,
+	assert.NilError(t, dbs.DB().QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM recs.follow_distances WHERE distance = 2`).Scan(&d2))
 	assert.Assert(t, d1 >= 2, "expected at least 2 direct follow distances")
 	assert.Assert(t, d2 >= 1, "expected at least 1 two-hop distance (alice -> bob -> carol)")
 
 	var dist int
-	assert.NilError(t, dbs.Users.QueryRowContext(ctx,
+	assert.NilError(t, dbs.DB().QueryRowContext(ctx,
 		`SELECT distance FROM recs.follow_distances WHERE user_a = 'did:test:alice' AND user_b = 'did:test:carol'`).Scan(&dist))
 	assert.Equal(t, dist, 2, "alice should be 2 hops from carol")
 }
@@ -282,7 +282,7 @@ func TestAutoDismissStale(t *testing.T) {
 
 	engine := newTestEngine(dbs)
 
-	_, err := dbs.Users.ExecContext(ctx, `
+	_, err := dbs.DB().ExecContext(ctx, `
 		INSERT INTO recs.recommendation_impressions (user_did, target_type, target_id, first_shown_at, last_shown_at, shown_count, acted)
 		VALUES ('did:test:alice', 'feed', 'https://stale.com/feed', datetime('now', '-31 days'), datetime('now'), 20, 0)
 	`)
@@ -302,7 +302,7 @@ func TestAutoDismissStale_DoesNotDismissRecent(t *testing.T) {
 
 	engine := newTestEngine(dbs)
 
-	_, err := dbs.Users.ExecContext(ctx, `
+	_, err := dbs.DB().ExecContext(ctx, `
 		INSERT INTO recs.recommendation_impressions (user_did, target_type, target_id, first_shown_at, last_shown_at, shown_count, acted)
 		VALUES ('did:test:alice', 'feed', 'https://recent.com/feed', datetime('now'), datetime('now'), 5, 0)
 	`)
@@ -322,7 +322,7 @@ func TestAutoDismissStale_DoesNotDismissActed(t *testing.T) {
 
 	engine := newTestEngine(dbs)
 
-	_, err := dbs.Users.ExecContext(ctx, `
+	_, err := dbs.DB().ExecContext(ctx, `
 		INSERT INTO recs.recommendation_impressions (user_did, target_type, target_id, first_shown_at, last_shown_at, shown_count, acted)
 		VALUES ('did:test:alice', 'feed', 'https://acted.com/feed', datetime('now', '-31 days'), datetime('now'), 20, 1)
 	`)
@@ -397,13 +397,13 @@ func TestSignalWeights_RewardPenalize(t *testing.T) {
 
 	engine := newTestEngine(dbs)
 
-	_, err := dbs.Users.ExecContext(ctx, `
+	_, err := dbs.DB().ExecContext(ctx, `
 		INSERT INTO recs.recommendation_impressions (user_did, target_type, target_id, first_shown_at, last_shown_at, shown_count, acted)
 		VALUES ('did:test:alice', 'feed', 'https://a.com/feed', datetime('now'), datetime('now'), 1, 1)
 	`)
 	assert.NilError(t, err)
 	for i := range minActionsTune {
-		_, err = dbs.Users.ExecContext(ctx, `
+		_, err = dbs.DB().ExecContext(ctx, `
 			INSERT INTO recs.recommendation_impressions (user_did, target_type, target_id, first_shown_at, last_shown_at, shown_count, acted)
 			VALUES ('did:test:alice', 'feed', ?, datetime('now'), datetime('now'), 1, 1)
 		`, fmt.Sprintf("https://%d.com/feed", i))
@@ -425,12 +425,12 @@ func TestColdStartRecommendations(t *testing.T) {
 	engine := newTestEngine(dbs)
 	assert.NilError(t, engine.ComputeFollowDistances(ctx))
 
-	_, err := dbs.Articles.ExecContext(ctx, `UPDATE feeds SET subscriber_count = 2 WHERE feed_url = 'https://a.com/feed'`)
+	_, err := dbs.DB().ExecContext(ctx, `UPDATE articles.feeds SET subscriber_count = 2 WHERE feed_url = 'https://a.com/feed'`)
 	assert.NilError(t, err)
-	_, err = dbs.Articles.ExecContext(ctx, `UPDATE feeds SET subscriber_count = 2 WHERE feed_url = 'https://b.com/feed'`)
+	_, err = dbs.DB().ExecContext(ctx, `UPDATE articles.feeds SET subscriber_count = 2 WHERE feed_url = 'https://b.com/feed'`)
 	assert.NilError(t, err)
 
-	_, err = dbs.Users.ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, "did:test:newuser", "newuser")
+	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, "did:test:newuser", "newuser")
 	assert.NilError(t, err)
 
 	recs, err := engine.ColdStartRecommendations(ctx, "did:test:newuser", 10)
@@ -475,7 +475,7 @@ func TestDismissArticle(t *testing.T) {
 	assert.NilError(t, engine.DismissArticle(ctx, "did:test:alice", "https://a.com/article1", "not_interested"))
 
 	var count int
-	assert.NilError(t, dbs.Users.QueryRowContext(ctx,
+	assert.NilError(t, dbs.DB().QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM recs.dismissed_recommendations WHERE user_did = 'did:test:alice' AND target_type = 'article'`).Scan(&count))
 	assert.Equal(t, count, 1)
 }
@@ -489,7 +489,7 @@ func TestComputeSignalProfiles(t *testing.T) {
 	assert.NilError(t, engine.ComputeSignalProfiles(ctx))
 
 	var count int
-	assert.NilError(t, dbs.Users.QueryRowContext(ctx, `SELECT COUNT(*) FROM recs.user_signal_profiles`).Scan(&count))
+	assert.NilError(t, dbs.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM recs.user_signal_profiles`).Scan(&count))
 	assert.Assert(t, count >= 3, "expected signal profiles for all users")
 }
 
@@ -504,7 +504,7 @@ func TestDismissFeed_Idempotent(t *testing.T) {
 	assert.NilError(t, engine.DismissFeed(ctx, "did:test:alice", "https://a.com/feed", "reason2"))
 
 	var count int
-	assert.NilError(t, dbs.Users.QueryRowContext(ctx,
+	assert.NilError(t, dbs.DB().QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM recs.dismissed_recommendations WHERE user_did = 'did:test:alice' AND target_type = 'feed'`).Scan(&count))
 	assert.Equal(t, count, 1, "duplicate dismiss should not create extra rows")
 }
@@ -513,33 +513,33 @@ func TestDescriptionBasedFeedSimilarity(t *testing.T) {
 	ctx := context.Background()
 	dbs := setupClusterTestDB(t)
 
-	_, err := dbs.Users.ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, "did:test:alice", "alice")
+	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, "did:test:alice", "alice")
 	assert.NilError(t, err)
-	_, err = dbs.Users.ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, "did:test:bob", "bob")
+	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO users (did, handle) VALUES (?, ?)`, "did:test:bob", "bob")
 	assert.NilError(t, err)
 
-	_, err = dbs.Articles.ExecContext(ctx, `INSERT INTO feeds (feed_url, title, site_url, description, feed_type) VALUES (?, ?, ?, ?, 'rss')`,
+	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO articles.feeds (feed_url, title, site_url, description, feed_type) VALUES (?, ?, ?, ?, 'rss')`,
 		"https://go.com/feed", "Go Blog", "https://go.com", "programming language golang software development")
 	assert.NilError(t, err)
-	_, err = dbs.Articles.ExecContext(ctx, `INSERT INTO feeds (feed_url, title, site_url, description, feed_type) VALUES (?, ?, ?, ?, 'rss')`,
+	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO articles.feeds (feed_url, title, site_url, description, feed_type) VALUES (?, ?, ?, ?, 'rss')`,
 		"https://rust.com/feed", "Rust Blog", "https://rust.com", "programming language rust software development")
 	assert.NilError(t, err)
 
-	_, err = dbs.Articles.ExecContext(ctx, `INSERT INTO subscriptions (user_did, feed_url) VALUES (?, ?)`, "did:test:alice", "https://go.com/feed")
+	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO articles.subscriptions (user_did, feed_url) VALUES (?, ?)`, "did:test:alice", "https://go.com/feed")
 	assert.NilError(t, err)
-	_, err = dbs.Articles.ExecContext(ctx, `INSERT INTO subscriptions (user_did, feed_url) VALUES (?, ?)`, "did:test:bob", "https://rust.com/feed")
+	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO articles.subscriptions (user_did, feed_url) VALUES (?, ?)`, "did:test:bob", "https://rust.com/feed")
 	assert.NilError(t, err)
 
 	engine := newTestEngine(dbs)
 	assert.NilError(t, engine.ComputeFeedSimilarity(ctx))
 
 	var count int
-	assert.NilError(t, dbs.Users.QueryRowContext(ctx, `SELECT COUNT(*) FROM recs.feed_similarity`).Scan(&count))
+	assert.NilError(t, dbs.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM recs.feed_similarity`).Scan(&count))
 	assert.Assert(t, count >= 0, "description-based similarity should produce pairs")
 
 	if count > 0 {
 		var jaccard float64
-		assert.NilError(t, dbs.Users.QueryRowContext(ctx,
+		assert.NilError(t, dbs.DB().QueryRowContext(ctx,
 			`SELECT jaccard FROM recs.feed_similarity WHERE feed_a = ? AND feed_b = ?`,
 			"https://go.com/feed", "https://rust.com/feed").Scan(&jaccard))
 		assert.Assert(t, jaccard > 0, "description word overlap should boost similarity")

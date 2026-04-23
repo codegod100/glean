@@ -21,11 +21,19 @@ type UserData struct {
 	AvatarURL   string
 }
 
-func (db *DB) BatchCreateUsers(ctx context.Context, users []UserData) error {
+type UserStore struct {
+	db *DB
+}
+
+func NewUserStore(db *DB) *UserStore {
+	return &UserStore{db: db}
+}
+
+func (s *UserStore) BatchCreateUsers(ctx context.Context, users []UserData) error {
 	if len(users) == 0 {
 		return nil
 	}
-	tx, err := db.BeginTx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -53,17 +61,17 @@ func (db *DB) BatchCreateUsers(ctx context.Context, users []UserData) error {
 	return tx.Commit()
 }
 
-func (db *DB) CreateUser(ctx context.Context, did, handle, displayName, avatarURL string) (*User, error) {
-	err := db.BatchCreateUsers(ctx, []UserData{{DID: did, Handle: handle, DisplayName: displayName, AvatarURL: avatarURL}})
+func (s *UserStore) CreateUser(ctx context.Context, did, handle, displayName, avatarURL string) (*User, error) {
+	err := s.BatchCreateUsers(ctx, []UserData{{DID: did, Handle: handle, DisplayName: displayName, AvatarURL: avatarURL}})
 	if err != nil {
 		return nil, err
 	}
-	return db.GetUser(ctx, did)
+	return s.GetUser(ctx, did)
 }
 
-func (db *DB) GetUser(ctx context.Context, did string) (*User, error) {
+func (s *UserStore) GetUser(ctx context.Context, did string) (*User, error) {
 	u := &User{}
-	err := db.QueryRowContext(ctx, `
+	err := s.db.QueryRowContext(ctx, `
 		SELECT did, handle, display_name, avatar_url, indexed_at, updated_at
 		FROM users WHERE did = ?
 	`, did).Scan(&u.DID, &u.Handle, &u.DisplayName, &u.AvatarURL, &u.IndexedAt, &u.UpdatedAt)
@@ -73,9 +81,9 @@ func (db *DB) GetUser(ctx context.Context, did string) (*User, error) {
 	return u, nil
 }
 
-func (db *DB) GetUserByHandle(ctx context.Context, handle string) (*User, error) {
+func (s *UserStore) GetUserByHandle(ctx context.Context, handle string) (*User, error) {
 	u := &User{}
-	err := db.QueryRowContext(ctx, `
+	err := s.db.QueryRowContext(ctx, `
 		SELECT did, handle, display_name, avatar_url, indexed_at, updated_at
 		FROM users WHERE handle = ?
 	`, handle).Scan(&u.DID, &u.Handle, &u.DisplayName, &u.AvatarURL, &u.IndexedAt, &u.UpdatedAt)
@@ -85,8 +93,8 @@ func (db *DB) GetUserByHandle(ctx context.Context, handle string) (*User, error)
 	return u, nil
 }
 
-func (db *DB) ListUserDIDs(ctx context.Context) (map[string]bool, error) {
-	rows, err := db.QueryContext(ctx, `SELECT did FROM users`)
+func (s *UserStore) ListUserDIDs(ctx context.Context) (map[string]bool, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT did FROM users`)
 	if err != nil {
 		return nil, err
 	}
@@ -103,8 +111,8 @@ func (db *DB) ListUserDIDs(ctx context.Context) (map[string]bool, error) {
 	return dids, rows.Err()
 }
 
-func (db *DB) UpdateUserProfile(ctx context.Context, did, displayName, avatarURL string) error {
-	_, err := db.ExecContext(ctx, `
+func (s *UserStore) UpdateUserProfile(ctx context.Context, did, displayName, avatarURL string) error {
+	_, err := s.db.ExecContext(ctx, `
 		UPDATE users SET
 			display_name = COALESCE(NULLIF(?, ''), display_name),
 			avatar_url = COALESCE(NULLIF(?, ''), avatar_url),
@@ -114,8 +122,8 @@ func (db *DB) UpdateUserProfile(ctx context.Context, did, displayName, avatarURL
 	return err
 }
 
-func (db *DB) ListUsers(ctx context.Context) ([]*User, error) {
-	rows, err := db.QueryContext(ctx, `
+func (s *UserStore) ListUsers(ctx context.Context) ([]*User, error) {
+	rows, err := s.db.QueryContext(ctx, `
 		SELECT did, handle, display_name, avatar_url, indexed_at, updated_at
 		FROM users ORDER BY updated_at DESC
 	`)

@@ -14,8 +14,8 @@ type Follow struct {
 	FollowedAt sql.NullTime
 }
 
-func (db *DB) UpsertFollow(ctx context.Context, userDID, targetDID, uri, cid string) error {
-	_, err := db.ExecContext(ctx, `
+func (s *UserStore) UpsertFollow(ctx context.Context, userDID, targetDID, uri, cid string) error {
+	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO follows (user_did, target_did, uri, cid, followed_at)
 		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(user_did, target_did) DO UPDATE SET
@@ -25,18 +25,18 @@ func (db *DB) UpsertFollow(ctx context.Context, userDID, targetDID, uri, cid str
 	return err
 }
 
-func (db *DB) DeleteFollow(ctx context.Context, userDID, targetDID string) error {
-	_, err := db.ExecContext(ctx, `DELETE FROM follows WHERE user_did = ? AND target_did = ?`, userDID, targetDID)
+func (s *UserStore) DeleteFollow(ctx context.Context, userDID, targetDID string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM follows WHERE user_did = ? AND target_did = ?`, userDID, targetDID)
 	return err
 }
 
-func (db *DB) DeleteFollowByURI(ctx context.Context, uri string) error {
-	_, err := db.ExecContext(ctx, `DELETE FROM follows WHERE uri = ?`, uri)
+func (s *UserStore) DeleteFollowByURI(ctx context.Context, uri string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM follows WHERE uri = ?`, uri)
 	return err
 }
 
-func (db *DB) ListFollows(ctx context.Context, userDID string, limit, offset int) ([]*Follow, error) {
-	rows, err := db.QueryContext(ctx, `
+func (s *UserStore) ListFollows(ctx context.Context, userDID string, limit, offset int) ([]*Follow, error) {
+	rows, err := s.db.QueryContext(ctx, `
 		SELECT user_did, target_did, uri, cid, followed_at
 		FROM follows WHERE user_did = ?
 		ORDER BY followed_at DESC
@@ -58,8 +58,8 @@ func (db *DB) ListFollows(ctx context.Context, userDID string, limit, offset int
 	return follows, rows.Err()
 }
 
-func (db *DB) ListFollowers(ctx context.Context, targetDID string, limit, offset int) ([]*Follow, error) {
-	rows, err := db.QueryContext(ctx, `
+func (s *UserStore) ListFollowers(ctx context.Context, targetDID string, limit, offset int) ([]*Follow, error) {
+	rows, err := s.db.QueryContext(ctx, `
 		SELECT user_did, target_did, uri, cid, followed_at
 		FROM follows WHERE target_did = ?
 		ORDER BY followed_at DESC
@@ -81,9 +81,9 @@ func (db *DB) ListFollowers(ctx context.Context, targetDID string, limit, offset
 	return follows, rows.Err()
 }
 
-func (db *DB) IsFollowing(ctx context.Context, userDID, targetDID string) (bool, error) {
+func (s *UserStore) IsFollowing(ctx context.Context, userDID, targetDID string) (bool, error) {
 	var exists int
-	err := db.QueryRowContext(ctx, `
+	err := s.db.QueryRowContext(ctx, `
 		SELECT 1 FROM follows WHERE user_did = ? AND target_did = ?
 	`, userDID, targetDID).Scan(&exists)
 	if err == sql.ErrNoRows {
@@ -95,8 +95,8 @@ func (db *DB) IsFollowing(ctx context.Context, userDID, targetDID string) (bool,
 	return true, nil
 }
 
-func (db *DB) GetFollowDIDs(ctx context.Context, userDID string) ([]string, error) {
-	rows, err := db.QueryContext(ctx, `
+func (s *UserStore) GetFollowDIDs(ctx context.Context, userDID string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `
 		SELECT target_did FROM follows WHERE user_did = ?
 	`, userDID)
 	if err != nil {
@@ -115,8 +115,8 @@ func (db *DB) GetFollowDIDs(ctx context.Context, userDID string) ([]string, erro
 	return dids, rows.Err()
 }
 
-func (db *DB) SyncFollows(ctx context.Context, userDID string, activeFollows map[string]Follow) error {
-	tx, err := db.BeginTx(ctx, nil)
+func (s *UserStore) SyncFollows(ctx context.Context, userDID string, activeFollows map[string]Follow) error {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}

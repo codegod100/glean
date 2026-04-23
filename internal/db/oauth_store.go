@@ -14,8 +14,8 @@ type OAuthStore struct {
 	db *DB
 }
 
-func NewOAuthStore(db *DB) *OAuthStore {
-	return &OAuthStore{db: db}
+func NewOAuthStore(dbs *Databases) *OAuthStore {
+	return &OAuthStore{db: dbs.db}
 }
 
 func (s *OAuthStore) GetSession(ctx context.Context, did syntax.DID, sessionID string) (*oauth.ClientSessionData, error) {
