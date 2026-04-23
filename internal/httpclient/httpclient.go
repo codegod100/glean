@@ -19,8 +19,9 @@ const (
 func NewTransport() *http.Transport {
 	return &http.Transport{
 		DialContext: (&net.Dialer{
-			Timeout:   10 * time.Second,
-			KeepAlive: 15 * time.Second,
+			Timeout:         10 * time.Second,
+			KeepAlive:       15 * time.Second,
+			FallbackDelay:   300 * time.Millisecond,
 		}).DialContext,
 		MaxIdleConns:        50,
 		IdleConnTimeout:     10 * time.Second,
@@ -31,7 +32,6 @@ func NewTransport() *http.Transport {
 
 func SetDefaultHeaders(req *http.Request) {
 	req.Header.Set("User-Agent", UserAgent)
-	req.Header.Set("Accept-Encoding", "br,gzip")
 	req.Header.Set("Connection", "close")
 }
 

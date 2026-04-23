@@ -267,7 +267,7 @@ func (s *Sync) syncFollows(ctx context.Context, userDID string) error {
 	}
 
 	g, gCtx := errgroup.WithContext(ctx)
-	g.SetLimit(10)
+	g.SetLimit(20)
 
 	dids := make([]string, 0, len(activeFollows))
 	profiles := make([]db.UserData, len(activeFollows))

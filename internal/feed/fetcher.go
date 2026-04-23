@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"pkg.rbrt.fr/glean/internal/httpclient"
 	"pkg.rbrt.fr/glean/internal/metrics"
 )
@@ -171,26 +172,23 @@ func (s *Scheduler) Run(ctx context.Context) error {
 }
 
 func (s *Scheduler) fetchAll(ctx context.Context) {
-	feeds, err := s.store.GetFeedsToFetch(ctx, s.staleInterval, 10_000)
+	feeds, err := s.store.GetFeedsToFetch(ctx, s.staleInterval, 1_000)
 	if err != nil {
 		s.logger.Error("failed to get feeds", "error", err)
 		return
 	}
 
-	sem := make(chan struct{}, 10)
-	var wg sync.WaitGroup
+	s.logger.Info("feeds fetched", "count", len(feeds))
+
+	g, gCtx := errgroup.WithContext(ctx)
+	g.SetLimit(20)
 	for _, f := range feeds {
-		wg.Add(1)
-		sem <- struct{}{}
-		go func(feed *Feed) {
-			defer func() {
-				<-sem
-				wg.Done()
-			}()
-			s.FetchFeed(ctx, feed)
-		}(f)
+		g.Go(func() error {
+			s.FetchFeed(gCtx, f)
+			return nil
+		})
 	}
-	wg.Wait()
+	_ = g.Wait()
 }
 
 func (s *Scheduler) FetchFeed(ctx context.Context, feed *Feed) {

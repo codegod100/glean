@@ -23,14 +23,6 @@ func OpenAll(basePath string) (*Databases, error) {
 	articlesPath := basePath + "_articles"
 	recsPath := basePath + "_recs"
 
-	for _, p := range []string{articlesPath, recsPath} {
-		f, err := sql.Open("sqlite3", p+"?"+DSN)
-		if err != nil {
-			return nil, err
-		}
-		f.Close()
-	}
-
 	seq := atomic.AddInt64(&multiDriverSeq, 1)
 	driverName := fmt.Sprintf("sqlite3_glean_multi_%d", seq)
 
