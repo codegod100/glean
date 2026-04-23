@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/bluesky-social/indigo/atproto/identity"
@@ -118,7 +119,23 @@ type Profile struct {
 	AvatarURL   string
 }
 
+type profileEntry struct {
+	profile Profile
+	fetched time.Time
+}
+
+var profileCache sync.Map
+
+const profileCacheTTL = 4 * time.Hour
+
 func ResolveProfile(ctx context.Context, did string) Profile {
+	if cached, ok := profileCache.Load(did); ok {
+		entry := cached.(*profileEntry)
+		if time.Since(entry.fetched) < profileCacheTTL {
+			return entry.profile
+		}
+	}
+
 	ident, err := ResolveIdentity(ctx, did)
 	if err != nil {
 		return Profile{}
@@ -140,5 +157,6 @@ func ResolveProfile(ctx context.Context, did string) Profile {
 	p.DisplayName = dn
 	p.AvatarURL = avatar
 
+	profileCache.Store(did, &profileEntry{profile: p, fetched: time.Now()})
 	return p
 }
