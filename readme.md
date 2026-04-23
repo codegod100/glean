@@ -39,6 +39,7 @@ Then open `http://localhost:8080`.
 
 | Variable                   | Default                    | What it does                                              |
 | -------------------------- | -------------------------- | --------------------------------------------------------- |
+| `GLEAN_SESSION_KEY`        | _(required)_               | Secret key for signing session cookies (any random string) |
 | `GLEAN_ADDR`               | `:8080`                    | Listen address                                            |
 | `GLEAN_DB`                 | `glean.db`                 | SQLite base path (`_users`, `_articles`, `_recs` suffixes) |
 | `GLEAN_JETSTREAM`          | `wss://jetstream.glean.at` | Jetstream WebSocket URL                                   |

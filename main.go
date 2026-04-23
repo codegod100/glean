@@ -28,7 +28,13 @@ func main() {
 	fetchInterval := flag.Duration("fetch-interval", envDuration("GLEAN_FETCH_INTERVAL", 5*time.Minute), "feed fetch tick interval")
 	collectionDirURL := flag.String("collection-dir", envOr("GLEAN_COLLECTION_DIR_URL", ""), "collection directory URL for startup backfill")
 	backfillConcurrency := flag.Int("backfill-concurrency", envInt("GLEAN_BACKFILL_CONCURRENCY", 5), "max concurrent backfill workers")
+	sessionKey := envOr("GLEAN_SESSION_KEY", "")
 	flag.Parse()
+
+	if sessionKey == "" {
+		fmt.Fprintln(os.Stderr, "GLEAN_SESSION_KEY is required")
+		os.Exit(1)
+	}
 
 	atproto.InitIdentity(envOr("GLEAN_PLC_URL", "https://didplc.glean.at"))
 
@@ -49,7 +55,7 @@ func main() {
 
 	engine := cluster.NewEngine(dbs.DB(), logger)
 
-	srv := server.New(dbs, clientID, callbackURL, *addr, scheduler, engine, logger)
+	srv := server.New(dbs, clientID, callbackURL, *addr, scheduler, engine, logger, []byte(sessionKey))
 
 	cron := cluster.NewCron(engine, *clusterInterval, logger)
 

@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
-	"os"
 
 	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/db"
@@ -94,14 +93,6 @@ func (s *Server) getSessionData(r *http.Request) *sessionData {
 		return nil
 	}
 	return data
-}
-
-func loadSessionKey() []byte {
-	key := os.Getenv("GLEAN_SESSION_KEY")
-	if key == "" {
-		key = "default-dev-key-change-in-production"
-	}
-	return []byte(key)
 }
 
 func encodeSession(key []byte, data sessionData) (string, error) {

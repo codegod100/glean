@@ -986,6 +986,8 @@ glean/
 
 ## 10. Auth Flow
 
+Session cookies are HMAC-signed using `GLEAN_SESSION_KEY` (required, must be set to a random string). The server refuses to start without it.
+
 DID resolution uses a configurable PLC directory (`GLEAN_PLC_URL`, defaults to `https://didplc.glean.at`). The identity directory is initialized once at startup via `InitIdentity()` with a caching layer (250k entries, 24h TTL).
 
 1. User visits `/`, clicks "Sign in with Bluesky" (or any AT Proto PDS)

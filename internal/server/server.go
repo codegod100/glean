@@ -71,7 +71,7 @@ type Server struct {
 	sessionKey  []byte
 }
 
-func New(dbs *db.Databases, clientID, callbackURL, addr string, scheduler *feed.Scheduler, engine *cluster.Engine, logger *slog.Logger) *Server {
+func New(dbs *db.Databases, clientID, callbackURL, addr string, scheduler *feed.Scheduler, engine *cluster.Engine, logger *slog.Logger, sessionKey []byte) *Server {
 	oauthStore := db.NewOAuthStore(dbs)
 
 	var config oauth.ClientConfig
@@ -99,7 +99,7 @@ func New(dbs *db.Databases, clientID, callbackURL, addr string, scheduler *feed.
 		scraper:     scraper.New(logger),
 		clientID:    clientID,
 		callbackURL: callbackURL,
-		sessionKey:  loadSessionKey(),
+		sessionKey:  sessionKey,
 	}
 
 	s.setupMiddleware()
