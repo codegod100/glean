@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -24,26 +25,38 @@ var dnsResolver = &net.Resolver{
 	},
 }
 
-func NewTransport() *http.Transport {
-	dialer := &net.Dialer{
-		Timeout:       5 * time.Second,
-		KeepAlive:     15 * time.Second,
-		FallbackDelay: 300 * time.Millisecond,
-		Resolver:      dnsResolver,
-	}
+var (
+	transportOnce sync.Once
+	sharedTransport *http.Transport
+)
 
-	return &http.Transport{
-		DialContext:         dialer.DialContext,
-		MaxIdleConns:        50,
-		IdleConnTimeout:     10 * time.Second,
-		TLSHandshakeTimeout: 5 * time.Second,
-		ForceAttemptHTTP2:   true,
-	}
+func DefaultTransport() *http.Transport {
+	transportOnce.Do(func() {
+		dialer := &net.Dialer{
+			Timeout:       5 * time.Second,
+			KeepAlive:     15 * time.Second,
+			FallbackDelay: 300 * time.Millisecond,
+			Resolver:      dnsResolver,
+		}
+
+		sharedTransport = &http.Transport{
+			DialContext:         dialer.DialContext,
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: 5 * time.Second,
+			ForceAttemptHTTP2:   true,
+		}
+	})
+	return sharedTransport
+}
+
+func NewTransport() *http.Transport {
+	return DefaultTransport()
 }
 
 func SetDefaultHeaders(req *http.Request) {
 	req.Header.Set("User-Agent", UserAgent)
-	req.Header.Set("Connection", "close")
 }
 
 func ParseRetryAfter(v string) time.Duration {
