@@ -164,32 +164,33 @@ func NewScheduler(store FeedStore, logger *slog.Logger, tickInterval, staleInter
 }
 
 func (s *Scheduler) Run(ctx context.Context) error {
+	s.logger.Info("starting initial feed refresh")
+	s.fetchAll(ctx, 0)
+
 	ticker := time.NewTicker(s.tickInterval)
 	defer ticker.Stop()
-
-	s.fetchAll(ctx)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			s.fetchAll(ctx)
+			s.fetchAll(ctx, s.staleInterval)
 		}
 	}
 }
 
-func (s *Scheduler) fetchAll(ctx context.Context) {
-	feeds, err := s.store.GetFeedsToFetch(ctx, s.staleInterval, 1_000)
+func (s *Scheduler) fetchAll(ctx context.Context, olderThan time.Duration) {
+	feeds, err := s.store.GetFeedsToFetch(ctx, olderThan, 1_000)
 	if err != nil {
 		s.logger.Error("failed to get feeds", "error", err)
 		return
 	}
 
-	s.logger.Info("feeds fetched", "count", len(feeds))
+	s.logger.Info("fetching feeds", "count", len(feeds), "older_than", olderThan)
 
 	g, gCtx := errgroup.WithContext(ctx)
-	g.SetLimit(20)
+	g.SetLimit(50)
 	for _, f := range feeds {
 		g.Go(func() error {
 			s.FetchFeed(gCtx, f)
