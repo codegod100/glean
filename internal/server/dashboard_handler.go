@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/cluster"
 )
@@ -115,10 +117,17 @@ func (s *Server) handleDismissArticleRecommendation(w http.ResponseWriter, r *ht
 }
 
 func resolvePeopleHandles(ctx context.Context, people []*cluster.PersonRecommendation) {
+	g, gCtx := errgroup.WithContext(ctx)
+	g.SetLimit(5)
 	for _, p := range people {
-		prof := atproto.ResolveProfile(ctx, p.DID)
-		p.Handle = prof.Handle
-		p.DisplayName = prof.DisplayName
-		p.AvatarURL = prof.AvatarURL
+		p := p
+		g.Go(func() error {
+			prof := atproto.ResolveProfile(gCtx, p.DID)
+			p.Handle = prof.Handle
+			p.DisplayName = prof.DisplayName
+			p.AvatarURL = prof.AvatarURL
+			return nil
+		})
 	}
+	_ = g.Wait()
 }

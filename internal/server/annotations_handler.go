@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/sync/errgroup"
 
 	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/db"
@@ -169,9 +170,16 @@ func (s *Server) handleDeleteAnnotation(w http.ResponseWriter, r *http.Request) 
 }
 
 func resolveAnnotationHandles(ctx context.Context, annotations []*db.Annotation) {
+	g, gCtx := errgroup.WithContext(ctx)
+	g.SetLimit(5)
 	for _, a := range annotations {
-		if a.AuthorDID != "" {
-			a.AuthorHandle = atproto.ResolveProfile(ctx, a.AuthorDID).Handle
-		}
+		a := a
+		g.Go(func() error {
+			if a.AuthorDID != "" {
+				a.AuthorHandle = atproto.ResolveProfile(gCtx, a.AuthorDID).Handle
+			}
+			return nil
+		})
 	}
+	_ = g.Wait()
 }
