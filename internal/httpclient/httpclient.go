@@ -16,16 +16,27 @@ const (
 	AcceptHTML = "text/html,application/xhtml+xml;q=0.9"
 )
 
+var dnsResolver = &net.Resolver{
+	PreferGo: true,
+	Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+		d := net.Dialer{Timeout: 3 * time.Second}
+		return d.DialContext(ctx, "udp", "1.1.1.1:53")
+	},
+}
+
 func NewTransport() *http.Transport {
+	dialer := &net.Dialer{
+		Timeout:       5 * time.Second,
+		KeepAlive:     15 * time.Second,
+		FallbackDelay: 300 * time.Millisecond,
+		Resolver:      dnsResolver,
+	}
+
 	return &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout:         10 * time.Second,
-			KeepAlive:       15 * time.Second,
-			FallbackDelay:   300 * time.Millisecond,
-		}).DialContext,
+		DialContext:         dialer.DialContext,
 		MaxIdleConns:        50,
 		IdleConnTimeout:     10 * time.Second,
-		TLSHandshakeTimeout: 10 * time.Second,
+		TLSHandshakeTimeout: 5 * time.Second,
 		ForceAttemptHTTP2:   true,
 	}
 }

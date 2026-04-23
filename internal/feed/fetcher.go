@@ -25,10 +25,10 @@ type Fetcher struct {
 func NewFetcher() *Fetcher {
 	return &Fetcher{
 		httpClient: &http.Client{
-			Timeout:   30 * time.Second,
+			Timeout:   10 * time.Second,
 			Transport: httpclient.NewTransport(),
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if len(via) >= 10 {
+				if len(via) >= 5 {
 					return fmt.Errorf("too many redirects")
 				}
 				return nil
