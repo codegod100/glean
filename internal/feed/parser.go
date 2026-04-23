@@ -163,6 +163,7 @@ func parseJSONFeed(data []byte, feedURL string) (*ParseResult, error) {
 		}
 
 		article := Article{
+			FeedURL:   feedURL,
 			GUID:      item.ID,
 			Title:     item.Title,
 			URL:       item.URL,
@@ -229,6 +230,7 @@ func convertRSS(rss *rssFeed, feedURL string) *ParseResult {
 
 	for _, item := range rss.Channel.Items {
 		article := Article{
+			FeedURL:   feedURL,
 			GUID:      item.GUID,
 			Title:     item.Title,
 			URL:       item.Link,
@@ -263,6 +265,7 @@ func convertRDF(rdf *rdfFeed, feedURL string) *ParseResult {
 			guid = item.Link
 		}
 		article := Article{
+			FeedURL:   feedURL,
 			GUID:      guid,
 			Title:     item.Title,
 			URL:       item.Link,
@@ -299,6 +302,7 @@ func convertAtom(atom *atomFeed, feedURL string) *ParseResult {
 
 	for _, entry := range atom.Entry {
 		article := Article{
+			FeedURL:   feedURL,
 			GUID:      entry.ID,
 			Title:     entry.Title,
 			URL:       pickAtomLink(entry.Link),
