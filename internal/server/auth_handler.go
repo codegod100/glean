@@ -20,7 +20,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAuthStart(w http.ResponseWriter, r *http.Request) {
 	handle := strings.TrimPrefix(r.FormValue("handle"), "@")
 	if handle == "" {
-		http.Error(w, "handle required", http.StatusBadRequest)
+		s.renderError(w, r, http.StatusBadRequest, "Missing handle", "Please enter your handle.")
 		return
 	}
 
@@ -30,12 +30,12 @@ func (s *Server) handleAuthStart(w http.ResponseWriter, r *http.Request) {
 
 		did, resolveErr := atproto.ResolveHandle(r.Context(), handle)
 		if resolveErr != nil {
-			http.Error(w, "could not resolve handle", http.StatusInternalServerError)
+			s.renderError(w, r, http.StatusBadGateway, "Handle not found", "Could not resolve that handle. Please check and try again.")
 			return
 		}
 		user, createErr := s.dbs.Users.CreateUser(r.Context(), did)
 		if createErr != nil {
-			http.Error(w, createErr.Error(), http.StatusInternalServerError)
+			s.renderError(w, r, http.StatusInternalServerError, "Sign in failed", "Could not create your account. Please try again.")
 			return
 		}
 		s.setUserSession(w, user)
@@ -56,21 +56,21 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 
 	handle := params.Get("handle")
 	if handle == "" {
-		http.Error(w, "handle required", http.StatusBadRequest)
+		s.renderError(w, r, http.StatusBadRequest, "Missing handle", "Please enter your handle.")
 		return
 	}
 
 	did, err := atproto.ResolveHandle(r.Context(), handle)
 	if err != nil {
 		s.logger.Error("failed to resolve handle", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.renderError(w, r, http.StatusBadGateway, "Handle not found", "Could not resolve that handle. Please check and try again.")
 		return
 	}
 
 	user, err := s.dbs.Users.CreateUser(r.Context(), did)
 	if err != nil {
 		s.logger.Error("failed to create user", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.renderError(w, r, http.StatusInternalServerError, "Sign in failed", "Could not create your account. Please try again.")
 		return
 	}
 
@@ -82,7 +82,7 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	sessData, err := s.oauth.ProcessCallback(r.Context(), r.URL.Query())
 	if err != nil {
 		s.logger.Error("OAuth callback failed", "error", err)
-		http.Error(w, "authentication failed: "+err.Error(), http.StatusInternalServerError)
+		s.renderError(w, r, http.StatusInternalServerError, "Authentication failed", "Something went wrong during sign in. Please try again.")
 		return
 	}
 
@@ -93,7 +93,7 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	user, err := s.dbs.Users.CreateUser(r.Context(), did)
 	if err != nil {
 		s.logger.Error("failed to create user", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.renderError(w, r, http.StatusInternalServerError, "Sign in failed", "Could not create your account. Please try again.")
 		return
 	}
 
@@ -105,7 +105,7 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	encoded, err := encodeSession(sessionData)
 	if err != nil {
 		s.logger.Error("failed to encode session", "error", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		s.renderError(w, r, http.StatusInternalServerError, "Session error", "Could not create your session. Please try again.")
 		return
 	}
 

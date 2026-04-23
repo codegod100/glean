@@ -512,6 +512,19 @@ func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "404.html", nil)
 }
 
+func (s *Server) renderError(w http.ResponseWriter, r *http.Request, code int, title, message string) {
+	if r.Header.Get("HX-Request") == "true" {
+		w.WriteHeader(code)
+		w.Write([]byte(message))
+		return
+	}
+	w.WriteHeader(code)
+	s.render(w, r, "error.html", map[string]any{
+		"Title":   title,
+		"Message": message,
+	})
+}
+
 func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data map[string]any) {
 	if data == nil {
 		data = map[string]any{}

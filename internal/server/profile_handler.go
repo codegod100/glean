@@ -20,7 +20,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		resolved, err := atproto.ResolveHandle(ctx, param)
 		if err != nil {
 			s.logger.Warn("failed to resolve handle", "error", err, "handle", param)
-			http.Error(w, "handle not found", http.StatusNotFound)
+			s.renderError(w, r, http.StatusNotFound, "Handle not found", "Could not find a user with that handle.")
 			return
 		}
 		did = resolved
@@ -29,7 +29,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	profileUser, err := s.dbs.Users.GetUser(ctx, did)
 	if err != nil {
 		s.logger.Warn("failed to get user", "error", err, "did", did)
-		http.Error(w, "user not found", http.StatusNotFound)
+		s.renderError(w, r, http.StatusNotFound, "User not found", "This user doesn't exist in Glean yet.")
 		return
 	}
 
