@@ -525,8 +525,6 @@ func (s *Server) BackfillFromCollectionDir(ctx context.Context, collectionDirURL
 			if err := sync.Run(ctx, did); err != nil {
 				s.logger.Error("backfill sync failed", "error", err, "did", did)
 			}
-
-			s.refreshUserFeeds(ctx, did)
 		}(did)
 	}
 
