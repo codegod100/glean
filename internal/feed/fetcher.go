@@ -181,7 +181,7 @@ func (s *Scheduler) Run(ctx context.Context) error {
 }
 
 func (s *Scheduler) fetchAll(ctx context.Context, olderThan time.Duration) {
-	feeds, err := s.store.GetFeedsToFetch(ctx, olderThan, 1_000)
+	feeds, err := s.store.GetFeedsToFetch(ctx, olderThan, 10_000)
 	if err != nil {
 		s.logger.Error("failed to get feeds", "error", err)
 		return
