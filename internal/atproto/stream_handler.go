@@ -11,6 +11,17 @@ import (
 	"pkg.rbrt.fr/glean/internal/db"
 )
 
+var sentinelErrors = []error{db.ErrDuplicateSubscription, db.ErrDuplicateLike}
+
+func isSentinel(err error) bool {
+	for _, s := range sentinelErrors {
+		if errors.Is(err, s) {
+			return true
+		}
+	}
+	return false
+}
+
 type StreamDBHandler struct {
 	articles *db.DB
 	users    *db.DB
@@ -50,18 +61,9 @@ func (h *StreamDBHandler) handleSubscription(ctx context.Context, event *Event) 
 			return nil
 		}
 
-		existing, err := h.articles.GetSubscription(ctx, event.DID, rec.FeedURL)
-		if err == nil && existing != nil {
-			if !existing.URI.Valid || existing.URI.String == "" {
-				return h.articles.UpdateSubscriptionURI(ctx, event.DID, rec.FeedURL, event.URI, event.CID)
-			}
-			return nil
-		}
-
-		f := &db.Feed{FeedURL: rec.FeedURL, Title: db.NullStr(rec.Title)}
-		_ = h.articles.UpsertFeed(ctx, f)
-		err = h.articles.CreateSubscription(ctx, event.DID, rec.FeedURL, rec.Title, rec.Category, event.URI, event.CID)
-		if errors.Is(err, db.ErrDuplicateSubscription) {
+		_ = h.articles.UpsertFeed(ctx, &db.Feed{FeedURL: rec.FeedURL, Title: db.NullStr(rec.Title)})
+		err := h.articles.CreateSubscription(ctx, event.DID, rec.FeedURL, rec.Title, rec.Category, event.URI, event.CID)
+		if isSentinel(err) {
 			return nil
 		}
 		return err
@@ -91,13 +93,8 @@ func (h *StreamDBHandler) handleLike(ctx context.Context, event *Event) error {
 			return nil
 		}
 
-		exists, err := h.articles.HasLiked(ctx, event.DID, rec.FeedURL, rec.ArticleURL)
-		if err != nil || exists {
-			return nil
-		}
-
 		t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
-		err = h.articles.CreateLike(ctx, &db.Like{
+		err := h.articles.CreateLike(ctx, &db.Like{
 			URI:        event.URI,
 			AuthorDID:  event.DID,
 			FeedURL:    rec.FeedURL,
@@ -105,7 +102,7 @@ func (h *StreamDBHandler) handleLike(ctx context.Context, event *Event) error {
 			CreatedAt:  sql.NullTime{Time: t, Valid: true},
 			CID:        sql.NullString{String: event.CID, Valid: event.CID != ""},
 		})
-		if errors.Is(err, db.ErrDuplicateLike) {
+		if isSentinel(err) {
 			return nil
 		}
 		return err
@@ -213,22 +210,9 @@ func (h *StreamDBHandler) handleSkyreaderSubscription(ctx context.Context, event
 			return nil
 		}
 
-		existing, err := h.articles.GetSubscription(ctx, event.DID, rec.FeedURL)
-		if err == nil && existing != nil {
-			if !existing.URI.Valid || existing.URI.String == "" {
-				return h.articles.UpdateSubscriptionURI(ctx, event.DID, rec.FeedURL, event.URI, event.CID)
-			}
-			return nil
-		}
-
-		f := &db.Feed{
-			FeedURL: rec.FeedURL,
-			Title:   db.NullStr(rec.Title),
-			SiteURL: db.NullStr(rec.SiteURL),
-		}
-		_ = h.articles.UpsertFeed(ctx, f)
-		err = h.articles.CreateSubscription(ctx, event.DID, rec.FeedURL, rec.Title, rec.Category, event.URI, event.CID)
-		if errors.Is(err, db.ErrDuplicateSubscription) {
+		_ = h.articles.UpsertFeed(ctx, &db.Feed{FeedURL: rec.FeedURL, Title: db.NullStr(rec.Title), SiteURL: db.NullStr(rec.SiteURL)})
+		err := h.articles.CreateSubscription(ctx, event.DID, rec.FeedURL, rec.Title, "", event.URI, event.CID)
+		if isSentinel(err) {
 			return nil
 		}
 		return err

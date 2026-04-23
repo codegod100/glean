@@ -114,14 +114,7 @@ func (db *DB) MarkFeedFetchError(ctx context.Context, feedURL, lastError string)
 	return err
 }
 
-func (db *DB) IncrementSubscriberCount(ctx context.Context, feedURL string) error {
-	_, err := db.ExecContext(ctx, `
-		UPDATE feeds SET subscriber_count = subscriber_count + 1 WHERE feed_url = ?
-	`, feedURL)
-	return err
-}
-
-func (db *DB) DecrementSubscriberCount(ctx context.Context, feedURL string) error {
+func (db *DB) decrementSubscriberCount(ctx context.Context, feedURL string) error {
 	_, err := db.ExecContext(ctx, `
 		UPDATE feeds SET subscriber_count = MAX(subscriber_count - 1, 0) WHERE feed_url = ?
 	`, feedURL)
@@ -132,21 +125,21 @@ func (db *DB) CreateSubscription(ctx context.Context, userDID, feedURL, title, c
 	existing, err := db.GetSubscription(ctx, userDID, feedURL)
 	if err == nil && existing != nil {
 		if !existing.URI.Valid || existing.URI.String == "" {
-			return db.UpdateSubscriptionURI(ctx, userDID, feedURL, uri, cid)
+			return db.updateSubscriptionURI(ctx, userDID, feedURL, uri, cid)
 		}
 		return ErrDuplicateSubscription
 	}
 	return db.BatchReconcileSubscriptions(ctx, userDID, []SubData{{FeedURL: feedURL, Title: title, Category: category, URI: uri, CID: cid}})
 }
 
-func (db *DB) UpdateSubscriptionURI(ctx context.Context, userDID, feedURL, uri, cid string) error {
+func (db *DB) updateSubscriptionURI(ctx context.Context, userDID, feedURL, uri, cid string) error {
 	_, err := db.ExecContext(ctx, `
 		UPDATE subscriptions SET uri = ?, cid = ? WHERE user_did = ? AND feed_url = ?
 	`, uri, cid, userDID, feedURL)
 	return err
 }
 
-func uriOrNil(category, v string) any {
+func uriOrNil(v string) any {
 	if v == "" {
 		return nil
 	}
@@ -167,7 +160,7 @@ func (db *DB) DeleteSubscription(ctx context.Context, userDID, feedURL string) e
 	if err != nil {
 		return err
 	}
-	return db.DecrementSubscriberCount(ctx, feedURL)
+	return db.decrementSubscriberCount(ctx, feedURL)
 }
 
 func (db *DB) DeleteAllSubscriptions(ctx context.Context, userDID string) error {
@@ -466,7 +459,7 @@ func (db *DB) BatchReconcileSubscriptions(ctx context.Context, userDID string, s
 			}
 			continue
 		}
-		result, err := insertStmt.ExecContext(ctx, userDID, sub.FeedURL, nilIfEmpty(sub.Title), sub.Category, uriOrNil(sub.Category, sub.URI), uriOrNil(sub.Category, sub.CID))
+		result, err := insertStmt.ExecContext(ctx, userDID, sub.FeedURL, nilIfEmpty(sub.Title), sub.Category, uriOrNil(sub.URI), uriOrNil(sub.CID))
 		if err != nil {
 			return err
 		}

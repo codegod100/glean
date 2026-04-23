@@ -21,7 +21,7 @@ func (db *DB) UpsertFollow(ctx context.Context, userDID, targetDID, uri, cid str
 		ON CONFLICT(user_did, target_did) DO UPDATE SET
 			uri = excluded.uri,
 			cid = excluded.cid
-	`, userDID, targetDID, uriOrNil("", uri), uriOrNil("", cid))
+	`, userDID, targetDID, uriOrNil(uri), uriOrNil(cid))
 	return err
 }
 

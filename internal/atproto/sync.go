@@ -10,9 +10,11 @@ package atproto
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
-	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"pkg.rbrt.fr/glean/internal/db"
 )
@@ -96,7 +98,9 @@ func (s *Sync) batchReconcileSubscriptions(ctx context.Context, userDID string, 
 	}
 
 	if len(feeds) > 0 {
-		_ = s.articles.BatchUpsertFeeds(ctx, feeds)
+		if err := s.articles.BatchUpsertFeeds(ctx, feeds); err != nil {
+			return fmt.Errorf("upsert feeds: %w", err)
+		}
 	}
 	return s.articles.BatchReconcileSubscriptions(ctx, userDID, subs)
 }
@@ -123,8 +127,11 @@ func (s *Sync) batchReconcileSkyreaderSubscriptions(ctx context.Context, userDID
 	}
 
 	if len(feeds) > 0 {
-		_ = s.articles.BatchUpsertFeeds(ctx, feeds)
+		if err := s.articles.BatchUpsertFeeds(ctx, feeds); err != nil {
+			return fmt.Errorf("failed to upsert feeds: %w", err)
+		}
 	}
+
 	return s.articles.BatchReconcileSubscriptions(ctx, userDID, subs)
 }
 
@@ -259,42 +266,30 @@ func (s *Sync) syncFollows(ctx context.Context, userDID string) error {
 		return nil
 	}
 
-	type profileResult struct {
-		did         string
-		handle      string
-		displayName string
-		avatarURL   string
+	g, gCtx := errgroup.WithContext(ctx)
+	g.SetLimit(10)
+
+	dids := make([]string, 0, len(activeFollows))
+	profiles := make([]db.UserData, len(activeFollows))
+	for did := range activeFollows {
+		dids = append(dids, did)
 	}
 
-	var wg sync.WaitGroup
-	sem := make(chan struct{}, 10)
-	results := make([]profileResult, 0, len(activeFollows))
-	var mu sync.Mutex
-
-	for targetDID := range activeFollows {
-		sem <- struct{}{}
-		wg.Add(1)
-		go func(did string) {
-			defer func() { <-sem }()
-			defer wg.Done()
-			var handle, displayName, avatarURL string
-			if h, dn, avatar, err := FetchProfile(ctx, did); err == nil {
-				handle = h
-				displayName = dn
-				avatarURL = avatar
+	for i, did := range dids {
+		g.Go(func() error {
+			if h, dn, avatar, err := FetchProfile(gCtx, did); err == nil {
+				profiles[i] = db.UserData{DID: did, Handle: h, DisplayName: dn, AvatarURL: avatar}
+			} else {
+				profiles[i] = db.UserData{DID: did}
 			}
-			mu.Lock()
-			results = append(results, profileResult{did, handle, displayName, avatarURL})
-			mu.Unlock()
-		}(targetDID)
+			return nil
+		})
 	}
-	wg.Wait()
-
-	var users []db.UserData
-	for _, r := range results {
-		users = append(users, db.UserData{DID: r.did, Handle: r.handle, DisplayName: r.displayName, AvatarURL: r.avatarURL})
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("fetch profiles: %w", err)
 	}
-	_ = s.users.BatchCreateUsers(ctx, users)
-
+	if err := s.users.BatchCreateUsers(ctx, profiles); err != nil {
+		return fmt.Errorf("batch create users: %w", err)
+	}
 	return s.users.SyncFollows(ctx, userDID, activeFollows)
 }
