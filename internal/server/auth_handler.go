@@ -33,7 +33,7 @@ func (s *Server) handleAuthStart(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "could not resolve handle", http.StatusInternalServerError)
 			return
 		}
-		user, createErr := s.db.CreateUser(r.Context(), did, handle, "", "")
+		user, createErr := s.dbs.Users.CreateUser(r.Context(), did, handle, "", "")
 		if createErr != nil {
 			http.Error(w, createErr.Error(), http.StatusInternalServerError)
 			return
@@ -67,7 +67,7 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.db.CreateUser(r.Context(), did, handle, "", "")
+	user, err := s.dbs.Users.CreateUser(r.Context(), did, handle, "", "")
 	if err != nil {
 		s.logger.Error("failed to create user", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -102,7 +102,7 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	user, err := s.db.CreateUser(r.Context(), did, handle, displayName, avatarURL)
+	user, err := s.dbs.Users.CreateUser(r.Context(), did, handle, displayName, avatarURL)
 	if err != nil {
 		s.logger.Error("failed to create user", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)

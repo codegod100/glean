@@ -32,6 +32,7 @@ func writeLikeButton(w http.ResponseWriter, articleID int64, liked bool, count i
 
 func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
+	ctx := r.Context()
 	feedURL := r.URL.Query().Get("feed")
 	status := r.URL.Query().Get("status")
 	searchQuery := r.URL.Query().Get("q")
@@ -39,7 +40,10 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 	page := pageFromRequest(r, 50)
 
 	if status == "" && searchQuery == "" {
-		unreadCount, _ := s.db.GetUnreadCount(r.Context(), user.DID, feedURL)
+		unreadCount, err := s.dbs.Articles.GetUnreadCount(ctx, user.DID, feedURL)
+		if err != nil {
+			s.logger.Warn("failed to get unread count", "error", err, "did", user.DID)
+		}
 		if unreadCount > 0 {
 			status = "unread"
 		} else {
@@ -51,15 +55,15 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	if searchQuery != "" {
-		articles, err = s.db.SearchArticles(r.Context(), user.DID, searchQuery, page.Limit()+1, page.Offset())
+		articles, err = s.dbs.Articles.SearchArticles(ctx, user.DID, searchQuery, page.Limit()+1, page.Offset())
 	} else {
 		switch status {
 		case "unread":
-			articles, err = s.db.ListUnreadArticles(r.Context(), user.DID, feedURL, page.Limit()+1, page.Offset())
+			articles, err = s.dbs.Articles.ListUnreadArticles(ctx, user.DID, feedURL, page.Limit()+1, page.Offset())
 		case "read":
-			articles, err = s.db.ListReadArticles(r.Context(), user.DID, feedURL, page.Limit()+1, page.Offset())
+			articles, err = s.dbs.Articles.ListReadArticles(ctx, user.DID, feedURL, page.Limit()+1, page.Offset())
 		default:
-			articles, err = s.db.ListArticles(r.Context(), user.DID, feedURL, page.Limit()+1, page.Offset())
+			articles, err = s.dbs.Articles.ListArticles(ctx, user.DID, feedURL, page.Limit()+1, page.Offset())
 		}
 	}
 
@@ -88,10 +92,12 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if feedURL != "" {
-		if feed, err := s.db.GetFeed(r.Context(), feedURL); err == nil {
+		if feed, err := s.dbs.Articles.GetFeed(ctx, feedURL); err == nil {
 			data["Feed"] = feed
+		} else {
+			s.logger.Warn("failed to get feed", "error", err, "feed", feedURL)
 		}
-		if _, err := s.db.GetSubscription(r.Context(), user.DID, feedURL); err == nil {
+		if _, err := s.dbs.Articles.GetSubscription(ctx, user.DID, feedURL); err == nil {
 			data["IsSubscribed"] = true
 		} else {
 			data["IsSubscribed"] = false
@@ -108,6 +114,7 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleNewArticleCount(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
+	ctx := r.Context()
 	sinceUnix, err := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -115,8 +122,9 @@ func (s *Server) handleNewArticleCount(w http.ResponseWriter, r *http.Request) {
 	}
 	since := time.Unix(sinceUnix, 0)
 
-	count, err := s.db.CountNewArticles(r.Context(), user.DID, since)
+	count, err := s.dbs.Articles.CountNewArticles(ctx, user.DID, since)
 	if err != nil {
+		s.logger.Error("failed to count new articles", "error", err, "did", user.DID)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -138,29 +146,53 @@ func pluralS(n int) string {
 
 func (s *Server) handleArticleDetail(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
+	ctx := r.Context()
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
-	article, err := s.db.GetArticle(r.Context(), id)
+	article, err := s.dbs.Articles.GetArticle(ctx, id)
 	if err != nil {
 		http.Error(w, "article not found", http.StatusNotFound)
 		return
 	}
 
-	_ = s.db.MarkArticleRead(r.Context(), user.DID, id)
+	if err := s.dbs.Articles.MarkArticleRead(ctx, user.DID, id); err != nil {
+		s.logger.Warn("failed to mark article read", "error", err, "id", id)
+	}
 
-	readState, _ := s.db.GetReadState(r.Context(), user.DID, id)
+	readState, err := s.dbs.Articles.GetReadState(ctx, user.DID, id)
+	if err != nil {
+		s.logger.Warn("failed to get read state", "error", err, "id", id)
+	}
 
-	likeCount, _ := s.db.GetLikeCount(r.Context(), article.FeedURL, article.URL.String)
+	var likeCount int
+	if article.URL.Valid {
+		likeCount, err = s.dbs.Articles.GetLikeCount(ctx, article.FeedURL, article.URL.String)
+		if err != nil {
+			s.logger.Warn("failed to get like count", "error", err, "feed", article.FeedURL)
+		}
+	}
+
 	liked := false
 	if article.URL.Valid {
-		liked, _ = s.db.HasLiked(r.Context(), user.DID, article.FeedURL, article.URL.String)
+		liked, err = s.dbs.Articles.HasLiked(ctx, user.DID, article.FeedURL, article.URL.String)
+		if err != nil {
+			s.logger.Warn("failed to check if liked", "error", err)
+		}
 	}
-	annotations, _ := s.db.ListAnnotations(r.Context(), "", article.URL.String, "", 20, 0)
-	feed, _ := s.db.GetFeed(r.Context(), article.FeedURL)
+
+	annotations, err := s.dbs.Articles.ListAnnotations(ctx, "", article.URL.String, "", 20, 0)
+	if err != nil {
+		s.logger.Warn("failed to list annotations", "error", err)
+	}
+
+	feed, err := s.dbs.Articles.GetFeed(ctx, article.FeedURL)
+	if err != nil {
+		s.logger.Warn("failed to get feed", "error", err, "feed", article.FeedURL)
+	}
 
 	s.render(w, r, "article_detail.html", map[string]any{
 		"User":           user,
@@ -181,7 +213,7 @@ func (s *Server) handleMarkRead(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	if err := s.db.MarkArticleRead(r.Context(), user.DID, id); err != nil {
+	if err := s.dbs.Articles.MarkArticleRead(r.Context(), user.DID, id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -196,7 +228,7 @@ func (s *Server) handleMarkUnread(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	if err := s.db.MarkArticleUnread(r.Context(), user.DID, id); err != nil {
+	if err := s.dbs.Articles.MarkArticleUnread(r.Context(), user.DID, id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -206,26 +238,27 @@ func (s *Server) handleMarkUnread(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
+	ctx := r.Context()
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
-	article, err := s.db.GetArticle(r.Context(), id)
+	article, err := s.dbs.Articles.GetArticle(ctx, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
-	liked, err := s.db.HasLiked(r.Context(), user.DID, article.FeedURL, article.URL.String)
+	liked, err := s.dbs.Articles.HasLiked(ctx, user.DID, article.FeedURL, article.URL.String)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if liked {
-		existingLike, getErr := s.db.GetLike(r.Context(), user.DID, article.FeedURL, article.URL.String)
+		existingLike, getErr := s.dbs.Articles.GetLike(ctx, user.DID, article.FeedURL, article.URL.String)
 		if getErr != nil {
 			http.Error(w, getErr.Error(), http.StatusInternalServerError)
 			return
@@ -234,7 +267,7 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 			if client := s.pdsClientForUser(r); client != nil {
 				parsed, ok := atproto.ParseRecordURI(existingLike.URI)
 				if ok {
-					if delErr := client.DeleteRecord(r.Context(), user.DID, parsed.Collection, parsed.RKey); delErr != nil {
+					if delErr := client.DeleteRecord(ctx, user.DID, parsed.Collection, parsed.RKey); delErr != nil {
 						s.logger.Error("failed to delete like from PDS", "error", delErr)
 						http.Error(w, "failed to delete like from PDS: "+delErr.Error(), http.StatusBadGateway)
 						return
@@ -242,7 +275,7 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		if err := s.db.DeleteLikeByUserArticle(r.Context(), user.DID, article.FeedURL, article.URL.String); err != nil {
+		if err := s.dbs.Articles.DeleteLikeByUserArticle(ctx, user.DID, article.FeedURL, article.URL.String); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -254,7 +287,7 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if client := s.pdsClientForUser(r); client != nil {
-			uri, _, err := client.CreateRecord(r.Context(), user.DID, atproto.CollectionLike, likeRecord)
+			uri, _, err := client.CreateRecord(ctx, user.DID, atproto.CollectionLike, likeRecord)
 			if err != nil {
 				s.logger.Error("failed to write like to PDS", "error", err)
 				http.Error(w, "failed to write like to PDS: "+err.Error(), http.StatusBadGateway)
@@ -268,13 +301,15 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 				ArticleURL: article.URL.String,
 				CreatedAt:  sql.NullTime{Time: time.Now(), Valid: true},
 			}
-			if err := s.db.CreateLike(r.Context(), like); err != nil && !errors.Is(err, db.ErrDuplicateLike) {
+			if err := s.dbs.Articles.CreateLike(ctx, like); err != nil && !errors.Is(err, db.ErrDuplicateLike) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			_ = s.engine.MarkImpressionActed(r.Context(), user.DID, "article", article.URL.String)
-			sig := s.engine.GetDominantSignal(s.engine.GetWeights(r.Context(), user.DID))
-			s.engine.RewardSignal(r.Context(), user.DID, sig)
+			if err := s.engine.MarkImpressionActed(ctx, user.DID, "article", article.URL.String); err != nil {
+				s.logger.Warn("failed to mark impression acted", "error", err)
+			}
+			sig := s.engine.GetDominantSignal(s.engine.GetWeights(ctx, user.DID))
+			s.engine.RewardSignal(ctx, user.DID, sig)
 		} else {
 			like := &db.Like{
 				URI:        fmt.Sprintf("glean:like:%d", time.Now().UnixNano()),
@@ -283,29 +318,38 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 				ArticleURL: article.URL.String,
 				CreatedAt:  sql.NullTime{Time: time.Now(), Valid: true},
 			}
-			if err := s.db.CreateLike(r.Context(), like); err != nil && !errors.Is(err, db.ErrDuplicateLike) {
+			if err := s.dbs.Articles.CreateLike(ctx, like); err != nil && !errors.Is(err, db.ErrDuplicateLike) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			_ = s.engine.MarkImpressionActed(r.Context(), user.DID, "article", article.URL.String)
-			sig := s.engine.GetDominantSignal(s.engine.GetWeights(r.Context(), user.DID))
-			s.engine.RewardSignal(r.Context(), user.DID, sig)
+			if err := s.engine.MarkImpressionActed(ctx, user.DID, "article", article.URL.String); err != nil {
+				s.logger.Warn("failed to mark impression acted", "error", err)
+			}
+			sig := s.engine.GetDominantSignal(s.engine.GetWeights(ctx, user.DID))
+			s.engine.RewardSignal(ctx, user.DID, sig)
 		}
 	}
 
-	likeCount, _ := s.db.GetLikeCount(r.Context(), article.FeedURL, article.URL.String)
+	likeCount := 0
+	if article.URL.Valid {
+		likeCount, err = s.dbs.Articles.GetLikeCount(ctx, article.FeedURL, article.URL.String)
+		if err != nil {
+			s.logger.Warn("failed to get like count", "error", err)
+		}
+	}
 	bordered := r.URL.Query().Get("bordered") == "true"
 	writeLikeButton(w, id, !liked, likeCount, bordered)
 }
 
 func (s *Server) handleMarkAllRead(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
+	ctx := r.Context()
 	feedURL := r.FormValue("feed")
 	var err error
 	if feedURL != "" {
-		err = s.db.MarkAllRead(r.Context(), user.DID, feedURL)
+		err = s.dbs.Articles.MarkAllRead(ctx, user.DID, feedURL)
 	} else {
-		err = s.db.MarkAllSubscribedRead(r.Context(), user.DID)
+		err = s.dbs.Articles.MarkAllSubscribedRead(ctx, user.DID)
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -316,13 +360,14 @@ func (s *Server) handleMarkAllRead(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleFetchContent(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
-	article, err := s.db.GetArticle(r.Context(), id)
+	article, err := s.dbs.Articles.GetArticle(ctx, id)
 	if err != nil {
 		http.Error(w, "article not found", http.StatusNotFound)
 		return
@@ -334,7 +379,7 @@ func (s *Server) handleFetchContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	content, err := s.scraper.Scrape(r.Context(), article.URL.String)
+	content, err := s.scraper.Scrape(ctx, article.URL.String)
 	if err != nil {
 		s.logger.Error("failed to scrape article", "error", err, "url", article.URL.String)
 		w.Header().Set("Content-Type", "text/html")
@@ -350,7 +395,7 @@ func (s *Server) handleFetchContent(w http.ResponseWriter, r *http.Request) {
 
 	cleaned := sanitize.HTML(content)
 
-	if err := s.db.UpdateArticleFullContent(r.Context(), id, cleaned); err != nil {
+	if err := s.dbs.Articles.UpdateArticleFullContent(ctx, id, cleaned); err != nil {
 		s.logger.Error("failed to save full content", "error", err, "id", id)
 	}
 

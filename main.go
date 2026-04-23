@@ -34,26 +34,26 @@ func main() {
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-	database, err := db.Open(*dbPath)
+	dbs, err := db.OpenAll(*dbPath)
 	if err != nil {
-		logger.Error("failed to open database", "error", err)
+		logger.Error("failed to open databases", "error", err)
 		os.Exit(1)
 	}
-	defer database.Close()
+	defer dbs.Close()
 
 	clientID := envOr("GLEAN_OAUTH_CLIENT_ID", "")
 	callbackURL := envOr("GLEAN_OAUTH_REDIRECT_URL", "")
 
-	storeAdapter := db.NewFeedStoreAdapter(database)
+	storeAdapter := db.NewFeedStoreAdapter(dbs.Articles)
 	scheduler := feed.NewScheduler(storeAdapter, logger, *fetchInterval, 30*time.Minute)
 
-	engine := cluster.NewEngine(database.DB, logger)
+	engine := cluster.NewEngine(dbs.Users.DB, logger)
 
-	srv := server.New(database, clientID, callbackURL, *addr, scheduler, engine, logger)
+	srv := server.New(dbs, clientID, callbackURL, *addr, scheduler, engine, logger)
 
 	cron := cluster.NewCron(engine, *clusterInterval, logger)
 
-	handler := atproto.NewStreamDBHandler(database, logger)
+	handler := atproto.NewStreamDBHandler(dbs.Articles, dbs.Users, logger)
 	jetstream := atproto.NewJetstreamConsumer(*jetstreamURL, handler.Handle, logger)
 
 	ctx, cancel := context.WithCancel(context.Background())

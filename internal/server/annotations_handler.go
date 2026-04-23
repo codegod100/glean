@@ -16,22 +16,26 @@ import (
 
 func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
+	ctx := r.Context()
 
 	limit := 20
 
-	likedPageNum, _ := strconv.Atoi(r.URL.Query().Get("liked_page"))
-	if likedPageNum < 1 {
+	likedPageNum, err := strconv.Atoi(r.URL.Query().Get("liked_page"))
+	if err != nil || likedPageNum < 1 {
 		likedPageNum = 1
 	}
-	annotPageNum, _ := strconv.Atoi(r.URL.Query().Get("annot_page"))
-	if annotPageNum < 1 {
+	annotPageNum, err := strconv.Atoi(r.URL.Query().Get("annot_page"))
+	if err != nil || annotPageNum < 1 {
 		annotPageNum = 1
 	}
 
 	likedPage := Pagination{Page: likedPageNum, PageSize: limit}
 	annotPage := Pagination{Page: annotPageNum, PageSize: limit}
 
-	articles, _ := s.db.ListLikedArticles(r.Context(), user.DID, limit+1, likedPage.Offset())
+	articles, err := s.dbs.Articles.ListLikedArticles(ctx, user.DID, limit+1, likedPage.Offset())
+	if err != nil {
+		s.logger.Warn("failed to list liked articles", "error", err, "did", user.DID)
+	}
 	likedHasMore := len(articles) > limit
 	if likedHasMore {
 		articles = articles[:limit]
@@ -42,7 +46,10 @@ func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 		likedPage.NextPage = likedPage.Page + 1
 	}
 
-	annotations, _ := s.db.ListAnnotations(r.Context(), "", "", user.DID, limit+1, annotPage.Offset())
+	annotations, err := s.dbs.Articles.ListAnnotations(ctx, "", "", user.DID, limit+1, annotPage.Offset())
+	if err != nil {
+		s.logger.Warn("failed to list annotations", "error", err, "did", user.DID)
+	}
 	annotHasMore := len(annotations) > limit
 	if annotHasMore {
 		annotations = annotations[:limit]
@@ -65,6 +72,7 @@ func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
+	ctx := r.Context()
 	a := &db.Annotation{
 		AuthorDID:  user.DID,
 		FeedURL:    r.FormValue("feed_url"),
@@ -95,7 +103,7 @@ func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) 
 			Tags:       tags,
 			Rating:     int(a.Rating.Int64),
 		}
-		uri, cid, err := client.CreateRecord(r.Context(), user.DID, atproto.CollectionAnnotation, record)
+		uri, cid, err := client.CreateRecord(ctx, user.DID, atproto.CollectionAnnotation, record)
 		if err != nil {
 			s.logger.Error("failed to write annotation to PDS", "error", err)
 			http.Error(w, "failed to write annotation to PDS: "+err.Error(), http.StatusBadGateway)
@@ -107,7 +115,7 @@ func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) 
 		a.URI = fmt.Sprintf("glean:annotation:%d", time.Now().UnixNano())
 	}
 
-	if err := s.db.CreateAnnotation(r.Context(), a); err != nil {
+	if err := s.dbs.Articles.CreateAnnotation(ctx, a); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -121,13 +129,14 @@ func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) handleDeleteAnnotation(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
+	ctx := r.Context()
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
 
-	annotation, err := s.db.GetAnnotation(r.Context(), id)
+	annotation, err := s.dbs.Articles.GetAnnotation(ctx, id)
 	if err != nil {
 		http.Error(w, "annotation not found", http.StatusNotFound)
 		return
@@ -142,14 +151,14 @@ func (s *Server) handleDeleteAnnotation(w http.ResponseWriter, r *http.Request) 
 		if client := s.pdsClientForUser(r); client != nil {
 			parsed, ok := atproto.ParseRecordURI(annotation.URI)
 			if ok {
-				if delErr := client.DeleteRecord(r.Context(), user.DID, parsed.Collection, parsed.RKey); delErr != nil {
+				if delErr := client.DeleteRecord(ctx, user.DID, parsed.Collection, parsed.RKey); delErr != nil {
 					s.logger.Error("failed to delete annotation from PDS", "error", delErr)
 				}
 			}
 		}
 	}
 
-	if err := s.db.DeleteAnnotation(r.Context(), annotation.URI); err != nil {
+	if err := s.dbs.Articles.DeleteAnnotation(ctx, annotation.URI); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

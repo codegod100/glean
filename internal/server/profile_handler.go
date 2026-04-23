@@ -10,18 +10,20 @@ import (
 )
 
 func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	param := chi.URLParam(r, "did")
 
 	var did string
 	if strings.HasPrefix(param, "did:") {
 		did = param
 	} else {
-		profileUser, err := s.db.GetUserByHandle(r.Context(), param)
+		profileUser, err := s.dbs.Articles.GetUserByHandle(ctx, param)
 		if err == nil {
 			did = profileUser.DID
 		} else {
-			resolved, err := atproto.ResolveHandle(r.Context(), param)
+			resolved, err := atproto.ResolveHandle(ctx, param)
 			if err != nil {
+				s.logger.Warn("failed to resolve handle", "error", err, "handle", param)
 				http.Error(w, "handle not found", http.StatusNotFound)
 				return
 			}
@@ -29,24 +31,38 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	profileUser, err := s.db.GetUser(r.Context(), did)
+	profileUser, err := s.dbs.Articles.GetUser(ctx, did)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		s.logger.Warn("failed to get user", "error", err, "did", did)
+		http.Error(w, "user not found", http.StatusNotFound)
 		return
 	}
 
 	if !profileUser.AvatarURL.Valid || profileUser.AvatarURL.String == "" {
-		_, displayName, avatarURL, err := atproto.FetchProfile(r.Context(), did)
+		_, displayName, avatarURL, err := atproto.FetchProfile(ctx, did)
 		if err == nil && avatarURL != "" {
-			_ = s.db.UpdateUserProfile(r.Context(), did, displayName, avatarURL)
+			if err := s.dbs.Articles.UpdateUserProfile(ctx, did, displayName, avatarURL); err != nil {
+				s.logger.Warn("failed to update user profile", "error", err, "did", did)
+			}
 			profileUser.DisplayName = nullString(displayName)
 			profileUser.AvatarURL = nullString(avatarURL)
 		}
 	}
 
-	subs, _ := s.db.ListSubscriptions(r.Context(), did, "", 50, 0)
-	annotations, _ := s.db.ListAnnotations(r.Context(), "", "", did, 50, 0)
-	subCount, _ := s.db.GetSubscriptionCount(r.Context(), did)
+	subs, err := s.dbs.Articles.ListSubscriptions(ctx, did, "", 50, 0)
+	if err != nil {
+		s.logger.Warn("failed to list subscriptions", "error", err, "did", did)
+	}
+
+	annotations, err := s.dbs.Articles.ListAnnotations(ctx, "", "", did, 50, 0)
+	if err != nil {
+		s.logger.Warn("failed to list annotations", "error", err, "did", did)
+	}
+
+	subCount, err := s.dbs.Articles.GetSubscriptionCount(ctx, did)
+	if err != nil {
+		s.logger.Warn("failed to get subscription count", "error", err, "did", did)
+	}
 
 	user := currentUser(r)
 

@@ -56,7 +56,7 @@ func splitString(s, sep string) []string {
 }
 
 type Server struct {
-	db          *db.DB
+	dbs         *db.Databases
 	router      *chi.Mux
 	templates   *template.Template
 	logger      *slog.Logger
@@ -70,8 +70,8 @@ type Server struct {
 	callbackURL string
 }
 
-func New(database *db.DB, clientID, callbackURL, addr string, scheduler *feed.Scheduler, engine *cluster.Engine, logger *slog.Logger) *Server {
-	oauthStore := db.NewOAuthStore(database)
+func New(dbs *db.Databases, clientID, callbackURL, addr string, scheduler *feed.Scheduler, engine *cluster.Engine, logger *slog.Logger) *Server {
+	oauthStore := db.NewOAuthStore(dbs.Users)
 
 	var config oauth.ClientConfig
 	if clientID == "" {
@@ -87,7 +87,7 @@ func New(database *db.DB, clientID, callbackURL, addr string, scheduler *feed.Sc
 	oauthClient := oauth.NewClientApp(&config, oauthStore)
 
 	s := &Server{
-		db:          database,
+		dbs:         dbs,
 		router:      chi.NewRouter(),
 		logger:      logger,
 		oauth:       oauthClient,
@@ -200,7 +200,7 @@ func (s *Server) setupRoutes() {
 	s.router.Post("/auth/logout", s.handleAuthLogout)
 	s.router.Get("/oauth/client-metadata", s.handleOAuthClientMetadata)
 
-	xrpc := atproto.NewXRPCHandler(s.db.DB, s.engine)
+	xrpc := atproto.NewXRPCHandler(s.dbs.Articles.DB, s.engine)
 	s.router.Get("/xrpc/at.glean.listSubscriptions", xrpc.ListSubscriptions)
 	s.router.Get("/xrpc/at.glean.listAnnotations", xrpc.ListAnnotations)
 	s.router.Get("/xrpc/at.glean.listLikes", xrpc.ListLikes)
@@ -382,11 +382,11 @@ func (s *Server) syncUserInBackground(userDID string, client *atproto.Client) {
 		defer cancel()
 
 		isNewUser := false
-		if count, err := s.db.GetSubscriptionCount(ctx, userDID); err == nil && count == 0 {
+		if count, err := s.dbs.Articles.GetSubscriptionCount(ctx, userDID); err == nil && count == 0 {
 			isNewUser = true
 		}
 
-		sync := atproto.NewSync(s.db, client, s.logger)
+		sync := atproto.NewSync(s.dbs.Articles, s.dbs.Users, client, s.logger)
 		if err := sync.Run(ctx, userDID); err != nil {
 			s.logger.Error("background sync failed", "error", err, "did", userDID)
 		}
@@ -398,7 +398,7 @@ func (s *Server) syncUserInBackground(userDID string, client *atproto.Client) {
 }
 
 func (s *Server) refreshUserFeeds(ctx context.Context, userDID string) {
-	subs, err := s.db.ListSubscriptions(ctx, userDID, "", 1000, 0)
+	subs, err := s.dbs.Articles.ListSubscriptions(ctx, userDID, "", 1000, 0)
 	if err != nil {
 		s.logger.Error("failed to list subscriptions for initial fetch", "error", err, "did", userDID)
 		return
@@ -415,7 +415,7 @@ func (s *Server) refreshUserFeeds(ctx context.Context, userDID string) {
 		}
 		seen[sub.FeedURL] = true
 
-		f, err := s.db.GetFeed(ctx, sub.FeedURL)
+		f, err := s.dbs.Articles.GetFeed(ctx, sub.FeedURL)
 		if err != nil {
 			continue
 		}
@@ -458,7 +458,7 @@ func (s *Server) BackfillFromCollectionDir(ctx context.Context, collectionDirURL
 		return
 	}
 
-	existing, err := s.db.ListUserDIDs(ctx)
+	existing, err := s.dbs.Users.ListUserDIDs(ctx)
 	if err != nil {
 		s.logger.Error("failed to list existing users", "error", err)
 		return
@@ -499,7 +499,7 @@ func (s *Server) BackfillFromCollectionDir(ctx context.Context, collectionDirURL
 				avatarURL = avatar
 			}
 
-			if _, err := s.db.CreateUser(ctx, did, handle, displayName, avatarURL); err != nil {
+			if _, err := s.dbs.Users.CreateUser(ctx, did, handle, displayName, avatarURL); err != nil {
 				s.logger.Error("failed to create user during backfill", "error", err, "did", did)
 				return
 			}
@@ -511,7 +511,7 @@ func (s *Server) BackfillFromCollectionDir(ctx context.Context, collectionDirURL
 			}
 
 			client := atproto.NewUnauthenticatedClient(pdsURL)
-			sync := atproto.NewSync(s.db, client, s.logger)
+			sync := atproto.NewSync(s.dbs.Articles, s.dbs.Users, client, s.logger)
 			if err := sync.Run(ctx, did); err != nil {
 				s.logger.Error("backfill sync failed", "error", err, "did", did)
 			}
@@ -525,7 +525,7 @@ func (s *Server) BackfillFromCollectionDir(ctx context.Context, collectionDirURL
 }
 
 func (s *Server) runSyncAll(ctx context.Context) {
-	users, err := s.db.ListUsers(ctx)
+	users, err := s.dbs.Users.ListUsers(ctx)
 	if err != nil {
 		s.logger.Error("failed to list users for sync", "error", err)
 		return
@@ -549,14 +549,14 @@ func (s *Server) runSyncAll(ctx context.Context) {
 		}
 
 		client := atproto.NewClient(sess.APIClient())
-		sync := atproto.NewSync(s.db, client, s.logger)
+		sync := atproto.NewSync(s.dbs.Articles, s.dbs.Users, client, s.logger)
 		if err := sync.Run(ctx, u.DID); err != nil {
 			metrics.SyncErrors.Inc()
 			s.logger.Error("periodic sync failed", "error", err, "did", u.DID)
 		}
 
 		if dn, avatar, err := client.GetProfile(ctx, u.DID); err == nil {
-			_ = s.db.UpdateUserProfile(ctx, u.DID, dn, avatar)
+			_ = s.dbs.Users.UpdateUserProfile(ctx, u.DID, dn, avatar)
 		}
 
 		metrics.SyncRuns.Inc()

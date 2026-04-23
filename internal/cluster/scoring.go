@@ -41,7 +41,7 @@ type ArticleRecommendation struct {
 
 func (e *Engine) GetFeedRecommendations(ctx context.Context, userDID string, limit int) ([]*FeedRecommendation, error) {
 	subCount := 0
-	_ = e.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM subscriptions WHERE user_did = ?`, userDID).Scan(&subCount)
+	_ = e.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM articles.subscriptions WHERE user_did = ?`, userDID).Scan(&subCount)
 
 	if subCount < 5 {
 		recs, err := e.ColdStartRecommendations(ctx, userDID, limit*2)
@@ -91,7 +91,7 @@ func (e *Engine) GetWeights(ctx context.Context, userDID string) SignalWeights {
 	var dbW SignalWeights
 	err := e.db.QueryRowContext(ctx, `
 		SELECT w_sub, w_like, w_tag, w_social, w_pop, w_category
-		FROM user_signal_weights WHERE user_did = ?
+		FROM recs.user_signal_weights WHERE user_did = ?
 	`, userDID).Scan(&dbW.WSub, &dbW.WLike, &dbW.WTag, &dbW.WSocial, &dbW.WPop, &dbW.WCategory)
 	if err == nil {
 		return dbW
@@ -104,46 +104,46 @@ func (e *Engine) ComputeFeedRecommendationsOnDemand(ctx context.Context, userDID
 
 	rows, err := e.db.QueryContext(ctx, `
 		WITH similar_users AS (
-			SELECT user_b AS peer, jaccard FROM user_similarity WHERE user_a = ? AND jaccard > 0.15
+			SELECT user_b AS peer, jaccard FROM recs.user_similarity WHERE user_a = ? AND jaccard > 0.15
 			UNION ALL
-			SELECT user_a AS peer, jaccard FROM user_similarity WHERE user_b = ? AND jaccard > 0.15
+			SELECT user_a AS peer, jaccard FROM recs.user_similarity WHERE user_b = ? AND jaccard > 0.15
 		),
 		candidate_feeds AS (
 			SELECT s.feed_url,
 				SUM(su.jaccard) AS sub_signal
 			FROM similar_users su
-			JOIN subscriptions s ON s.user_did = su.peer
-			WHERE s.feed_url NOT IN (SELECT feed_url FROM subscriptions WHERE user_did = ?)
-			  AND s.feed_url NOT IN (SELECT target_id FROM dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
+			JOIN articles.subscriptions s ON s.user_did = su.peer
+			WHERE s.feed_url NOT IN (SELECT feed_url FROM articles.subscriptions WHERE user_did = ?)
+			  AND s.feed_url NOT IN (SELECT target_id FROM recs.dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
 			GROUP BY s.feed_url
 		),
 		like_signals AS (
 			SELECT s.feed_url,
 				SUM(su.jaccard * EXP(-0.023 * CAST(julianday('now') - julianday(l.created_at) AS REAL))) AS like_signal
 			FROM similar_users su
-			JOIN likes l ON l.author_did = su.peer
-			JOIN subscriptions s ON s.feed_url = l.feed_url
-			WHERE s.feed_url NOT IN (SELECT feed_url FROM subscriptions WHERE user_did = ?)
-			  AND s.feed_url NOT IN (SELECT target_id FROM dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
+			JOIN articles.likes l ON l.author_did = su.peer
+			JOIN articles.subscriptions s ON s.feed_url = l.feed_url
+			WHERE s.feed_url NOT IN (SELECT feed_url FROM articles.subscriptions WHERE user_did = ?)
+			  AND s.feed_url NOT IN (SELECT target_id FROM recs.dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
 			GROUP BY s.feed_url
 		),
 		social_boost AS (
 			SELECT s.feed_url,
 				SUM(CASE WHEN fd.distance = 1 THEN 1.0 ELSE 0.3 END) AS social
-			FROM follow_distances fd
-			JOIN subscriptions s ON s.user_did = fd.user_b
+			FROM recs.follow_distances fd
+			JOIN articles.subscriptions s ON s.user_did = fd.user_b
 			WHERE fd.user_a = ?
-			  AND s.feed_url NOT IN (SELECT feed_url FROM subscriptions WHERE user_did = ?)
-			  AND s.feed_url NOT IN (SELECT target_id FROM dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
+			  AND s.feed_url NOT IN (SELECT feed_url FROM articles.subscriptions WHERE user_did = ?)
+			  AND s.feed_url NOT IN (SELECT target_id FROM recs.dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
 			GROUP BY s.feed_url
 		),
 		category_counts AS (
 			SELECT category, COUNT(*) AS cnt
-			FROM subscriptions WHERE user_did = ? AND category IS NOT NULL AND category != ''
+			FROM articles.subscriptions WHERE user_did = ? AND category IS NOT NULL AND category != ''
 			GROUP BY category
 		),
 		max_subs AS (
-			SELECT CAST(COALESCE(MAX(subscriber_count), 1) AS REAL) AS m FROM feeds
+			SELECT CAST(COALESCE(MAX(subscriber_count), 1) AS REAL) AS m FROM articles.feeds
 		)
 		SELECT cf.feed_url, COALESCE(f.title, ''), COALESCE(f.site_url, ''),
 		       COALESCE(f.description, ''), f.subscriber_count, COALESCE(f.favicon_url, ''),
@@ -157,7 +157,7 @@ func (e *Engine) ComputeFeedRecommendationsOnDemand(ctx context.Context, userDID
 		       ) THEN ? ELSE 0 END
 		       AS score
 		FROM candidate_feeds cf
-		JOIN feeds f ON f.feed_url = cf.feed_url
+		JOIN articles.feeds f ON f.feed_url = cf.feed_url
 		LEFT JOIN like_signals ls ON ls.feed_url = cf.feed_url
 		LEFT JOIN social_boost sb ON sb.feed_url = cf.feed_url
 		CROSS JOIN max_subs ms
@@ -187,31 +187,31 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 
 	rows, err := e.db.QueryContext(ctx, `
 		WITH similar_users AS (
-			SELECT user_b AS peer, jaccard FROM user_similarity WHERE user_a = ? AND jaccard > 0.15
+			SELECT user_b AS peer, jaccard FROM recs.user_similarity WHERE user_a = ? AND jaccard > 0.15
 			UNION ALL
-			SELECT user_a AS peer, jaccard FROM user_similarity WHERE user_b = ? AND jaccard > 0.15
+			SELECT user_a AS peer, jaccard FROM recs.user_similarity WHERE user_b = ? AND jaccard > 0.15
 		),
 		liked_articles AS (
 			SELECT l.feed_url, l.article_url,
 				SUM(su.jaccard * EXP(-0.023 * CAST(julianday('now') - julianday(l.created_at) AS REAL))) AS like_signal
 			FROM similar_users su
-			JOIN likes l ON l.author_did = su.peer
+			JOIN articles.likes l ON l.author_did = su.peer
 			WHERE NOT EXISTS (
-				SELECT 1 FROM likes ul WHERE ul.author_did = ? AND ul.feed_url = l.feed_url AND ul.article_url = l.article_url
+				SELECT 1 FROM articles.likes ul WHERE ul.author_did = ? AND ul.feed_url = l.feed_url AND ul.article_url = l.article_url
 			)
 			AND NOT EXISTS (
-				SELECT 1 FROM dismissed_recommendations d WHERE d.user_did = ? AND d.target_type = 'article' AND d.target_id = l.article_url
+				SELECT 1 FROM recs.dismissed_recommendations d WHERE d.user_did = ? AND d.target_type = 'article' AND d.target_id = l.article_url
 			)
 			GROUP BY l.feed_url, l.article_url
 		),
 		social_likes AS (
 			SELECT l.feed_url, l.article_url,
 				SUM(CASE WHEN fd.distance = 1 THEN 1.0 ELSE 0.3 END) AS social
-			FROM follow_distances fd
-			JOIN likes l ON l.author_did = fd.user_b
+			FROM recs.follow_distances fd
+			JOIN articles.likes l ON l.author_did = fd.user_b
 			WHERE fd.user_a = ?
 			  AND NOT EXISTS (
-				SELECT 1 FROM likes ul WHERE ul.author_did = ? AND ul.feed_url = l.feed_url AND ul.article_url = l.article_url
+				SELECT 1 FROM articles.likes ul WHERE ul.author_did = ? AND ul.feed_url = l.feed_url AND ul.article_url = l.article_url
 			  )
 			GROUP BY l.feed_url, l.article_url
 		)
@@ -223,10 +223,9 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 		     + EXP(-0.023 * CAST(julianday('now') - julianday(a.published) AS REAL)) * 0.2
 		       AS score
 		FROM liked_articles la
-		JOIN articles a ON a.feed_url = la.feed_url AND a.url = la.article_url
-		LEFT JOIN feeds f ON f.feed_url = la.feed_url
+		JOIN articles.articles a ON a.feed_url = la.feed_url AND a.url = la.article_url
+		LEFT JOIN articles.feeds f ON f.feed_url = la.feed_url
 		LEFT JOIN social_likes sl ON sl.feed_url = la.feed_url AND sl.article_url = la.article_url
-		-- Future-published articles (e.g., scheduled) sort last
 		ORDER BY score DESC, (CASE WHEN a.published > 'now' THEN 1 ELSE 0 END), a.published DESC
 		LIMIT ?
 	`, userDID, userDID, userDID, userDID, userDID, userDID, w.WLike, w.WSocial, limit)
@@ -252,13 +251,13 @@ func (e *Engine) ComputePeopleRecommendationsOnDemand(ctx context.Context, userD
 		SELECT u.did, u.handle, COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''),
 		       sim.jaccard, sim.common_feeds, COALESCE(sim.common_likes, 0), COALESCE(sim.common_tags, 0)
 		FROM (
-			SELECT user_b AS peer_did, jaccard, common_feeds, common_likes, common_tags FROM user_similarity WHERE user_a = ?
+			SELECT user_b AS peer_did, jaccard, common_feeds, common_likes, common_tags FROM recs.user_similarity WHERE user_a = ?
 			UNION ALL
-			SELECT user_a AS peer_did, jaccard, common_feeds, common_likes, common_tags FROM user_similarity WHERE user_b = ?
+			SELECT user_a AS peer_did, jaccard, common_feeds, common_likes, common_tags FROM recs.user_similarity WHERE user_b = ?
 		) sim
-		JOIN users u ON u.did = sim.peer_did
+		JOIN main.users u ON u.did = sim.peer_did
 		WHERE u.handle IS NOT NULL AND u.handle != ''
-		  AND EXISTS (SELECT 1 FROM subscriptions s JOIN feeds f ON s.feed_url = f.feed_url WHERE s.user_did = u.did AND f.subscriber_count > 0)
+		  AND EXISTS (SELECT 1 FROM articles.subscriptions s JOIN articles.feeds f ON s.feed_url = f.feed_url WHERE s.user_did = u.did AND f.subscriber_count > 0)
 		ORDER BY sim.jaccard DESC
 		LIMIT ?
 	`, userDID, userDID, limit)
@@ -286,7 +285,7 @@ func (e *Engine) ComputeSignalProfiles(ctx context.Context) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.ExecContext(ctx, `DELETE FROM user_signal_profiles`); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM recs.user_signal_profiles`); err != nil {
 		return err
 	}
 
@@ -299,7 +298,7 @@ func (e *Engine) ComputeSignalProfiles(ctx context.Context) error {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO _user_like_counts SELECT author_did, COUNT(*) FROM likes GROUP BY author_did
+		INSERT INTO _user_like_counts SELECT author_did, COUNT(*) FROM articles.likes GROUP BY author_did
 	`); err != nil {
 		return err
 	}
@@ -316,7 +315,7 @@ func (e *Engine) ComputeSignalProfiles(ctx context.Context) error {
 		INSERT INTO _user_tag_counts
 		WITH user_tags AS (
 			SELECT author_did, TRIM(value) AS tag
-			FROM annotations, json_each('["' || REPLACE(tags, ',', '","') || '"]')
+			FROM articles.annotations, json_each('["' || REPLACE(tags, ',', '","') || '"]')
 			WHERE tags IS NOT NULL AND tags != ''
 		)
 		SELECT author_did, COUNT(DISTINCT tag) FROM user_tags GROUP BY author_did
@@ -337,7 +336,7 @@ func (e *Engine) ComputeSignalProfiles(ctx context.Context) error {
 		SELECT user_did, '[' || GROUP_CONCAT('{"c":"' || category || '","n":"' || CAST(cnt AS TEXT) || '}') || ']'
 		FROM (
 			SELECT user_did, category, COUNT(*) AS cnt
-			FROM subscriptions
+			FROM articles.subscriptions
 			WHERE category IS NOT NULL AND category != ''
 			GROUP BY user_did, category
 			ORDER BY COUNT(*) DESC
@@ -349,13 +348,13 @@ func (e *Engine) ComputeSignalProfiles(ctx context.Context) error {
 	}
 
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO user_signal_profiles (user_did, total_likes, total_tags, top_categories)
+		INSERT INTO recs.user_signal_profiles (user_did, total_likes, total_tags, top_categories)
 		SELECT
 			u.did,
 			COALESCE(lc.cnt, 0),
 			COALESCE(tc.cnt, 0),
 			COALESCE(cc.categories, '[]')
-		FROM users u
+		FROM main.users u
 		LEFT JOIN _user_like_counts lc ON lc.user_did = u.did
 		LEFT JOIN _user_tag_counts tc ON tc.user_did = u.did
 		LEFT JOIN _user_top_categories cc ON cc.user_did = u.did
@@ -370,7 +369,7 @@ func (e *Engine) ComputeSignalProfiles(ctx context.Context) error {
 
 func (e *Engine) ColdStartRecommendations(ctx context.Context, userDID string, limit int) ([]*FeedRecommendation, error) {
 	subCount := 0
-	_ = e.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM subscriptions WHERE user_did = ?`, userDID).Scan(&subCount)
+	_ = e.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM articles.subscriptions WHERE user_did = ?`, userDID).Scan(&subCount)
 	if subCount >= 5 {
 		return nil, nil
 	}
@@ -378,19 +377,19 @@ func (e *Engine) ColdStartRecommendations(ctx context.Context, userDID string, l
 	rows, err := e.db.QueryContext(ctx, `
 		WITH followed_feeds AS (
 			SELECT s.feed_url, 1.0 AS weight
-			FROM follow_distances fd
-			JOIN subscriptions s ON s.user_did = fd.user_b
+			FROM recs.follow_distances fd
+			JOIN articles.subscriptions s ON s.user_did = fd.user_b
 			WHERE fd.user_a = ? AND fd.distance = 1
-			AND s.feed_url NOT IN (SELECT feed_url FROM subscriptions WHERE user_did = ?)
-			AND s.feed_url NOT IN (SELECT target_id FROM dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
+			AND s.feed_url NOT IN (SELECT feed_url FROM articles.subscriptions WHERE user_did = ?)
+			AND s.feed_url NOT IN (SELECT target_id FROM recs.dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
 		),
 		popular_feeds AS (
 			SELECT feed_url, subscriber_count,
-				LOG(1 + CAST(subscriber_count AS REAL)) / LOG(1 + CAST((SELECT COALESCE(MAX(subscriber_count), 1) FROM feeds) AS REAL)) AS pop_score
-			FROM feeds
+				LOG(1 + CAST(subscriber_count AS REAL)) / LOG(1 + CAST((SELECT COALESCE(MAX(subscriber_count), 1) FROM articles.feeds) AS REAL)) AS pop_score
+			FROM articles.feeds
 			WHERE subscriber_count > 0
-			AND feed_url NOT IN (SELECT feed_url FROM subscriptions WHERE user_did = ?)
-			AND feed_url NOT IN (SELECT target_id FROM dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
+			AND feed_url NOT IN (SELECT feed_url FROM articles.subscriptions WHERE user_did = ?)
+			AND feed_url NOT IN (SELECT target_id FROM recs.dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
 			ORDER BY subscriber_count DESC
 			LIMIT 50
 		),
@@ -410,7 +409,7 @@ func (e *Engine) ColdStartRecommendations(ctx context.Context, userDID string, l
 		       COALESCE(f.favicon_url, ''),
 		       ac.weight AS score
 		FROM all_candidates ac
-		JOIN feeds f ON f.feed_url = ac.feed_url
+		JOIN articles.feeds f ON f.feed_url = ac.feed_url
 		ORDER BY score DESC
 		LIMIT ?
 	`, userDID, userDID, userDID, userDID, userDID, limit)

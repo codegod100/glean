@@ -12,12 +12,13 @@ import (
 )
 
 type StreamDBHandler struct {
-	db     *db.DB
-	logger *slog.Logger
+	articles *db.DB
+	users    *db.DB
+	logger   *slog.Logger
 }
 
-func NewStreamDBHandler(database *db.DB, logger *slog.Logger) *StreamDBHandler {
-	return &StreamDBHandler{db: database, logger: logger}
+func NewStreamDBHandler(articles, users *db.DB, logger *slog.Logger) *StreamDBHandler {
+	return &StreamDBHandler{articles: articles, users: users, logger: logger}
 }
 
 func (h *StreamDBHandler) Handle(ctx context.Context, event *Event) error {
@@ -49,17 +50,17 @@ func (h *StreamDBHandler) handleSubscription(ctx context.Context, event *Event) 
 			return nil
 		}
 
-		existing, err := h.db.GetSubscription(ctx, event.DID, rec.FeedURL)
+		existing, err := h.articles.GetSubscription(ctx, event.DID, rec.FeedURL)
 		if err == nil && existing != nil {
 			if !existing.URI.Valid || existing.URI.String == "" {
-				return h.db.UpdateSubscriptionURI(ctx, event.DID, rec.FeedURL, event.URI, event.CID)
+				return h.articles.UpdateSubscriptionURI(ctx, event.DID, rec.FeedURL, event.URI, event.CID)
 			}
 			return nil
 		}
 
 		f := &db.Feed{FeedURL: rec.FeedURL, Title: db.NullStr(rec.Title)}
-		_ = h.db.UpsertFeed(ctx, f)
-		err = h.db.CreateSubscription(ctx, event.DID, rec.FeedURL, rec.Title, rec.Category, event.URI, event.CID)
+		_ = h.articles.UpsertFeed(ctx, f)
+		err = h.articles.CreateSubscription(ctx, event.DID, rec.FeedURL, rec.Title, rec.Category, event.URI, event.CID)
 		if errors.Is(err, db.ErrDuplicateSubscription) {
 			return nil
 		}
@@ -70,9 +71,9 @@ func (h *StreamDBHandler) handleSubscription(ctx context.Context, event *Event) 
 		if !ok {
 			return nil
 		}
-		sub, err := h.db.GetSubscriptionByURI(ctx, event.DID, event.URI)
+		sub, err := h.articles.GetSubscriptionByURI(ctx, event.DID, event.URI)
 		if err == nil && sub != nil {
-			return h.db.DeleteSubscription(ctx, event.DID, sub.FeedURL)
+			return h.articles.DeleteSubscription(ctx, event.DID, sub.FeedURL)
 		}
 		_ = parsed
 	}
@@ -90,13 +91,13 @@ func (h *StreamDBHandler) handleLike(ctx context.Context, event *Event) error {
 			return nil
 		}
 
-		exists, err := h.db.HasLiked(ctx, event.DID, rec.FeedURL, rec.ArticleURL)
+		exists, err := h.articles.HasLiked(ctx, event.DID, rec.FeedURL, rec.ArticleURL)
 		if err != nil || exists {
 			return nil
 		}
 
 		t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
-		err = h.db.CreateLike(ctx, &db.Like{
+		err = h.articles.CreateLike(ctx, &db.Like{
 			URI:        event.URI,
 			AuthorDID:  event.DID,
 			FeedURL:    rec.FeedURL,
@@ -110,7 +111,7 @@ func (h *StreamDBHandler) handleLike(ctx context.Context, event *Event) error {
 		return err
 
 	case "delete":
-		return h.db.DeleteLike(ctx, event.URI)
+		return h.articles.DeleteLike(ctx, event.URI)
 	}
 	return nil
 }
@@ -141,10 +142,10 @@ func (h *StreamDBHandler) handleAnnotation(ctx context.Context, event *Event) er
 		if rec.Rating > 0 {
 			a.Rating = sql.NullInt64{Int64: int64(rec.Rating), Valid: true}
 		}
-		return h.db.CreateAnnotation(ctx, a)
+		return h.articles.CreateAnnotation(ctx, a)
 
 	case "delete":
-		return h.db.DeleteAnnotation(ctx, event.URI)
+		return h.articles.DeleteAnnotation(ctx, event.URI)
 	}
 	return nil
 }
@@ -159,10 +160,10 @@ func (h *StreamDBHandler) handleFollow(ctx context.Context, event *Event) error 
 		if rec.Subject == "" {
 			return nil
 		}
-		return h.db.UpsertFollow(ctx, event.DID, rec.Subject, event.URI, event.CID)
+		return h.users.UpsertFollow(ctx, event.DID, rec.Subject, event.URI, event.CID)
 
 	case "delete":
-		return h.db.DeleteFollowByURI(ctx, event.URI)
+		return h.users.DeleteFollowByURI(ctx, event.URI)
 	}
 	return nil
 }
@@ -194,11 +195,9 @@ func (h *StreamDBHandler) handleMarginNote(ctx context.Context, event *Event) er
 			CreatedAt:  sql.NullTime{Time: t, Valid: true},
 			CID:        sql.NullString{String: event.CID, Valid: event.CID != ""},
 		}
-		return h.db.CreateAnnotation(ctx, a)
+		return h.articles.CreateAnnotation(ctx, a)
 
 	case "delete":
-		// TODO: I actually don't think we should delete an annotation on Glean if deleted from Margin
-		// return h.db.DeleteAnnotation(ctx, event.URI)
 	}
 	return nil
 }
@@ -214,10 +213,10 @@ func (h *StreamDBHandler) handleSkyreaderSubscription(ctx context.Context, event
 			return nil
 		}
 
-		existing, err := h.db.GetSubscription(ctx, event.DID, rec.FeedURL)
+		existing, err := h.articles.GetSubscription(ctx, event.DID, rec.FeedURL)
 		if err == nil && existing != nil {
 			if !existing.URI.Valid || existing.URI.String == "" {
-				return h.db.UpdateSubscriptionURI(ctx, event.DID, rec.FeedURL, event.URI, event.CID)
+				return h.articles.UpdateSubscriptionURI(ctx, event.DID, rec.FeedURL, event.URI, event.CID)
 			}
 			return nil
 		}
@@ -227,25 +226,20 @@ func (h *StreamDBHandler) handleSkyreaderSubscription(ctx context.Context, event
 			Title:   db.NullStr(rec.Title),
 			SiteURL: db.NullStr(rec.SiteURL),
 		}
-		_ = h.db.UpsertFeed(ctx, f)
-		err = h.db.CreateSubscription(ctx, event.DID, rec.FeedURL, rec.Title, rec.Category, event.URI, event.CID)
+		_ = h.articles.UpsertFeed(ctx, f)
+		err = h.articles.CreateSubscription(ctx, event.DID, rec.FeedURL, rec.Title, rec.Category, event.URI, event.CID)
 		if errors.Is(err, db.ErrDuplicateSubscription) {
 			return nil
 		}
 		return err
 
 	case "delete":
-		// TODO: I actually don't think we should delete an subscription on Glean if deleted from Skyreader
-		// sub, err := h.db.GetSubscriptionByURI(ctx, event.DID, event.URI)
-		// if err == nil && sub != nil {
-		// 	return h.db.DeleteSubscription(ctx, event.DID, sub.FeedURL)
-		// }
 	}
 	return nil
 }
 
 func (h *StreamDBHandler) resolveFeedURL(ctx context.Context, articleURL string) string {
-	article, err := h.db.GetArticleByURL(ctx, articleURL)
+	article, err := h.articles.GetArticleByURL(ctx, articleURL)
 	if err != nil {
 		return ""
 	}

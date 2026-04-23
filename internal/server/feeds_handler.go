@@ -16,29 +16,53 @@ import (
 func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	category := r.URL.Query().Get("category")
+	ctx := r.Context()
 
 	page := pageFromRequest(r, 50)
-	subs, _ := s.db.ListSubscriptions(r.Context(), user.DID, category, page.Limit()+1, page.Offset())
+	subs, err := s.dbs.Articles.ListSubscriptions(ctx, user.DID, category, page.Limit()+1, page.Offset())
+	if err != nil {
+		s.logger.Warn("failed to list subscriptions", "error", err, "did", user.DID)
+	}
 	totalFetched := len(subs)
 	page = page.Paginate(totalFetched)
 	if page.HasNext {
 		subs = subs[:page.PageSize]
 	}
 
-	allSubs, _ := s.db.ListSubscriptions(r.Context(), user.DID, "", 1000, 0)
-	feedRecs, _ := s.engine.GetFeedRecommendations(r.Context(), user.DID, 6)
-	peopleRecs, _ := s.engine.GetPeopleRecommendations(r.Context(), user.DID, 5)
+	allSubs, err := s.dbs.Articles.ListSubscriptions(ctx, user.DID, "", 1000, 0)
+	if err != nil {
+		s.logger.Warn("failed to list all subscriptions", "error", err, "did", user.DID)
+	}
+
+	feedRecs, err := s.engine.GetFeedRecommendations(ctx, user.DID, 6)
+	if err != nil {
+		s.logger.Warn("failed to get feed recommendations", "error", err, "did", user.DID)
+	}
+
+	peopleRecs, err := s.engine.GetPeopleRecommendations(ctx, user.DID, 5)
+	if err != nil {
+		s.logger.Warn("failed to get people recommendations", "error", err, "did", user.DID)
+	}
 
 	if len(feedRecs) > 0 {
 		impressions := make([]cluster.Impression, len(feedRecs))
 		for i, rec := range feedRecs {
 			impressions[i] = cluster.Impression{TargetType: "feed", TargetID: rec.FeedURL}
 		}
-		_ = s.engine.RecordImpressions(r.Context(), user.DID, impressions)
+		if err := s.engine.RecordImpressions(ctx, user.DID, impressions); err != nil {
+			s.logger.Warn("failed to record impressions", "error", err)
+		}
 	}
-	deadFeeds, _ := s.db.ListDeadFeeds(r.Context(), user.DID, 7)
 
-	categories, _ := s.db.GetCategories(r.Context(), user.DID)
+	deadFeeds, err := s.dbs.Articles.ListDeadFeeds(ctx, user.DID, 7)
+	if err != nil {
+		s.logger.Warn("failed to list dead feeds", "error", err, "did", user.DID)
+	}
+
+	categories, err := s.dbs.Articles.GetCategories(ctx, user.DID)
+	if err != nil {
+		s.logger.Warn("failed to get categories", "error", err, "did", user.DID)
+	}
 
 	s.render(w, r, "feeds.html", map[string]any{
 		"User":                  user,
@@ -80,7 +104,7 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 		if faviconURL == "" {
 			go func() {
 				if f := feed.ResolveFavicon(context.Background(), feedURL, result.Feed.SiteURL); f != "" {
-					_ = s.db.UpdateFeedFavicon(context.Background(), feedURL, f)
+					_ = s.dbs.Articles.UpdateFeedFavicon(context.Background(), feedURL, f)
 				}
 			}()
 		}
@@ -94,7 +118,7 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 		FeedType:    nullString(result.Feed.Type),
 		FaviconURL:  nullString(faviconURL),
 	}
-	if err := s.db.UpsertFeed(r.Context(), f); err != nil {
+	if err := s.dbs.Articles.UpsertFeed(r.Context(), f); err != nil {
 		s.logger.Error("failed to upsert feed", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -118,7 +142,7 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 		subCID = cid
 	}
 
-	if err := s.db.CreateSubscription(r.Context(), user.DID, feedURL, feedTitle, category, subURI, subCID); err != nil {
+	if err := s.dbs.Articles.CreateSubscription(r.Context(), user.DID, feedURL, feedTitle, category, subURI, subCID); err != nil {
 		if errors.Is(err, db.ErrDuplicateSubscription) {
 			http.Error(w, "Already subscribed to this feed.", http.StatusConflict)
 			return
@@ -128,12 +152,15 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = s.engine.MarkImpressionActed(r.Context(), user.DID, "feed", feedURL)
+	if err := s.engine.MarkImpressionActed(r.Context(), user.DID, "feed", feedURL); err != nil {
+		s.logger.Warn("failed to mark impression acted", "error", err)
+	}
 	sig := s.engine.GetDominantSignal(s.engine.GetWeights(r.Context(), user.DID))
 	s.engine.RewardSignal(r.Context(), user.DID, sig)
 
-	sub, _ := s.db.GetSubscription(r.Context(), user.DID, feedURL)
-	if sub == nil {
+	sub, err := s.dbs.Articles.GetSubscription(r.Context(), user.DID, feedURL)
+	if err != nil {
+		s.logger.Warn("failed to get subscription", "error", err)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -156,7 +183,7 @@ func (s *Server) handleRemoveFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sub, err := s.db.GetSubscription(r.Context(), user.DID, feedURL)
+	sub, err := s.dbs.Articles.GetSubscription(r.Context(), user.DID, feedURL)
 	if err == nil && sub.URI.Valid {
 		if client := s.pdsClientForUser(r); client != nil {
 			parsed, ok := atproto.ParseRecordURI(sub.URI.String)
@@ -170,7 +197,7 @@ func (s *Server) handleRemoveFeed(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.db.DeleteSubscription(r.Context(), user.DID, feedURL); err != nil {
+	if err := s.dbs.Articles.DeleteSubscription(r.Context(), user.DID, feedURL); err != nil {
 		s.logger.Error("failed to delete subscription", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -182,7 +209,10 @@ func (s *Server) handleRemoveFeed(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleClearAllSubscriptions(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 
-	subs, _ := s.db.ListSubscriptions(r.Context(), user.DID, "", 1000, 0)
+	subs, err := s.dbs.Articles.ListSubscriptions(r.Context(), user.DID, "", 1000, 0)
+	if err != nil {
+		s.logger.Warn("failed to list subscriptions", "error", err, "did", user.DID)
+	}
 	if client := s.pdsClientForUser(r); client != nil {
 		for _, sub := range subs {
 			if sub.URI.Valid {
@@ -196,7 +226,7 @@ func (s *Server) handleClearAllSubscriptions(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	if err := s.db.DeleteAllSubscriptions(r.Context(), user.DID); err != nil {
+	if err := s.dbs.Articles.DeleteAllSubscriptions(r.Context(), user.DID); err != nil {
 		s.logger.Error("failed to clear subscriptions", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -231,14 +261,16 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 			SiteURL:     nullString(fu.SiteURL),
 			Description: nullString(fu.Description),
 		}
-		if upsertErr := s.db.UpsertFeed(r.Context(), f); upsertErr != nil {
+		if upsertErr := s.dbs.Articles.UpsertFeed(r.Context(), f); upsertErr != nil {
 			s.logger.Error("failed to upsert feed", "error", upsertErr)
 			continue
 		}
 
 		go func(feedURL, siteURL string) {
 			if fav := feed.ResolveFavicon(context.Background(), feedURL, siteURL); fav != "" {
-				_ = s.db.UpdateFeedFavicon(context.Background(), feedURL, fav)
+				if err := s.dbs.Articles.UpdateFeedFavicon(context.Background(), feedURL, fav); err != nil {
+					s.logger.Warn("failed to update favicon", "error", err, "feed", feedURL)
+				}
 			}
 		}(fu.URL, fu.SiteURL)
 
@@ -259,7 +291,7 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 			subCID = cid
 		}
 
-		if subErr := s.db.CreateSubscription(r.Context(), user.DID, fu.URL, fu.Title, fu.Category, subURI, subCID); subErr != nil {
+		if subErr := s.dbs.Articles.CreateSubscription(r.Context(), user.DID, fu.URL, fu.Title, fu.Category, subURI, subCID); subErr != nil {
 			if !errors.Is(subErr, db.ErrDuplicateSubscription) {
 				s.logger.Error("failed to create subscription", "error", subErr)
 			}
@@ -274,7 +306,10 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleOPMLDownload(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
-	subs, _ := s.db.ListSubscriptions(r.Context(), user.DID, "", 1000, 0)
+	subs, err := s.dbs.Articles.ListSubscriptions(r.Context(), user.DID, "", 1000, 0)
+	if err != nil {
+		s.logger.Warn("failed to list subscriptions", "error", err, "did", user.DID)
+	}
 
 	var feedURLs []feed.FeedURL
 	for _, sub := range subs {
@@ -298,7 +333,10 @@ func (s *Server) handleOPMLDownload(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleFeedList(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
-	subs, _ := s.db.ListSubscriptions(r.Context(), user.DID, "", 100, 0)
+	subs, err := s.dbs.Articles.ListSubscriptions(r.Context(), user.DID, "", 100, 0)
+	if err != nil {
+		s.logger.Warn("failed to list subscriptions", "error", err, "did", user.DID)
+	}
 	s.render(w, r, "feeds.html", map[string]any{
 		"User":          user,
 		"Subscriptions": subs,
@@ -308,7 +346,10 @@ func (s *Server) handleFeedList(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRefreshFeeds(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 
-	subs, _ := s.db.ListSubscriptions(r.Context(), user.DID, "", 100, 0)
+	subs, err := s.dbs.Articles.ListSubscriptions(r.Context(), user.DID, "", 100, 0)
+	if err != nil {
+		s.logger.Warn("failed to list subscriptions", "error", err, "did", user.DID)
+	}
 	seen := make(map[string]bool)
 	for _, sub := range subs {
 		if seen[sub.FeedURL] {
@@ -316,8 +357,9 @@ func (s *Server) handleRefreshFeeds(w http.ResponseWriter, r *http.Request) {
 		}
 		seen[sub.FeedURL] = true
 
-		f, err := s.db.GetFeed(r.Context(), sub.FeedURL)
+		f, err := s.dbs.Articles.GetFeed(r.Context(), sub.FeedURL)
 		if err != nil {
+			s.logger.Warn("failed to get feed", "error", err, "feed", sub.FeedURL)
 			continue
 		}
 		ff := &feed.Feed{
@@ -332,7 +374,10 @@ func (s *Server) handleRefreshFeeds(w http.ResponseWriter, r *http.Request) {
 		s.scheduler.FetchFeed(r.Context(), ff)
 	}
 
-	subs, _ = s.db.ListSubscriptions(r.Context(), user.DID, "", 100, 0)
+	subs, err = s.dbs.Articles.ListSubscriptions(r.Context(), user.DID, "", 100, 0)
+	if err != nil {
+		s.logger.Warn("failed to list subscriptions", "error", err, "did", user.DID)
+	}
 	s.render(w, r, "feed-list.html", map[string]any{
 		"User":          user,
 		"Subscriptions": subs,
@@ -346,7 +391,7 @@ func (s *Server) handleRetryFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	f, err := s.db.GetFeed(r.Context(), feedURL)
+	f, err := s.dbs.Articles.GetFeed(r.Context(), feedURL)
 	if err != nil {
 		http.Error(w, "feed not found", http.StatusNotFound)
 		return
@@ -364,7 +409,10 @@ func (s *Server) handleRetryFeed(w http.ResponseWriter, r *http.Request) {
 	s.scheduler.FetchFeed(r.Context(), ff)
 
 	user := currentUser(r)
-	deadFeeds, _ := s.db.ListDeadFeeds(r.Context(), user.DID, 7)
+	deadFeeds, err := s.dbs.Articles.ListDeadFeeds(r.Context(), user.DID, 7)
+	if err != nil {
+		s.logger.Warn("failed to list dead feeds", "error", err, "did", user.DID)
+	}
 	if len(deadFeeds) == 0 {
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(""))

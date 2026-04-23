@@ -9,6 +9,7 @@ import (
 
 func (s *Server) handleTrending(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
+	ctx := r.Context()
 
 	scope := r.URL.Query().Get("scope")
 	if scope == "for-me" && user == nil {
@@ -28,10 +29,14 @@ func (s *Server) handleTrending(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var trending []*db.TrendingItem
+	var err error
 	if scope == "for-me" {
-		trending, _ = s.db.ListTrendingArticlesForUser(r.Context(), userDID, since, page.Limit()+1, page.Offset())
+		trending, err = s.dbs.Articles.ListTrendingArticlesForUser(ctx, userDID, since, page.Limit()+1, page.Offset())
 	} else {
-		trending, _ = s.db.ListTrendingArticles(r.Context(), userDID, since, page.Limit()+1, page.Offset())
+		trending, err = s.dbs.Articles.ListTrendingArticles(ctx, userDID, since, page.Limit()+1, page.Offset())
+	}
+	if err != nil {
+		s.logger.Warn("failed to list trending articles", "error", err, "scope", scope)
 	}
 
 	totalFetched := len(trending)

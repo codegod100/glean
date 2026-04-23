@@ -23,8 +23,7 @@ go.work.sum
 .env
 
 # database
-*.db
-*.db-*
+*.db*
 
 # tailwind
 static/output.css

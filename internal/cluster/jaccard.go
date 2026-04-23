@@ -42,20 +42,20 @@ func (e *Engine) ComputeFeedSimilarity(ctx context.Context) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.ExecContext(ctx, `DELETE FROM feed_similarity`); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM recs.feed_similarity`); err != nil {
 		return err
 	}
 
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO feed_similarity (feed_a, feed_b, jaccard)
+		INSERT INTO recs.feed_similarity (feed_a, feed_b, jaccard)
 		SELECT
 			s1.feed_url,
 			s2.feed_url,
 			CAST(COUNT(*) AS REAL) / (f1.subscriber_count + f2.subscriber_count - CAST(COUNT(*) AS REAL))
-		FROM subscriptions s1
-		JOIN subscriptions s2 ON s1.user_did = s2.user_did AND s1.feed_url < s2.feed_url
-		JOIN feeds f1 ON f1.feed_url = s1.feed_url
-		JOIN feeds f2 ON f2.feed_url = s2.feed_url
+		FROM articles.subscriptions s1
+		JOIN articles.subscriptions s2 ON s1.user_did = s2.user_did AND s1.feed_url < s2.feed_url
+		JOIN articles.feeds f1 ON f1.feed_url = s1.feed_url
+		JOIN articles.feeds f2 ON f2.feed_url = s2.feed_url
 		GROUP BY s1.feed_url, s2.feed_url
 	`)
 	if err != nil {
@@ -82,7 +82,7 @@ func (e *Engine) computeDescriptionSimilarity(ctx context.Context, tx *sql.Tx) e
 		INSERT INTO _feed_words (feed_url, word)
 		WITH feed_tokens AS (
 			SELECT feed_url, LOWER(TRIM(value)) AS word
-			FROM feeds,
+			FROM articles.feeds,
 			json_each('["' || REPLACE(LOWER(COALESCE(description, '')), ' ', '","') || '"]')
 			WHERE description IS NOT NULL AND description != ''
 		)
@@ -140,7 +140,7 @@ func (e *Engine) computeDescriptionSimilarity(ctx context.Context, tx *sql.Tx) e
 	}
 
 	descInsert := `
-		INSERT OR IGNORE INTO feed_similarity (feed_a, feed_b, jaccard)
+		INSERT OR IGNORE INTO recs.feed_similarity (feed_a, feed_b, jaccard)
 		SELECT feed_a, feed_b, 0 FROM _word_overlap
 	`
 	if _, err := tx.ExecContext(ctx, descInsert); err != nil {
@@ -148,16 +148,16 @@ func (e *Engine) computeDescriptionSimilarity(ctx context.Context, tx *sql.Tx) e
 	}
 
 	descUpdate := fmt.Sprintf(`
-		UPDATE feed_similarity SET
+		UPDATE recs.feed_similarity SET
 			jaccard = jaccard + %g * CAST(_word_overlap.common AS REAL) / NULLIF(
-				(SELECT cnt FROM _feed_word_counts WHERE feed_url = feed_similarity.feed_a) +
-				(SELECT cnt FROM _feed_word_counts WHERE feed_url = feed_similarity.feed_b) -
+				(SELECT cnt FROM _feed_word_counts WHERE feed_url = recs.feed_similarity.feed_a) +
+				(SELECT cnt FROM _feed_word_counts WHERE feed_url = recs.feed_similarity.feed_b) -
 				CAST(_word_overlap.common AS REAL),
 				0
 			)
 		FROM _word_overlap
-		WHERE feed_similarity.feed_a = _word_overlap.feed_a
-		  AND feed_similarity.feed_b = _word_overlap.feed_b
+		WHERE recs.feed_similarity.feed_a = _word_overlap.feed_a
+		  AND recs.feed_similarity.feed_b = _word_overlap.feed_b
 	`, e.config.DescriptionWeight)
 
 	if _, err := tx.ExecContext(ctx, descUpdate); err != nil {
@@ -174,23 +174,23 @@ func (e *Engine) ComputeUserSimilarity(ctx context.Context) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.ExecContext(ctx, `DELETE FROM user_similarity`); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM recs.user_similarity`); err != nil {
 		return err
 	}
 
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO user_similarity (user_a, user_b, jaccard, common_feeds)
+		INSERT INTO recs.user_similarity (user_a, user_b, jaccard, common_feeds)
 		SELECT
 			s1.user_did,
 			s2.user_did,
 			CAST(COUNT(*) AS REAL) / (
-				(SELECT COUNT(*) FROM subscriptions WHERE user_did = s1.user_did) +
-				(SELECT COUNT(*) FROM subscriptions WHERE user_did = s2.user_did) -
+				(SELECT COUNT(*) FROM articles.subscriptions WHERE user_did = s1.user_did) +
+				(SELECT COUNT(*) FROM articles.subscriptions WHERE user_did = s2.user_did) -
 				CAST(COUNT(*) AS REAL)
 			),
 			COUNT(*)
-		FROM subscriptions s1
-		JOIN subscriptions s2 ON s1.feed_url = s2.feed_url AND s1.user_did < s2.user_did
+		FROM articles.subscriptions s1
+		JOIN articles.subscriptions s2 ON s1.feed_url = s2.feed_url AND s1.user_did < s2.user_did
 		GROUP BY s1.user_did, s2.user_did
 	`)
 	if err != nil {
@@ -207,7 +207,7 @@ func (e *Engine) ComputeUserSimilarity(ctx context.Context) error {
 	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO _likes_count (author_did, cnt)
-		SELECT author_did, COUNT(*) FROM likes GROUP BY author_did
+		SELECT author_did, COUNT(*) FROM articles.likes GROUP BY author_did
 	`); err != nil {
 		return err
 	}
@@ -227,8 +227,8 @@ func (e *Engine) ComputeUserSimilarity(ctx context.Context) error {
 				EXP(-0.023 * CAST(julianday('now') - julianday(l1.created_at) AS REAL))
 			  * EXP(-0.023 * CAST(julianday('now') - julianday(l2.created_at) AS REAL))
 			) AS INTEGER)
-		FROM likes l1
-		JOIN likes l2 ON l1.feed_url = l2.feed_url AND l1.article_url = l2.article_url
+		FROM articles.likes l1
+		JOIN articles.likes l2 ON l1.feed_url = l2.feed_url AND l1.article_url = l2.article_url
 			AND l1.author_did < l2.author_did
 		WHERE l1.created_at IS NOT NULL AND l2.created_at IS NOT NULL
 		GROUP BY l1.author_did, l2.author_did
@@ -237,17 +237,17 @@ func (e *Engine) ComputeUserSimilarity(ctx context.Context) error {
 	}
 
 	likesUpdate := fmt.Sprintf(`
-		UPDATE user_similarity SET
+		UPDATE recs.user_similarity SET
 			jaccard = jaccard + %g * CAST(_likes_overlap.common AS REAL) / NULLIF(
-				(SELECT cnt FROM _likes_count WHERE author_did = user_similarity.user_a) +
-				(SELECT cnt FROM _likes_count WHERE author_did = user_similarity.user_b) -
+				(SELECT cnt FROM _likes_count WHERE author_did = recs.user_similarity.user_a) +
+				(SELECT cnt FROM _likes_count WHERE author_did = recs.user_similarity.user_b) -
 				CAST(_likes_overlap.common AS REAL),
 				0
 			),
 			common_likes = _likes_overlap.common
 		FROM _likes_overlap
-		WHERE user_similarity.user_a = _likes_overlap.user_a
-		  AND user_similarity.user_b = _likes_overlap.user_b
+		WHERE recs.user_similarity.user_a = _likes_overlap.user_a
+		  AND recs.user_similarity.user_b = _likes_overlap.user_b
 	`, e.config.LikesWeight)
 
 	if _, err := tx.ExecContext(ctx, likesUpdate); err != nil {
@@ -255,7 +255,7 @@ func (e *Engine) ComputeUserSimilarity(ctx context.Context) error {
 	}
 
 	likesInsert := fmt.Sprintf(`
-		INSERT INTO user_similarity (user_a, user_b, jaccard, common_feeds, common_likes)
+		INSERT INTO recs.user_similarity (user_a, user_b, jaccard, common_feeds, common_likes)
 		SELECT sub.user_a, sub.user_b, sub.jaccard, 0, sub.common
 		FROM (
 			SELECT
@@ -289,7 +289,7 @@ func (e *Engine) ComputeUserSimilarity(ctx context.Context) error {
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO _tag_overlap (user_a, user_b, common)
 		WITH user_tags AS (
-			SELECT author_did, TRIM(value) AS tag FROM annotations, json_each('["' || REPLACE(tags, ',', '","') || '"]')
+			SELECT author_did, TRIM(value) AS tag FROM articles.annotations, json_each('["' || REPLACE(tags, ',', '","') || '"]')
 			WHERE tags IS NOT NULL AND tags != ''
 		)
 		SELECT t1.author_did, t2.author_did, COUNT(DISTINCT t1.tag)
@@ -312,7 +312,7 @@ func (e *Engine) ComputeUserSimilarity(ctx context.Context) error {
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO _tag_count (author_did, cnt)
 		WITH user_tags AS (
-			SELECT author_did, TRIM(value) AS tag FROM annotations, json_each('["' || REPLACE(tags, ',', '","') || '"]')
+			SELECT author_did, TRIM(value) AS tag FROM articles.annotations, json_each('["' || REPLACE(tags, ',', '","') || '"]')
 			WHERE tags IS NOT NULL AND tags != ''
 		)
 		SELECT author_did, COUNT(DISTINCT tag) FROM user_tags GROUP BY author_did
@@ -321,7 +321,7 @@ func (e *Engine) ComputeUserSimilarity(ctx context.Context) error {
 	}
 
 	_, err = tx.ExecContext(ctx, `
-		INSERT OR IGNORE INTO user_similarity (user_a, user_b, jaccard, common_feeds, common_tags)
+		INSERT OR IGNORE INTO recs.user_similarity (user_a, user_b, jaccard, common_feeds, common_tags)
 		SELECT user_a, user_b, 0, 0, 0 FROM _tag_overlap
 	`)
 	if err != nil {
@@ -329,17 +329,17 @@ func (e *Engine) ComputeUserSimilarity(ctx context.Context) error {
 	}
 
 	tagsUpdate := fmt.Sprintf(`
-		UPDATE user_similarity SET
+		UPDATE recs.user_similarity SET
 			jaccard = jaccard + %g * CAST(_tag_overlap.common AS REAL) / NULLIF(
-				(SELECT cnt FROM _tag_count WHERE author_did = user_similarity.user_a) +
-				(SELECT cnt FROM _tag_count WHERE author_did = user_similarity.user_b) -
+				(SELECT cnt FROM _tag_count WHERE author_did = recs.user_similarity.user_a) +
+				(SELECT cnt FROM _tag_count WHERE author_did = recs.user_similarity.user_b) -
 				CAST(_tag_overlap.common AS REAL),
 				0
 			),
 			common_tags = _tag_overlap.common
 		FROM _tag_overlap
-		WHERE user_similarity.user_a = _tag_overlap.user_a
-		  AND user_similarity.user_b = _tag_overlap.user_b
+		WHERE recs.user_similarity.user_a = _tag_overlap.user_a
+		  AND recs.user_similarity.user_b = _tag_overlap.user_b
 	`, e.config.TagsWeight)
 
 	if _, err := tx.ExecContext(ctx, tagsUpdate); err != nil {
@@ -347,13 +347,13 @@ func (e *Engine) ComputeUserSimilarity(ctx context.Context) error {
 	}
 
 	followQuery := fmt.Sprintf(`
-		INSERT INTO user_similarity (user_a, user_b, jaccard, common_feeds, common_likes, common_tags)
+		INSERT INTO recs.user_similarity (user_a, user_b, jaccard, common_feeds, common_likes, common_tags)
 		SELECT
 			MIN(f.user_did, f.target_did),
 			MAX(f.user_did, f.target_did),
 			%g,
 			0, 0, 0
-		FROM follows f
+		FROM main.follows f
 		WHERE f.user_did != f.target_did
 		GROUP BY MIN(f.user_did, f.target_did), MAX(f.user_did, f.target_did)
 		ON CONFLICT(user_a, user_b) DO UPDATE SET

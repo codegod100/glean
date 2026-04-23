@@ -22,18 +22,18 @@ func (e *Engine) PenalizeSignal(ctx context.Context, userDID string, signal stri
 func (e *Engine) adjustWeight(ctx context.Context, userDID string, signal string, delta float64) {
 	var actedCount int
 	_ = e.db.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM recommendation_impressions WHERE user_did = ? AND acted = 1
+		SELECT COUNT(*) FROM recs.recommendation_impressions WHERE user_did = ? AND acted = 1
 	`, userDID).Scan(&actedCount)
 	if actedCount < minActionsTune {
 		return
 	}
 
 	var exists int
-	_ = e.db.QueryRowContext(ctx, `SELECT 1 FROM user_signal_weights WHERE user_did = ?`, userDID).Scan(&exists)
+	_ = e.db.QueryRowContext(ctx, `SELECT 1 FROM recs.user_signal_weights WHERE user_did = ?`, userDID).Scan(&exists)
 
 	if exists == 0 {
 		_, _ = e.db.ExecContext(ctx, `
-			INSERT INTO user_signal_weights (user_did, w_sub, w_like, w_tag, w_social, w_pop, w_category)
+			INSERT INTO recs.user_signal_weights (user_did, w_sub, w_like, w_tag, w_social, w_pop, w_category)
 			VALUES (?, 1.0, 0.5, 0.3, 0.7, 0.2, 0.4)
 		`, userDID)
 	}
@@ -45,7 +45,7 @@ func (e *Engine) adjustWeight(ctx context.Context, userDID string, signal string
 
 	adj := learningRate * delta
 	_, _ = e.db.ExecContext(ctx, `
-		UPDATE user_signal_weights SET
+		UPDATE recs.user_signal_weights SET
 			`+column+` = MAX(?, MIN(?, `+column+` * (1 + ?))),
 			updated_at = CURRENT_TIMESTAMP
 		WHERE user_did = ?

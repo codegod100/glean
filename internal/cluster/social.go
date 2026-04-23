@@ -11,18 +11,18 @@ func (e *Engine) ComputeFollowDistances(ctx context.Context) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.ExecContext(ctx, `DELETE FROM follow_distances`); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM recs.follow_distances`); err != nil {
 		return err
 	}
 
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO follow_distances (user_a, user_b, distance)
+		INSERT INTO recs.follow_distances (user_a, user_b, distance)
 		SELECT user_a, user_b, MIN(distance) FROM (
-			SELECT user_did AS user_a, target_did AS user_b, 1 AS distance FROM follows WHERE user_did != target_did
+			SELECT user_did AS user_a, target_did AS user_b, 1 AS distance FROM main.follows WHERE user_did != target_did
 			UNION ALL
 			SELECT f1.user_did, f2.target_did, 2
-			FROM follows f1
-			JOIN follows f2 ON f1.target_did = f2.user_did
+			FROM main.follows f1
+			JOIN main.follows f2 ON f1.target_did = f2.user_did
 			WHERE f1.user_did != f2.target_did
 		) GROUP BY user_a, user_b
 	`)
@@ -37,7 +37,7 @@ func (e *Engine) ComputeFollowDistances(ctx context.Context) error {
 func (e *Engine) ComputeFollowDistancesIncremental(ctx context.Context) error {
 	var maxFollowed string
 	err := e.db.QueryRowContext(ctx, `
-		SELECT COALESCE(MAX(followed_at), '1970-01-01') FROM follows
+		SELECT COALESCE(MAX(followed_at), '1970-01-01') FROM main.follows
 	`).Scan(&maxFollowed)
 	if err != nil {
 		return err
@@ -45,7 +45,7 @@ func (e *Engine) ComputeFollowDistancesIncremental(ctx context.Context) error {
 
 	var lastComputed string
 	err = e.db.QueryRowContext(ctx, `
-		SELECT COALESCE(MAX(computed_at), '1970-01-01') FROM user_similarity
+		SELECT COALESCE(MAX(computed_at), '1970-01-01') FROM recs.user_similarity
 	`).Scan(&lastComputed)
 	if err != nil {
 		return err

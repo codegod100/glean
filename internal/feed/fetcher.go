@@ -101,6 +101,9 @@ func (s *Scheduler) Run(ctx context.Context) error {
 	ticker := time.NewTicker(s.tickInterval)
 	defer ticker.Stop()
 
+	// fetch all at startup
+	s.fetchAll(ctx)
+
 	for {
 		select {
 		case <-ctx.Done():

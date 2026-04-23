@@ -13,7 +13,7 @@ The core idea: your RSS subscriptions are a strong signal about your interests. 
 | Layer            | Technology                                                      |
 | ---------------- | --------------------------------------------------------------- |
 | Backend          | Go                                                              |
-| Database         | SQLite (via `mattn/go-sqlite3`)                                 |
+| Database         | SQLite (3 files: users, articles, recs via `mattn/go-sqlite3`) |
 | Frontend         | htmx + TailwindCSS                                              |
 | Auth             | AT Protocol OAuth / DID resolution (configurable PLC directory) |
 | AT Protocol role | AppView for `at.glean.*` lexicons                               |
@@ -475,7 +475,19 @@ Glean runs as a single Go binary that fills three roles: **AppView** (indexing `
 
 ## 6. Database Schema (SQLite)
 
-### 6.1 Users
+Glean uses three separate SQLite database files to reduce write-lock contention. Each is opened with its own connection pool:
+
+| File | Contents | ATTACH alias |
+|------|----------|-------------|
+| `<base>_users` | Users, follows, OAuth | `main` (primary) |
+| `<base>_articles` | Feeds, subscriptions, articles, read state, likes, annotations | `articles` |
+| `<base>_recs` | Similarity scores, impressions, dismissals, signal weights | `recs` |
+
+The users connection pool uses a custom SQLite driver with a `ConnectHook` that ATTACHes the articles and recs databases on every new connection. This allows the cluster engine to run cross-database queries using schema prefixes (`articles.subscriptions`, `recs.user_similarity`, `main.follows`).
+
+The articles and recs connections are independent pools used by the service layer for single-database operations.
+
+### 6.1 Users (`<base>_users`)
 
 ```sql
 CREATE TABLE users (
@@ -488,7 +500,7 @@ CREATE TABLE users (
 );
 ```
 
-### 6.2 Feed Subscriptions
+### 6.2 Feed Subscriptions (`<base>_articles`)
 
 Indexed from `at.glean.subscription` records on user PDS.
 
@@ -509,7 +521,7 @@ CREATE INDEX idx_subscriptions_feed ON subscriptions(feed_url);
 CREATE INDEX idx_subscriptions_user ON subscriptions(user_did);
 ```
 
-### 6.3 Feeds
+### 6.3 Feeds (`<base>_articles`)
 
 Master list of all known RSS feeds.
 
@@ -533,7 +545,7 @@ CREATE TABLE feeds (
 );
 ```
 
-### 6.4 Articles
+### 6.4 Articles (`<base>_articles`)
 
 Fetched from RSS feeds. Only fetched for feeds that have local subscribers.
 
@@ -557,7 +569,7 @@ CREATE INDEX idx_articles_feed ON articles(feed_url);
 CREATE INDEX idx_articles_published ON articles(published DESC);
 ```
 
-### 6.5 Read State
+### 6.5 Read State (`<base>_articles`)
 
 ```sql
 CREATE TABLE read_state (
@@ -571,7 +583,7 @@ CREATE TABLE read_state (
 CREATE INDEX idx_read_state_unread ON read_state(user_did, is_read) WHERE is_read = 0;
 ```
 
-### 6.6 Annotations, Likes
+### 6.6 Annotations, Likes (`<base>_articles`)
 
 Local mirror of AT Protocol lexicon records for fast querying.
 
@@ -602,7 +614,7 @@ CREATE TABLE likes (
 );
 ```
 
-### 6.7 Cluster Precomputation
+### 6.7 Cluster Precomputation (`<base>_recs`)
 
 Stores precomputed similarity data to avoid recalculating on every request.
 
@@ -627,7 +639,7 @@ CREATE TABLE user_similarity (
 );
 ```
 
-### 6.8 Follows
+### 6.8 Follows (`<base>_users`)
 
 Tracks follow relationships between users (from `app.bsky.graph.follow` and `sh.tangled.graph.follow` records).
 
@@ -645,7 +657,7 @@ CREATE INDEX idx_follows_user ON follows(user_did);
 CREATE INDEX idx_follows_target ON follows(target_did);
 ```
 
-### 6.9 OAuth Storage
+### 6.9 OAuth Storage (`<base>_users`)
 
 ```sql
 CREATE TABLE oauth_auth_requests (
@@ -899,7 +911,8 @@ glean/
 │   │   ├── sync.go                # PDS record reconciliation
 │   │   └── xrpc.go                # XRPC query handlers (AppView endpoints)
 │   ├── db/
-│   │   ├── db.go                  # SQLite connection, migrations
+│   │   ├── db.go                  # SQLite connection, single-DB schema
+│   │   ├── multi.go               # Multi-DB setup with ATTACH for cross-database queries
 │   │   ├── user.go                # User queries
 │   │   ├── feed.go                # Feed + subscription queries
 │   │   ├── article.go             # Article queries

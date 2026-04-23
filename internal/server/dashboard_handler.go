@@ -9,21 +9,43 @@ import (
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
+	ctx := r.Context()
 
-	unreadCount, _ := s.db.GetUnreadCount(r.Context(), user.DID, "")
-	subCount, _ := s.db.GetSubscriptionCount(r.Context(), user.DID)
+	unreadCount, err := s.dbs.Articles.GetUnreadCount(ctx, user.DID, "")
+	if err != nil {
+		s.logger.Warn("failed to get unread count", "error", err, "did", user.DID)
+	}
+
+	subCount, err := s.dbs.Articles.GetSubscriptionCount(ctx, user.DID)
+	if err != nil {
+		s.logger.Warn("failed to get subscription count", "error", err, "did", user.DID)
+	}
 
 	page := pageFromRequest(r, 25)
-	articles, _ := s.db.ListUnreadArticles(r.Context(), user.DID, "", page.Limit()+1, page.Offset())
+	articles, err := s.dbs.Articles.ListUnreadArticles(ctx, user.DID, "", page.Limit()+1, page.Offset())
+	if err != nil {
+		s.logger.Warn("failed to list unread articles", "error", err, "did", user.DID)
+	}
 	totalFetched := len(articles)
 	page = page.Paginate(totalFetched)
 	if page.HasNext {
 		articles = articles[:page.PageSize]
 	}
 
-	articleRecs, _ := s.engine.GetArticleRecommendations(r.Context(), user.DID, 5)
-	peopleRecs, _ := s.engine.GetPeopleRecommendations(r.Context(), user.DID, 5)
-	feedRecs, _ := s.engine.GetFeedRecommendations(r.Context(), user.DID, 5)
+	articleRecs, err := s.engine.GetArticleRecommendations(ctx, user.DID, 5)
+	if err != nil {
+		s.logger.Warn("failed to get article recommendations", "error", err, "did", user.DID)
+	}
+
+	peopleRecs, err := s.engine.GetPeopleRecommendations(ctx, user.DID, 5)
+	if err != nil {
+		s.logger.Warn("failed to get people recommendations", "error", err, "did", user.DID)
+	}
+
+	feedRecs, err := s.engine.GetFeedRecommendations(ctx, user.DID, 5)
+	if err != nil {
+		s.logger.Warn("failed to get feed recommendations", "error", err, "did", user.DID)
+	}
 
 	var impressions []cluster.Impression
 	for _, rec := range feedRecs {
@@ -33,12 +55,22 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		impressions = append(impressions, cluster.Impression{TargetType: "article", TargetID: rec.URL})
 	}
 	if len(impressions) > 0 {
-		_ = s.engine.RecordImpressions(r.Context(), user.DID, impressions)
+		if err := s.engine.RecordImpressions(ctx, user.DID, impressions); err != nil {
+			s.logger.Warn("failed to record impressions", "error", err)
+		}
 	}
 
 	since := time.Now().AddDate(0, 0, -7).Format(time.RFC3339)
-	personalTrending, _ := s.db.ListTrendingArticlesForUser(r.Context(), user.DID, since, 5, 0)
-	globalTrending, _ := s.db.ListTrendingArticles(r.Context(), user.DID, since, 10, 0)
+
+	personalTrending, err := s.dbs.Articles.ListTrendingArticlesForUser(ctx, user.DID, since, 5, 0)
+	if err != nil {
+		s.logger.Warn("failed to list personal trending", "error", err, "did", user.DID)
+	}
+
+	globalTrending, err := s.dbs.Articles.ListTrendingArticles(ctx, user.DID, since, 10, 0)
+	if err != nil {
+		s.logger.Warn("failed to list global trending", "error", err, "did", user.DID)
+	}
 
 	s.render(w, r, "dashboard.html", map[string]any{
 		"User":                   user,

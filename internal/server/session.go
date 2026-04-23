@@ -34,7 +34,7 @@ func (s *Server) getUserFromSession(r *http.Request) *db.User {
 		return nil
 	}
 
-	user, err := s.db.GetUser(r.Context(), data.DID)
+	user, err := s.dbs.Users.GetUser(r.Context(), data.DID)
 	if err != nil {
 		return nil
 	}
