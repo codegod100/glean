@@ -17,7 +17,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(param, "did:") {
 		did = param
 	} else {
-		profileUser, err := s.dbs.Articles.GetUserByHandle(ctx, param)
+		profileUser, err := s.dbs.Users.GetUserByHandle(ctx, param)
 		if err == nil {
 			did = profileUser.DID
 		} else {
@@ -31,7 +31,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	profileUser, err := s.dbs.Articles.GetUser(ctx, did)
+	profileUser, err := s.dbs.Users.GetUser(ctx, did)
 	if err != nil {
 		s.logger.Warn("failed to get user", "error", err, "did", did)
 		http.Error(w, "user not found", http.StatusNotFound)
@@ -41,7 +41,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	if !profileUser.AvatarURL.Valid || profileUser.AvatarURL.String == "" {
 		_, displayName, avatarURL, err := atproto.FetchProfile(ctx, did)
 		if err == nil && avatarURL != "" {
-			if err := s.dbs.Articles.UpdateUserProfile(ctx, did, displayName, avatarURL); err != nil {
+			if err := s.dbs.Users.UpdateUserProfile(ctx, did, displayName, avatarURL); err != nil {
 				s.logger.Warn("failed to update user profile", "error", err, "did", did)
 			}
 			profileUser.DisplayName = nullString(displayName)

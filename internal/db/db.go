@@ -9,7 +9,7 @@ import (
 	"github.com/mattn/go-sqlite3"
 )
 
-const DSN = "_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL&_cache=shared"
+const DSN = "_journal_mode=WAL&_busy_timeout=30000&_synchronous=NORMAL&_cache=shared"
 
 func init() {
 	sql.Register("sqlite3_glean", &sqlite3.SQLiteDriver{

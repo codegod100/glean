@@ -33,7 +33,7 @@ func (db *DB) BatchCreateUsers(ctx context.Context, users []UserData) error {
 
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO users (did, handle, display_name, avatar_url, updated_at)
-		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+		VALUES (?, COALESCE(NULLIF(?, ''), ?), NULLIF(?, ''), NULLIF(?, ''), CURRENT_TIMESTAMP)
 		ON CONFLICT(did) DO UPDATE SET
 			handle = COALESCE(NULLIF(excluded.handle, ''), users.handle),
 			display_name = COALESCE(NULLIF(excluded.display_name, ''), users.display_name),
@@ -46,7 +46,7 @@ func (db *DB) BatchCreateUsers(ctx context.Context, users []UserData) error {
 	defer stmt.Close()
 
 	for _, u := range users {
-		if _, err := stmt.ExecContext(ctx, u.DID, u.Handle, u.DisplayName, u.AvatarURL); err != nil {
+		if _, err := stmt.ExecContext(ctx, u.DID, u.Handle, u.DID, u.DisplayName, u.AvatarURL); err != nil {
 			return err
 		}
 	}
