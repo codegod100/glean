@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -91,6 +92,9 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, _, _, err := s.fetcher.Fetch(r.Context(), feedURL, "", "")
+	if err != nil {
+		result, feedURL, err = s.discoverFeed(r.Context(), feedURL)
+	}
 	if err != nil {
 		s.logger.Error("failed to fetch feed", "error", err, "url", feedURL)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -445,6 +449,22 @@ func (s *Server) handleDismissFeedRecommendation(w http.ResponseWriter, r *http.
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) discoverFeed(ctx context.Context, feedURL string) (*feed.ParseResult, string, error) {
+	discovered, err := feed.Discover(ctx, feedURL)
+	if err != nil || len(discovered.FeedURLs) == 0 {
+		return nil, feedURL, fmt.Errorf("no feeds found at %s", feedURL)
+	}
+
+	for _, candidate := range discovered.FeedURLs {
+		result, _, _, fetchErr := s.fetcher.Fetch(ctx, candidate, "", "")
+		if fetchErr == nil && result != nil {
+			return result, candidate, nil
+		}
+	}
+
+	return nil, feedURL, fmt.Errorf("no feeds found at %s", feedURL)
 }
 
 func nullString(s string) sql.NullString {
