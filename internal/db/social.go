@@ -36,11 +36,7 @@ type Like struct {
 }
 
 func (db *DB) CreateAnnotation(ctx context.Context, a *Annotation) error {
-	_, err := db.ExecContext(ctx, `
-		INSERT OR IGNORE INTO annotations (uri, author_did, feed_url, article_url, quote, note, tags, rating, created_at, cid)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, a.URI, a.AuthorDID, a.FeedURL, a.ArticleURL, a.Quote, a.Note, a.Tags, a.Rating, a.CreatedAt, a.CID)
-	return err
+	return db.BatchCreateAnnotations(ctx, []*Annotation{a})
 }
 
 func (db *DB) GetAnnotation(ctx context.Context, id int64) (*Annotation, error) {
@@ -121,19 +117,69 @@ func (db *DB) ListAnnotations(ctx context.Context, feedURL, articleURL, authorDI
 	return annotations, rows.Err()
 }
 
-func (db *DB) CreateLike(ctx context.Context, l *Like) error {
-	result, err := db.ExecContext(ctx, `
-		INSERT OR IGNORE INTO likes (uri, author_did, feed_url, article_url, created_at, cid)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, l.URI, l.AuthorDID, l.FeedURL, l.ArticleURL, l.CreatedAt, l.CID)
+func (db *DB) BatchCreateLikes(ctx context.Context, likes []*Like) error {
+	if len(likes) == 0 {
+		return nil
+	}
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	n, _ := result.RowsAffected()
-	if n == 0 {
+	defer tx.Rollback()
+
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT OR IGNORE INTO likes (uri, author_did, feed_url, article_url, created_at, cid)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, l := range likes {
+		if _, err := stmt.ExecContext(ctx, l.URI, l.AuthorDID, l.FeedURL, l.ArticleURL, l.CreatedAt, l.CID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (db *DB) BatchCreateAnnotations(ctx context.Context, annotations []*Annotation) error {
+	if len(annotations) == 0 {
+		return nil
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT OR IGNORE INTO annotations (uri, author_did, feed_url, article_url, quote, note, tags, rating, created_at, cid)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, a := range annotations {
+		if _, err := stmt.ExecContext(ctx, a.URI, a.AuthorDID, a.FeedURL, a.ArticleURL, a.Quote, a.Note, a.Tags, a.Rating, a.CreatedAt, a.CID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (db *DB) CreateLike(ctx context.Context, l *Like) error {
+	exists, err := db.HasLiked(ctx, l.AuthorDID, l.FeedURL, l.ArticleURL)
+	if err != nil {
+		return err
+	}
+	if exists {
 		return ErrDuplicateLike
 	}
-	return nil
+	return db.BatchCreateLikes(ctx, []*Like{l})
 }
 
 func (db *DB) DeleteLike(ctx context.Context, uri string) error {

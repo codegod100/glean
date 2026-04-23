@@ -14,8 +14,24 @@ type User struct {
 	UpdatedAt   sql.NullTime
 }
 
-func (db *DB) CreateUser(ctx context.Context, did, handle, displayName, avatarURL string) (*User, error) {
-	_, err := db.ExecContext(ctx, `
+type UserData struct {
+	DID         string
+	Handle      string
+	DisplayName string
+	AvatarURL   string
+}
+
+func (db *DB) BatchCreateUsers(ctx context.Context, users []UserData) error {
+	if len(users) == 0 {
+		return nil
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO users (did, handle, display_name, avatar_url, updated_at)
 		VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(did) DO UPDATE SET
@@ -23,7 +39,22 @@ func (db *DB) CreateUser(ctx context.Context, did, handle, displayName, avatarUR
 			display_name = COALESCE(NULLIF(excluded.display_name, ''), users.display_name),
 			avatar_url = COALESCE(NULLIF(excluded.avatar_url, ''), users.avatar_url),
 			updated_at = CURRENT_TIMESTAMP
-	`, did, handle, displayName, avatarURL)
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, u := range users {
+		if _, err := stmt.ExecContext(ctx, u.DID, u.Handle, u.DisplayName, u.AvatarURL); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (db *DB) CreateUser(ctx context.Context, did, handle, displayName, avatarURL string) (*User, error) {
+	err := db.BatchCreateUsers(ctx, []UserData{{DID: did, Handle: handle, DisplayName: displayName, AvatarURL: avatarURL}})
 	if err != nil {
 		return nil, err
 	}

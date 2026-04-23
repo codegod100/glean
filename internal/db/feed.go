@@ -42,16 +42,7 @@ type Subscription struct {
 }
 
 func (db *DB) UpsertFeed(ctx context.Context, feed *Feed) error {
-	_, err := db.ExecContext(ctx, `
-		INSERT INTO feeds (feed_url, title, site_url, description, feed_type)
-		VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(feed_url) DO UPDATE SET
-			title = excluded.title,
-			site_url = excluded.site_url,
-			description = excluded.description,
-			feed_type = excluded.feed_type
-	`, feed.FeedURL, feed.Title, feed.SiteURL, feed.Description, feed.FeedType)
-	return err
+	return db.BatchUpsertFeeds(ctx, []*Feed{feed})
 }
 
 func (db *DB) GetFeed(ctx context.Context, feedURL string) (*Feed, error) {
@@ -138,18 +129,14 @@ func (db *DB) DecrementSubscriberCount(ctx context.Context, feedURL string) erro
 }
 
 func (db *DB) CreateSubscription(ctx context.Context, userDID, feedURL, title, category, uri, cid string) error {
-	result, err := db.ExecContext(ctx, `
-		INSERT OR IGNORE INTO subscriptions (user_did, feed_url, title, category, uri, cid)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, userDID, feedURL, nilIfEmpty(title), category, uriOrNil(category, uri), uriOrNil(category, cid))
-	if err != nil {
-		return err
-	}
-	n, _ := result.RowsAffected()
-	if n == 0 {
+	existing, err := db.GetSubscription(ctx, userDID, feedURL)
+	if err == nil && existing != nil {
+		if !existing.URI.Valid || existing.URI.String == "" {
+			return db.UpdateSubscriptionURI(ctx, userDID, feedURL, uri, cid)
+		}
 		return ErrDuplicateSubscription
 	}
-	return db.IncrementSubscriberCount(ctx, feedURL)
+	return db.BatchReconcileSubscriptions(ctx, userDID, []SubData{{FeedURL: feedURL, Title: title, Category: category, URI: uri, CID: cid}})
 }
 
 func (db *DB) UpdateSubscriptionURI(ctx context.Context, userDID, feedURL, uri, cid string) error {
@@ -380,6 +367,117 @@ func (db *DB) ListAllFeeds(ctx context.Context, limit, offset int) ([]*Feed, err
 		feeds = append(feeds, f)
 	}
 	return feeds, rows.Err()
+}
+
+type SubData struct {
+	FeedURL  string
+	Title    string
+	Category string
+	URI      string
+	CID      string
+}
+
+func (db *DB) BatchUpsertFeeds(ctx context.Context, feeds []*Feed) error {
+	if len(feeds) == 0 {
+		return nil
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO feeds (feed_url, title, site_url, description, feed_type)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(feed_url) DO UPDATE SET
+			title = excluded.title,
+			site_url = excluded.site_url,
+			description = excluded.description,
+			feed_type = excluded.feed_type
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, f := range feeds {
+		if _, err := stmt.ExecContext(ctx, f.FeedURL, f.Title, f.SiteURL, f.Description, f.FeedType); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (db *DB) BatchReconcileSubscriptions(ctx context.Context, userDID string, subs []SubData) error {
+	if len(subs) == 0 {
+		return nil
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	rows, err := tx.QueryContext(ctx, `SELECT feed_url, COALESCE(uri, '') FROM subscriptions WHERE user_did = ?`, userDID)
+	if err != nil {
+		return err
+	}
+	existing := make(map[string]string, len(subs))
+	for rows.Next() {
+		var feedURL, uri string
+		if err := rows.Scan(&feedURL, &uri); err != nil {
+			rows.Close()
+			return err
+		}
+		existing[feedURL] = uri
+	}
+	rows.Close()
+
+	insertStmt, err := tx.PrepareContext(ctx, `
+		INSERT OR IGNORE INTO subscriptions (user_did, feed_url, title, category, uri, cid)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return err
+	}
+	defer insertStmt.Close()
+
+	updateStmt, err := tx.PrepareContext(ctx, `
+		UPDATE subscriptions SET uri = ?, cid = ? WHERE user_did = ? AND feed_url = ?
+	`)
+	if err != nil {
+		return err
+	}
+	defer updateStmt.Close()
+
+	incrStmt, err := tx.PrepareContext(ctx, `UPDATE feeds SET subscriber_count = subscriber_count + 1 WHERE feed_url = ?`)
+	if err != nil {
+		return err
+	}
+	defer incrStmt.Close()
+
+	for _, sub := range subs {
+		if existingURI, ok := existing[sub.FeedURL]; ok {
+			if existingURI == "" && sub.URI != "" {
+				if _, err := updateStmt.ExecContext(ctx, sub.URI, sub.CID, userDID, sub.FeedURL); err != nil {
+					return err
+				}
+			}
+			continue
+		}
+		result, err := insertStmt.ExecContext(ctx, userDID, sub.FeedURL, nilIfEmpty(sub.Title), sub.Category, uriOrNil(sub.Category, sub.URI), uriOrNil(sub.Category, sub.CID))
+		if err != nil {
+			return err
+		}
+		n, _ := result.RowsAffected()
+		if n > 0 {
+			if _, err := incrStmt.ExecContext(ctx, sub.FeedURL); err != nil {
+				return err
+			}
+		}
+	}
+	return tx.Commit()
 }
 
 func (db *DB) ListUnsubscribedFeeds(ctx context.Context, userDID string, limit, offset int) ([]*Feed, error) {

@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"golang.org/x/sync/errgroup"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -488,16 +490,24 @@ func (s *Server) BackfillFromCollectionDir(ctx context.Context, collectionDirURL
 			defer func() { <-sem }()
 			defer wg.Done()
 
-			handle := did
-			if ident, err := atproto.ResolveIdentity(ctx, did); err == nil {
-				handle = ident.Handle.String()
-			}
+			g, gCtx := errgroup.WithContext(ctx)
 
-			var displayName, avatarURL string
-			if _, dn, avatar, err := atproto.FetchProfile(ctx, did); err == nil {
-				displayName = dn
-				avatarURL = avatar
-			}
+			var handle, displayName, avatarURL string
+			g.Go(func() error {
+				if ident, err := atproto.ResolveIdentity(gCtx, did); err == nil {
+					handle = ident.Handle.String()
+				}
+				return nil
+			})
+			g.Go(func() error {
+				if h, dn, avatar, err := atproto.FetchProfile(gCtx, did); err == nil {
+					handle = h
+					displayName = dn
+					avatarURL = avatar
+				}
+				return nil
+			})
+			_ = g.Wait()
 
 			if _, err := s.dbs.Users.CreateUser(ctx, did, handle, displayName, avatarURL); err != nil {
 				s.logger.Error("failed to create user during backfill", "error", err, "did", did)

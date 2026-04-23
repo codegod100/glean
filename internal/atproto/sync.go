@@ -5,17 +5,13 @@
 //   - we only sync known users (not the entire network)
 //   - the Jetstream consumer handles real-time events concurrently
 //   - all reconcile operations are idempotent
-//
-// Known trade-off: syncFollows atomically replaces all follows for a user.
-// A Jetstream follow event arriving mid-sync could be lost, but self-heals
-// on the next sync cycle or Jetstream event.
 package atproto
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log/slog"
+	"sync"
 	"time"
 
 	"pkg.rbrt.fr/glean/internal/db"
@@ -35,19 +31,19 @@ func NewSync(articles, users *db.DB, client *Client, logger *slog.Logger) *Sync 
 func (s *Sync) Run(ctx context.Context, userDID string) error {
 	s.logger.Info("syncing from PDS", "did", userDID)
 
-	if err := s.syncCollection(ctx, userDID, CollectionSubscription, s.reconcileSubscription); err != nil {
+	if err := s.syncCollection(ctx, userDID, CollectionSubscription, s.batchReconcileSubscriptions); err != nil {
 		s.logger.Error("sync subscriptions failed", "error", err, "did", userDID)
 	}
-	if err := s.syncCollection(ctx, userDID, CollectionSkyreaderSubscription, s.reconcileSkyreaderSubscription); err != nil {
+	if err := s.syncCollection(ctx, userDID, CollectionSkyreaderSubscription, s.batchReconcileSkyreaderSubscriptions); err != nil {
 		s.logger.Error("sync skyreader subscriptions failed", "error", err, "did", userDID)
 	}
-	if err := s.syncCollection(ctx, userDID, CollectionLike, s.reconcileLike); err != nil {
+	if err := s.syncCollection(ctx, userDID, CollectionLike, s.batchReconcileLikes); err != nil {
 		s.logger.Error("sync likes failed", "error", err, "did", userDID)
 	}
-	if err := s.syncCollection(ctx, userDID, CollectionAnnotation, s.reconcileAnnotation); err != nil {
+	if err := s.syncCollection(ctx, userDID, CollectionAnnotation, s.batchReconcileAnnotations); err != nil {
 		s.logger.Error("sync annotations failed", "error", err, "did", userDID)
 	}
-	if err := s.syncCollection(ctx, userDID, CollectionMarginNote, s.reconcileMarginNote); err != nil {
+	if err := s.syncCollection(ctx, userDID, CollectionMarginNote, s.batchReconcileMarginNotes); err != nil {
 		s.logger.Error("sync margin notes failed", "error", err, "did", userDID)
 	}
 	if err := s.syncFollows(ctx, userDID); err != nil {
@@ -57,187 +53,171 @@ func (s *Sync) Run(ctx context.Context, userDID string) error {
 	return nil
 }
 
-type reconcileFunc func(ctx context.Context, userDID, uri, cid string, value json.RawMessage) error
-
-func (s *Sync) syncCollection(ctx context.Context, userDID, collection string, fn reconcileFunc) error {
+func (s *Sync) syncCollection(ctx context.Context, userDID, collection string, fn func(ctx context.Context, userDID string, records []Record) error) error {
+	var allRecords []Record
 	cursor := ""
 	for {
 		records, next, err := s.client.ListRecords(ctx, userDID, collection, 100, cursor)
 		if err != nil {
 			return err
 		}
-
-		for _, r := range records {
-			if err := fn(ctx, userDID, r.URI, r.CID, r.Value); err != nil {
-				s.logger.Error("reconcile record error", "error", err, "uri", r.URI)
-			}
-		}
-
+		allRecords = append(allRecords, records...)
 		if next == "" || len(records) == 0 {
 			break
 		}
 		cursor = next
 	}
-	return nil
-}
-
-func (s *Sync) reconcileSubscription(ctx context.Context, userDID, uri, cid string, value json.RawMessage) error {
-	var rec SubscriptionRecord
-	if err := json.Unmarshal(value, &rec); err != nil {
-		return err
-	}
-
-	if rec.FeedURL == "" {
+	if len(allRecords) == 0 {
 		return nil
 	}
+	return fn(ctx, userDID, allRecords)
+}
 
-	f := &db.Feed{FeedURL: rec.FeedURL, Title: db.NullStr(rec.Title)}
-	_ = s.articles.UpsertFeed(ctx, f)
+func (s *Sync) batchReconcileSubscriptions(ctx context.Context, userDID string, records []Record) error {
+	var feeds []*db.Feed
+	var subs []db.SubData
 
-	existing, err := s.articles.GetSubscription(ctx, userDID, rec.FeedURL)
-	if err == nil && existing != nil {
-		if !existing.URI.Valid || existing.URI.String == "" {
-			return s.articles.UpdateSubscriptionURI(ctx, userDID, rec.FeedURL, uri, cid)
+	for _, r := range records {
+		var rec SubscriptionRecord
+		if err := json.Unmarshal(r.Value, &rec); err != nil {
+			continue
 		}
-		return nil
-	}
-
-	err = s.articles.CreateSubscription(ctx, userDID, rec.FeedURL, rec.Title, rec.Category, uri, cid)
-	if errors.Is(err, db.ErrDuplicateSubscription) {
-		return nil
-	}
-	return err
-}
-
-func (s *Sync) reconcileSkyreaderSubscription(ctx context.Context, userDID, uri, cid string, value json.RawMessage) error {
-	var rec SkyreaderSubscriptionRecord
-	if err := json.Unmarshal(value, &rec); err != nil {
-		return err
-	}
-
-	if rec.FeedURL == "" {
-		return nil
-	}
-
-	f := &db.Feed{FeedURL: rec.FeedURL, Title: db.NullStr(rec.Title), SiteURL: db.NullStr(rec.SiteURL)}
-	_ = s.articles.UpsertFeed(ctx, f)
-
-	existing, err := s.articles.GetSubscription(ctx, userDID, rec.FeedURL)
-	if err == nil && existing != nil {
-		if !existing.URI.Valid || existing.URI.String == "" {
-			return s.articles.UpdateSubscriptionURI(ctx, userDID, rec.FeedURL, uri, cid)
+		if rec.FeedURL == "" {
+			continue
 		}
-		return nil
+		feeds = append(feeds, &db.Feed{FeedURL: rec.FeedURL, Title: db.NullStr(rec.Title)})
+		subs = append(subs, db.SubData{
+			FeedURL:  rec.FeedURL,
+			Title:    rec.Title,
+			Category: rec.Category,
+			URI:      r.URI,
+			CID:      r.CID,
+		})
 	}
 
-	err = s.articles.CreateSubscription(ctx, userDID, rec.FeedURL, rec.Title, "", uri, cid)
-	if errors.Is(err, db.ErrDuplicateSubscription) {
-		return nil
+	if len(feeds) > 0 {
+		_ = s.articles.BatchUpsertFeeds(ctx, feeds)
 	}
-	return err
+	return s.articles.BatchReconcileSubscriptions(ctx, userDID, subs)
 }
 
-func (s *Sync) reconcileLike(ctx context.Context, userDID, uri, cid string, value json.RawMessage) error {
-	var rec LikeRecord
-	if err := json.Unmarshal(value, &rec); err != nil {
-		return err
+func (s *Sync) batchReconcileSkyreaderSubscriptions(ctx context.Context, userDID string, records []Record) error {
+	var feeds []*db.Feed
+	var subs []db.SubData
+
+	for _, r := range records {
+		var rec SkyreaderSubscriptionRecord
+		if err := json.Unmarshal(r.Value, &rec); err != nil {
+			continue
+		}
+		if rec.FeedURL == "" {
+			continue
+		}
+		feeds = append(feeds, &db.Feed{FeedURL: rec.FeedURL, Title: db.NullStr(rec.Title), SiteURL: db.NullStr(rec.SiteURL)})
+		subs = append(subs, db.SubData{
+			FeedURL: rec.FeedURL,
+			Title:   rec.Title,
+			URI:     r.URI,
+			CID:     r.CID,
+		})
 	}
 
-	if rec.FeedURL == "" || rec.ArticleURL == "" {
-		return nil
+	if len(feeds) > 0 {
+		_ = s.articles.BatchUpsertFeeds(ctx, feeds)
 	}
-
-	exists, err := s.articles.HasLiked(ctx, userDID, rec.FeedURL, rec.ArticleURL)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return nil
-	}
-
-	t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
-	like := &db.Like{
-		URI:        uri,
-		AuthorDID:  userDID,
-		FeedURL:    rec.FeedURL,
-		ArticleURL: rec.ArticleURL,
-		CreatedAt:  db.NullTime(t),
-		CID:        db.NullStr(cid),
-	}
-	err = s.articles.CreateLike(ctx, like)
-	if errors.Is(err, db.ErrDuplicateLike) {
-		return nil
-	}
-	return err
+	return s.articles.BatchReconcileSubscriptions(ctx, userDID, subs)
 }
 
-func (s *Sync) reconcileAnnotation(ctx context.Context, userDID, uri, cid string, value json.RawMessage) error {
-	var rec AnnotationRecord
-	if err := json.Unmarshal(value, &rec); err != nil {
-		return err
+func (s *Sync) batchReconcileLikes(ctx context.Context, userDID string, records []Record) error {
+	var likes []*db.Like
+
+	for _, r := range records {
+		var rec LikeRecord
+		if err := json.Unmarshal(r.Value, &rec); err != nil {
+			continue
+		}
+		if rec.FeedURL == "" || rec.ArticleURL == "" {
+			continue
+		}
+		t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
+		likes = append(likes, &db.Like{
+			URI:        r.URI,
+			AuthorDID:  userDID,
+			FeedURL:    rec.FeedURL,
+			ArticleURL: rec.ArticleURL,
+			CreatedAt:  db.NullTime(t),
+			CID:        db.NullStr(r.CID),
+		})
 	}
 
-	if rec.FeedURL == "" || rec.ArticleURL == "" {
-		return nil
-	}
-
-	exists, err := s.articles.AnnotationExists(ctx, uri)
-	if err != nil || exists {
-		return err
-	}
-
-	t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
-	a := &db.Annotation{
-		URI:        uri,
-		AuthorDID:  userDID,
-		FeedURL:    rec.FeedURL,
-		ArticleURL: rec.ArticleURL,
-		Quote:      db.NullStr(rec.Quote),
-		Note:       db.NullStr(rec.Note),
-		Tags:       db.NullStrTags(rec.Tags),
-		CreatedAt:  db.NullTime(t),
-		CID:        db.NullStr(cid),
-	}
-	if rec.Rating > 0 {
-		a.Rating = db.NullInt(int64(rec.Rating))
-	}
-	return s.articles.CreateAnnotation(ctx, a)
+	return s.articles.BatchCreateLikes(ctx, likes)
 }
 
-func (s *Sync) reconcileMarginNote(ctx context.Context, userDID, uri, cid string, value json.RawMessage) error {
-	var rec MarginNoteRecord
-	if err := json.Unmarshal(value, &rec); err != nil {
-		return err
+func (s *Sync) batchReconcileAnnotations(ctx context.Context, userDID string, records []Record) error {
+	var annotations []*db.Annotation
+
+	for _, r := range records {
+		var rec AnnotationRecord
+		if err := json.Unmarshal(r.Value, &rec); err != nil {
+			continue
+		}
+		if rec.FeedURL == "" || rec.ArticleURL == "" {
+			continue
+		}
+		t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
+		a := &db.Annotation{
+			URI:        r.URI,
+			AuthorDID:  userDID,
+			FeedURL:    rec.FeedURL,
+			ArticleURL: rec.ArticleURL,
+			Quote:      db.NullStr(rec.Quote),
+			Note:       db.NullStr(rec.Note),
+			Tags:       db.NullStrTags(rec.Tags),
+			CreatedAt:  db.NullTime(t),
+			CID:        db.NullStr(r.CID),
+		}
+		if rec.Rating > 0 {
+			a.Rating = db.NullInt(int64(rec.Rating))
+		}
+		annotations = append(annotations, a)
 	}
 
-	articleURL, quote, note, tags := rec.ToAnnotation()
-	if articleURL == "" {
-		return nil
+	return s.articles.BatchCreateAnnotations(ctx, annotations)
+}
+
+func (s *Sync) batchReconcileMarginNotes(ctx context.Context, userDID string, records []Record) error {
+	var annotations []*db.Annotation
+
+	for _, r := range records {
+		var rec MarginNoteRecord
+		if err := json.Unmarshal(r.Value, &rec); err != nil {
+			continue
+		}
+		articleURL, quote, note, tags := rec.ToAnnotation()
+		if articleURL == "" {
+			continue
+		}
+
+		feedURL := ""
+		if article, err := s.articles.GetArticleByURL(ctx, articleURL); err == nil {
+			feedURL = article.FeedURL
+		}
+
+		t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
+		annotations = append(annotations, &db.Annotation{
+			URI:        r.URI,
+			AuthorDID:  userDID,
+			FeedURL:    feedURL,
+			ArticleURL: articleURL,
+			Quote:      db.NullStr(quote),
+			Note:       db.NullStr(note),
+			Tags:       db.NullStrTags(tags),
+			CreatedAt:  db.NullTime(t),
+			CID:        db.NullStr(r.CID),
+		})
 	}
 
-	exists, err := s.articles.AnnotationExists(ctx, uri)
-	if err != nil || exists {
-		return err
-	}
-
-	feedURL := ""
-	if article, err := s.articles.GetArticleByURL(ctx, articleURL); err == nil {
-		feedURL = article.FeedURL
-	}
-
-	t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
-	a := &db.Annotation{
-		URI:        uri,
-		AuthorDID:  userDID,
-		FeedURL:    feedURL,
-		ArticleURL: articleURL,
-		Quote:      db.NullStr(quote),
-		Note:       db.NullStr(note),
-		Tags:       db.NullStrTags(tags),
-		CreatedAt:  db.NullTime(t),
-		CID:        db.NullStr(cid),
-	}
-	return s.articles.CreateAnnotation(ctx, a)
+	return s.articles.BatchCreateAnnotations(ctx, annotations)
 }
 
 func (s *Sync) syncFollows(ctx context.Context, userDID string) error {
@@ -266,16 +246,6 @@ func (s *Sync) syncFollows(ctx context.Context, userDID string) error {
 					CID:        db.NullStr(r.CID),
 					FollowedAt: db.NullTime(t),
 				}
-
-				// auto onboard followers
-				var handle, displayName, avatarURL string
-				if h, dn, avatar, err := FetchProfile(ctx, rec.Subject); err == nil {
-					handle = h
-					displayName = dn
-					avatarURL = avatar
-				}
-
-				s.users.CreateUser(ctx, rec.Subject, handle, displayName, avatarURL)
 			}
 
 			if next == "" || len(records) == 0 {
@@ -288,6 +258,43 @@ func (s *Sync) syncFollows(ctx context.Context, userDID string) error {
 	if len(activeFollows) == 0 {
 		return nil
 	}
+
+	type profileResult struct {
+		did         string
+		handle      string
+		displayName string
+		avatarURL   string
+	}
+
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 10)
+	results := make([]profileResult, 0, len(activeFollows))
+	var mu sync.Mutex
+
+	for targetDID := range activeFollows {
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(did string) {
+			defer func() { <-sem }()
+			defer wg.Done()
+			var handle, displayName, avatarURL string
+			if h, dn, avatar, err := FetchProfile(ctx, did); err == nil {
+				handle = h
+				displayName = dn
+				avatarURL = avatar
+			}
+			mu.Lock()
+			results = append(results, profileResult{did, handle, displayName, avatarURL})
+			mu.Unlock()
+		}(targetDID)
+	}
+	wg.Wait()
+
+	var users []db.UserData
+	for _, r := range results {
+		users = append(users, db.UserData{DID: r.did, Handle: r.handle, DisplayName: r.displayName, AvatarURL: r.avatarURL})
+	}
+	_ = s.users.BatchCreateUsers(ctx, users)
 
 	return s.users.SyncFollows(ctx, userDID, activeFollows)
 }
