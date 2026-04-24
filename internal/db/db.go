@@ -11,8 +11,6 @@ import (
 	"github.com/mattn/go-sqlite3"
 )
 
-const DSN = "_journal_mode=WAL&_busy_timeout=30000&_synchronous=NORMAL&_cache=shared"
-
 type DB struct {
 	*sql.DB
 }
@@ -42,7 +40,11 @@ func OpenAll(basePath string) (*Databases, error) {
 				return err
 			}
 			for _, p := range []string{
+				`PRAGMA journal_mode=WAL`,
 				`PRAGMA wal_autocheckpoint = 1000`,
+				`PRAGMA busy_timeout = 30000`,
+				`PRAGMA synchronous = NORMAL`,
+				`PRAGMA cache = shared`,
 				`PRAGMA temp_store = MEMORY`,
 				`PRAGMA mmap_size = 268435456`,
 			} {
@@ -53,14 +55,40 @@ func OpenAll(basePath string) (*Databases, error) {
 			if _, err := conn.Exec(fmt.Sprintf("ATTACH DATABASE '%s' AS articles", articlesPath), nil); err != nil {
 				return err
 			}
+			for _, p := range []string{
+				`PRAGMA articles.journal_mode=WAL`,
+				`PRAGMA articles.wal_autocheckpoint = 1000`,
+				`PRAGMA articles.busy_timeout = 30000`,
+				`PRAGMA articles.synchronous = NORMAL`,
+				`PRAGMA articles.cache = shared`,
+				`PRAGMA articles.temp_store = MEMORY`,
+				`PRAGMA articles.mmap_size = 268435456`,
+			} {
+				if _, err := conn.Exec(p, nil); err != nil {
+					return err
+				}
+			}
 			if _, err := conn.Exec(fmt.Sprintf("ATTACH DATABASE '%s' AS recs", recsPath), nil); err != nil {
 				return err
+			}
+			for _, p := range []string{
+				`PRAGMA recs.journal_mode=WAL`,
+				`PRAGMA recs.wal_autocheckpoint = 1000`,
+				`PRAGMA recs.busy_timeout = 30000`,
+				`PRAGMA recs.synchronous = NORMAL`,
+				`PRAGMA recs.cache = shared`,
+				`PRAGMA recs.temp_store = MEMORY`,
+				`PRAGMA recs.mmap_size = 268435456`,
+			} {
+				if _, err := conn.Exec(p, nil); err != nil {
+					return err
+				}
 			}
 			return nil
 		},
 	})
 
-	db, err := sql.Open(driverName, basePath+"_users?cache=shared&"+DSN)
+	db, err := sql.Open(driverName, basePath+"_users")
 	if err != nil {
 		return nil, err
 	}
