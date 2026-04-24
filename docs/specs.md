@@ -298,7 +298,7 @@ A background scheduler polls subscribed feeds on a configurable tick. Feeds are 
 
 The scheduler uses a configurable tick interval with in-flight deduplication:
 
-- **Tick interval**: The scheduler checks for stale feeds every `GLEAN_FETCH_INTERVAL` (default 5 minutes)
+- **Tick interval**: The scheduler checks for stale feeds every `GLEAN_FETCH_INTERVAL` (default 15 minutes)
 - **Staleness threshold**: Feeds not fetched in the last 30 minutes are eligible
 - **Subscriber filter**: Only feeds with `subscriber_count > 0` are fetched
 - **In-flight dedup**: If a feed is already being fetched (e.g., manual refresh and background scheduler overlap), the second caller waits for the first to complete rather than fetching again
@@ -395,7 +395,7 @@ Beyond the clustering system, Glean also discovers new feeds from article conten
 
 - **Auto-discovery**: When fetching a feed, parse `<link rel="alternate" type="application/rss+xml">` from the feed's site URL to discover related feeds
 - **Feedfavicon**: Fetch `favicon.ico` or `/apple-touch-icon.png` from the feed's site URL for display
-- **Dead feed detection**: If a feed fails for 7 consecutive fetches (14 days at base interval), mark it as dead. Notify the user and offer to remove it.
+- **Dead feed detection**: If a feed fails for 7 consecutive fetches, mark it as dead. Notify the user and offer to remove it.
 
 ## 5. System Architecture
 
@@ -668,7 +668,7 @@ Feed description text similarity is also computed (word overlap after stopword r
 For any two users, compute Jaccard over their subscription sets, plus like co-occurrence (time-decayed) and tag overlap:
 
 ```
-J(U1, U2) = jaccard_subscriptions + 0.3 * jaccard_likes + 0.2 * jaccard_tags + follow_boost
+J(U1, U2) = jaccard_subscriptions + 0.3 * jaccard_likes + 0.2 * jaccard_tags + 0.5 * follow_boost
 ```
 
 Like overlap uses exponential time decay: `EXP(-0.023 * age_days)` (30-day half-life).
@@ -818,34 +818,34 @@ The server renders HTML fragments that htmx swaps into the page. No JSON API nee
 
 ### 8.1 Pages
 
-| Route                          | Method | Description                                              |
-| ------------------------------ | ------ | -------------------------------------------------------- |
-| `/`                            | GET    | Landing page / auth redirect                             |
-| `/dashboard`                   | GET    | Main dashboard: unread articles, recommendations sidebar |
-| `/feeds`                       | GET    | Manage RSS subscriptions (OPML import for onboarding)    |
-| `/feeds/list`                  | GET    | Feed list fragment (htmx partial)                        |
-| `/feeds/opml/upload`           | POST   | Upload OPML file to bulk-import subscriptions            |
-| `/feeds/opml/download`         | GET    | Export subscriptions as OPML (offboarding)               |
-| `/feeds/add`                   | POST   | Add a single feed URL                                    |
-| `/feeds/remove`                | DELETE | Remove a feed                                            |
-| `/feeds/refresh`               | POST   | Refresh all subscribed feeds                             |
-| `/feeds/retry`                 | POST   | Retry a failed feed                                      |
-| `/feeds/clear`                 | POST   | Clear all subscriptions                                  |
-| `/feeds/dismiss`               | POST   | Dismiss a feed recommendation                            |
-| `/articles`                    | GET    | Read articles (paginated, filterable by feed)            |
-| `/articles/new-count`          | GET    | Get count of new articles (for badge updates)            |
-| `/articles/{id}`               | GET    | Article detail view                                      |
-| `/articles/{id}/read`          | POST   | Mark article as read                                     |
-| `/articles/{id}/unread`        | POST   | Mark article as unread                                   |
-| `/articles/{id}/like`          | POST   | Like an article                                          |
-| `/articles/{id}/fetch-content` | POST   | Fetch full article content from original URL             |
-| `/articles/mark-all-read`      | POST   | Mark all articles as read                                |
-| `/articles/dismiss`            | POST   | Dismiss an article recommendation                        |
-| `/trending`                    | GET    | Community feed: articles ranked by likes                 |
-| `/library`                     | GET    | Liked articles and annotations                           |
-| `/library/create`              | POST   | Create annotation on an article                          |
-| `/library/{id}/delete`         | POST   | Delete an annotation                                     |
-| `/profile/{did}`               | GET    | Public profile: their feeds, likes, annotations          |
+| Route                          | Method | Description                                                         |
+| ------------------------------ | ------ | ------------------------------------------------------------------- |
+| `/`                            | GET    | Landing page / auth redirect                                        |
+| `/dashboard`                   | GET    | Main dashboard: unread articles, recommendations sidebar            |
+| `/feeds`                       | GET    | Manage RSS subscriptions (OPML import for onboarding)               |
+| `/feeds/list`                  | GET    | Feed list fragment (htmx partial)                                   |
+| `/feeds/opml/upload`           | POST   | Upload OPML file to bulk-import subscriptions (redirects to /feeds) |
+| `/feeds/opml/download`         | GET    | Export subscriptions as OPML (offboarding)                          |
+| `/feeds/add`                   | POST   | Add a single feed URL                                               |
+| `/feeds/remove`                | DELETE | Remove a feed                                                       |
+| `/feeds/refresh`               | POST   | Refresh all subscribed feeds                                        |
+| `/feeds/retry`                 | POST   | Retry a failed feed                                                 |
+| `/feeds/clear`                 | POST   | Clear all subscriptions                                             |
+| `/feeds/dismiss`               | POST   | Dismiss a feed recommendation                                       |
+| `/articles`                    | GET    | Read articles (paginated, filterable by feed)                       |
+| `/articles/new-count`          | GET    | Get count of new articles (for badge updates)                       |
+| `/articles/{id}`               | GET    | Article detail view                                                 |
+| `/articles/{id}/read`          | POST   | Mark article as read                                                |
+| `/articles/{id}/unread`        | POST   | Mark article as unread                                              |
+| `/articles/{id}/like`          | POST   | Like an article                                                     |
+| `/articles/{id}/fetch-content` | POST   | Fetch full article content from original URL                        |
+| `/articles/mark-all-read`      | POST   | Mark all articles as read                                           |
+| `/articles/dismiss`            | POST   | Dismiss an article recommendation                                   |
+| `/trending`                    | GET    | Community feed: articles ranked by likes                            |
+| `/library`                     | GET    | Liked articles and annotations                                      |
+| `/library/create`              | POST   | Create annotation on an article                                     |
+| `/library/{id}/delete`         | POST   | Delete an annotation                                                |
+| `/profile/{did}`               | GET    | Public profile: their feeds, likes, annotations                     |
 
 ### 8.2 htmx Patterns
 
@@ -881,14 +881,12 @@ glean/
 │   │   ├── sync.go                # PDS record reconciliation
 │   │   └── xrpc.go                # XRPC query handlers (AppView endpoints)
 │   ├── db/
-│   │   ├── db.go                  # SQLite connection, single-DB schema
-│   │   ├── multi.go               # Multi-DB setup with ATTACH for cross-database queries
+│   │   ├── db.go                  # SQLite connection with ATTACH for cross-database queries
 │   │   ├── user.go                # User queries
 │   │   ├── feed.go                # Feed + subscription queries
 │   │   ├── article.go             # Article queries
 │   │   ├── social.go              # Like, annotation queries
 │   │   ├── follow.go              # Follow queries
-│   │   ├── cluster.go             # Similarity + recommendation queries
 │   │   ├── oauth_store.go         # OAuth session storage
 │   │   └── store.go               # FeedStore adapter for scheduler
 │   ├── feed/
@@ -904,8 +902,7 @@ glean/
 │   │   └── metrics.go             # Prometheus metrics definitions
 │   ├── cluster/
 │   │   ├── jaccard.go             # Jaccard similarity computation
-│   │   ├── recommender.go         # Feed + people recommendation queries (on-demand)
-│   │   ├── scoring.go             # Multi-signal composite scoring queries
+│   │   ├── scoring.go             # Feed + people + article recommendation queries (on-demand)
 │   │   ├── social.go              # Follow-distance computation (1-2 hop)
 │   │   ├── dismiss.go             # Dismiss + impression tracking
 │   │   ├── weights.go             # Bandit-style signal weight auto-tuning
@@ -976,8 +973,8 @@ Browser ──POST /feeds/opml/upload──► Server
                                       ├─► Fetch each feed, validate + store in `feeds` table
                                       ├─► For each feed, create an `at.glean.subscription` record
                                       │   via XRPC write to user's PDS
-                                      ├─► Insert subscriptions in local `subscriptions` table
-                                      └─◄ Return updated feed list fragment (htmx)
+                                       ├─► Insert subscriptions in local `subscriptions` table
+                                       └─◄ Redirect to `/feeds`
 ```
 
 ### 11.2 Reading the Feed
@@ -993,17 +990,19 @@ Browser ──GET /articles──► Server
 ### 11.3 Recommendations
 
 ```
-Cron (every 6h) ──► Cluster Engine
-                        │
-                        ├─► SELECT user similarity pairs
-                        ├─► Compute recommendation scores
-                        └─► INSERT into user_feed_recommendations
+Cron (every 10m) ──► Cluster Engine
+                          │
+                          ├─► Compute feed similarity
+                          ├─► Compute user similarity
+                          ├─► Compute follow distances
+                          ├─► Compute signal profiles
+                          └─► Auto-dismiss stale recommendations
 
-Browser ──GET /discover/feeds──► Server
-                                  │
-                                  ├─► SELECT from user_feed_recommendations
-                                  ├─► Fetch feed metadata
-                                  └─◄ Render recommendation cards (htmx)
+Browser ──GET /dashboard──► Server
+                                │
+                                ├─► Compute recommendations on-demand
+                                ├─► Fetch feed metadata
+                                └─◄ Render recommendation cards (htmx)
 ```
 
 ## 12. Key Design Decisions
@@ -1035,7 +1034,6 @@ Glean exposes a `/metrics` endpoint for monitoring. Key metrics:
 - **`glean_jetstream_reconnects_total`** — Jetstream reconnection count
 - **`glean_http_requests_total`** — HTTP request counts labeled by method, path, and status
 - **`glean_http_request_duration_seconds`** — HTTP request duration labeled by method and path
-- **`glean_users_active_total`** — Number of users with active sessions
 - **`glean_pds_sync_runs_total`** / **`glean_pds_sync_errors_total`** — PDS sync runs and errors
 - **`glean_cluster_runs_total`** / **`glean_cluster_duration_seconds`** — Recommendation engine runs and timing
 

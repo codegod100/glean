@@ -167,6 +167,5 @@ All custom colors live under the `spot` namespace in `tailwind.config.js`. CSS v
 | Article Detail  | `max-w-3xl` centered   | Content, like/share/read buttons, annotations                  |
 | Feeds           | 2/3 + 1/3 grid         | Feed list with categories + add/import sidebar, refresh button |
 | Trending        | Full-width list        | Like/annotation counts on each article                         |
-| Discover        | Mixed grid             | Recommendations + people + browse all                          |
-| Annotations     | Full-width list        | Filter by article URL, load more                               |
+| Library         | Full-width list        | Liked articles and annotations                                 |
 | Profile         | `max-w-2xl` centered   | Avatar, stats, feeds, annotations                              |

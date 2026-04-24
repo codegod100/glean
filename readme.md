@@ -37,20 +37,20 @@ Then open `http://localhost:8080`.
 
 ## Configuration
 
-| Variable                   | Default                    | What it does                                              |
-| -------------------------- | -------------------------- | --------------------------------------------------------- |
-| `GLEAN_SESSION_KEY`        | _(required)_               | Secret key for signing session cookies (any random string) |
-| `GLEAN_ADDR`               | `:8080`                    | Listen address                                            |
-| `GLEAN_DB`                 | `glean.db`                 | SQLite base path (`_users`, `_articles`, `_recs` suffixes) |
-| `GLEAN_JETSTREAM`          | `wss://jetstream.glean.at` | Jetstream WebSocket URL                                   |
-| `GLEAN_SYNC_INTERVAL`      | `1h`                       | PDS sync interval (Go duration: `30m`, `2h30m`, etc.)     |
-| `GLEAN_CLUSTER_INTERVAL`   | `10m`                      | Cluster recomputation interval (Go duration)              |
-| `GLEAN_FETCH_INTERVAL`     | `5m`                       | Feed fetch scheduler tick interval (Go duration)           |
-| `GLEAN_COLLECTION_DIR_URL` | _(empty)_                  | Collection directory URL for startup backfill              |
-| `GLEAN_BACKFILL_CONCURRENCY` | `5`                      | Max concurrent backfill workers                            |
-| `GLEAN_PLC_URL`            | `https://didplc.glean.at`  | PLC directory URL for DID resolution                      |
-| `GLEAN_OAUTH_CLIENT_ID`    | _(empty)_                  | OAuth client metadata URL (leave empty for localhost dev) |
-| `GLEAN_OAUTH_REDIRECT_URL` | _(empty)_                  | OAuth redirect URL (leave empty for localhost dev)        |
+| Variable                     | Default                    | What it does                                               |
+| ---------------------------- | -------------------------- | ---------------------------------------------------------- |
+| `GLEAN_SESSION_KEY`          | _(required)_               | Secret key for signing session cookies (any random string) |
+| `GLEAN_ADDR`                 | `:8080`                    | Listen address                                             |
+| `GLEAN_DB`                   | `glean.db`                 | SQLite base path (`_users`, `_articles`, `_recs` suffixes) |
+| `GLEAN_JETSTREAM`            | `wss://jetstream.glean.at` | Jetstream WebSocket URL                                    |
+| `GLEAN_SYNC_INTERVAL`        | `30m`                      | PDS sync interval (Go duration: `30m`, `2h30m`, etc.)      |
+| `GLEAN_CLUSTER_INTERVAL`     | `1h`                       | Cluster recomputation interval (Go duration)               |
+| `GLEAN_FETCH_INTERVAL`       | `15m`                      | Feed fetch scheduler tick interval (Go duration)           |
+| `GLEAN_COLLECTION_DIR_URL`   | _(empty)_                  | Collection directory URL for startup backfill              |
+| `GLEAN_BACKFILL_CONCURRENCY` | `5`                        | Max concurrent backfill workers                            |
+| `GLEAN_PLC_URL`              | `https://didplc.glean.at`  | PLC directory URL for DID resolution                       |
+| `GLEAN_OAUTH_CLIENT_ID`      | _(empty)_                  | OAuth client metadata URL (leave empty for localhost dev)  |
+| `GLEAN_OAUTH_REDIRECT_URL`   | _(empty)_                  | OAuth redirect URL (leave empty for localhost dev)         |
 
 For production:
 
