@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"pkg.rbrt.fr/glean/internal/httpclient"
@@ -117,8 +118,11 @@ func findFavicon(ctx context.Context, base *url.URL, links []string) string {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	var wg sync.WaitGroup
 	for _, path := range faviconPaths {
+		wg.Add(1)
 		go func(path string) {
+			defer wg.Done()
 			u, _ := url.Parse(path)
 			resolved := origin.ResolveReference(u)
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, resolved.String(), nil)
@@ -140,11 +144,18 @@ func findFavicon(ctx context.Context, base *url.URL, links []string) string {
 		}(path)
 	}
 
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
 	select {
 	case r := <-found:
 		if r.found {
 			return r.url
 		}
+	case <-done:
 	case <-ctx.Done():
 	}
 	return ""

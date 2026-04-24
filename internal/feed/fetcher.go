@@ -209,7 +209,7 @@ func (s *Scheduler) FetchFeed(ctx context.Context, feed *Feed) {
 
 	faviconURL := result.Feed.FaviconURL
 	if faviconURL == "" && feed.FaviconURL == "" {
-		faviconURL = ResolveFavicon(context.Background(), feed.URL, feed.SiteURL)
+		faviconURL = ResolveFavicon(ctx, feed.URL, feed.SiteURL)
 	}
 
 	if err := s.store.StoreFetchResult(ctx, feed.URL, result.Articles, faviconURL); err != nil {
