@@ -841,10 +841,11 @@ The server renders HTML fragments that htmx swaps into the page. No JSON API nee
 | `/articles/{id}/fetch-content` | POST   | Fetch full article content from original URL                        |
 | `/articles/mark-all-read`      | POST   | Mark all articles as read                                           |
 | `/articles/dismiss`            | POST   | Dismiss an article recommendation                                   |
-| `/trending`                    | GET    | Community feed: articles ranked by likes                            |
+| `/trending`                    | GET    | Community feed: articles ranked by likes (public)                   |
 | `/library`                     | GET    | Liked articles and annotations                                      |
 | `/library/create`              | POST   | Create annotation on an article                                     |
 | `/library/{id}/delete`         | POST   | Delete an annotation                                                |
+| `/stats`                       | GET    | Application metrics and performance data (Prometheus, public)       |
 | `/profile/{did}`               | GET    | Public profile: their feeds, likes, annotations                     |
 
 ### 8.2 htmx Patterns
@@ -916,6 +917,7 @@ glean/
 │   │   ├── annotations_handler.go # Annotation handlers
 │   │   ├── dashboard_handler.go   # Dashboard handler
 │   │   ├── trending_handler.go    # Trending handler
+│   │   ├── stats_handler.go       # Stats handler (Prometheus metrics display)
 │   │   ├── index_handler.go       # Landing page handler
 │   │   ├── profile_handler.go     # Public profile handler
 │   │   ├── pagination.go          # Pagination helpers
@@ -932,6 +934,7 @@ glean/
 │       ├── articles.html          # Article listing
 │       ├── article_detail.html    # Article detail
 │       ├── trending.html          # Trending articles
+│       ├── stats.html             # Application metrics
 │       ├── library.html           # Liked articles + annotations
 │       ├── profile.html           # User profile
 │       ├── error.html             # Error page

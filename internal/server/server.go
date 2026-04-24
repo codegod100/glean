@@ -214,6 +214,7 @@ func (s *Server) setupRoutes() {
 
 	s.router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(static.Files))))
 	s.router.Handle("/metrics", promhttp.Handler())
+	s.router.Get("/stats", s.handleStats)
 	s.router.NotFound(s.handleNotFound)
 }
 

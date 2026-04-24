@@ -65,7 +65,7 @@
         </div>
         <button onclick="document.getElementById('shortcuts-dialog').close()" class="mt-4 w-full text-sm text-spot-secondary hover:text-spot-text px-4 py-2 rounded-pill border border-spot-outline transition">Close</button>
     </dialog>
-    {{if or .User (eq .ActivePath "/trending")}}
+    {{if or .User (or (eq .ActivePath "/trending") (eq .ActivePath "/stats"))}}
     <aside class="hidden lg:flex flex-col w-60 bg-spot-bg h-screen fixed left-0 top-0 px-3 py-4 z-20">
         <div class="mb-8 px-3">
             {{template "logo-link"}}
@@ -136,8 +136,8 @@
     </nav>
     {{end}}
 
-    <main id="main-content" class="{{if or .User (eq .ActivePath "/trending")}}lg:ml-60 pb-20 lg:pb-0{{end}} flex-1 min-h-screen flex flex-col">
-        {{if or .User (eq .ActivePath "/trending")}}
+    <main id="main-content" class="{{if or .User (or (eq .ActivePath "/trending") (eq .ActivePath "/stats"))}}lg:ml-60 pb-20 lg:pb-0{{end}} flex-1 min-h-screen flex flex-col">
+        {{if or .User (or (eq .ActivePath "/trending") (eq .ActivePath "/stats"))}}
         <div class="lg:hidden bg-spot-surface border-b border-spot-divider px-4 py-3 flex items-center justify-between sticky top-0 z-20">
             {{template "logo-text"}}
             {{if .User}}
@@ -150,7 +150,7 @@
             {{end}}
         </div>
         {{end}}
-        <div class="{{if not (or .User (eq .ActivePath "/trending"))}}w-full{{else}}max-w-6xl mx-auto px-4 lg:px-8 py-6{{end}} flex-1">
+        <div class="{{if not (or .User (or (eq .ActivePath "/trending") (eq .ActivePath "/stats")))}}w-full{{else}}max-w-6xl mx-auto px-4 lg:px-8 py-6{{end}} flex-1">
             {{.Content}}
         </div>
         <footer class="mt-auto">
