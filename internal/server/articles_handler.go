@@ -188,6 +188,7 @@ func (s *Server) handleArticleDetail(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.logger.Warn("failed to list annotations", "error", err)
 	}
+	resolveAnnotationHandles(ctx, annotations)
 
 	feed, err := s.dbs.Articles.GetFeed(ctx, article.FeedURL)
 	if err != nil {

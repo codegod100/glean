@@ -24,7 +24,7 @@
     {{end}}
     <div class="flex items-center justify-between mt-3 pt-3 border-t border-spot-divider">
         <div class="flex items-center gap-2 text-xs text-spot-muted">
-            <a href="/profile/{{.annotation.AuthorDID}}" class="hover:text-spot-green transition">{{.annotation.AuthorHandle}}</a>
+            <a href="/profile/{{.annotation.AuthorDID}}" class="hover:text-spot-green transition">{{if .annotation.AuthorHandle}}{{.annotation.AuthorHandle}}{{else}}{{.annotation.AuthorDID}}{{end}}</a>
             {{if .annotation.CreatedAt.Valid}}<span>&middot;</span><span>{{.annotation.CreatedAt.Time.Format "Jan 2, 2006 15:04"}}</span>{{end}}
         </div>
         {{if eq .annotation.AuthorDID .userDID}}
