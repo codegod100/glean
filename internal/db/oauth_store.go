@@ -76,6 +76,12 @@ func (s *OAuthStore) ListSessionsForDID(ctx context.Context, did string) ([]stri
 	return ids, rows.Err()
 }
 
+func (s *OAuthStore) CountActiveUsers(ctx context.Context) (int, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT account_did) FROM oauth_sessions`).Scan(&count)
+	return count, err
+}
+
 func (s *OAuthStore) GetAuthRequestInfo(ctx context.Context, state string) (*oauth.AuthRequestData, error) {
 	var data []byte
 	err := s.db.QueryRowContext(ctx, `

@@ -470,6 +470,10 @@ func (s *Server) BackfillFromCollectionDir(ctx context.Context, collectionDirURL
 }
 
 func (s *Server) runSyncAll(ctx context.Context) {
+	if n, err := s.oauthStore.CountActiveUsers(ctx); err == nil {
+		metrics.ActiveUsers.Set(float64(n))
+	}
+
 	users, err := s.dbs.Users.ListUsers(ctx)
 	if err != nil {
 		s.logger.Error("failed to list users for sync", "error", err)
