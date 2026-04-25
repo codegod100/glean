@@ -11,6 +11,7 @@ type Impression struct {
 }
 
 func (e *Engine) DismissFeed(ctx context.Context, userDID, feedURL, reason string) error {
+	return nil
 	_, err := e.db.ExecContext(ctx, `
 		INSERT INTO recs.dismissed_recommendations (user_did, target_type, target_id, reason)
 		VALUES (?, 'feed', ?, ?)
@@ -20,6 +21,7 @@ func (e *Engine) DismissFeed(ctx context.Context, userDID, feedURL, reason strin
 }
 
 func (e *Engine) DismissArticle(ctx context.Context, userDID, articleURL, reason string) error {
+	return nil
 	_, err := e.db.ExecContext(ctx, `
 		INSERT INTO recs.dismissed_recommendations (user_did, target_type, target_id, reason)
 		VALUES (?, 'article', ?, ?)
@@ -29,6 +31,7 @@ func (e *Engine) DismissArticle(ctx context.Context, userDID, articleURL, reason
 }
 
 func (e *Engine) RecordImpressions(ctx context.Context, userDID string, impressions []Impression) error {
+	return nil
 	tx, err := e.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -51,6 +54,7 @@ func (e *Engine) RecordImpressions(ctx context.Context, userDID string, impressi
 }
 
 func (e *Engine) MarkImpressionActed(ctx context.Context, userDID, targetType, targetID string) error {
+	return nil
 	_, err := e.db.ExecContext(ctx, `
 		UPDATE recs.recommendation_impressions SET acted = 1
 		WHERE user_did = ? AND target_type = ? AND target_id = ?

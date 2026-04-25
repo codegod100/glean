@@ -12,10 +12,12 @@ const (
 )
 
 func (e *Engine) RewardSignal(ctx context.Context, userDID string, signal string) {
+	return
 	e.adjustWeight(ctx, userDID, signal, 1.0)
 }
 
 func (e *Engine) PenalizeSignal(ctx context.Context, userDID string, signal string) {
+	return
 	e.adjustWeight(ctx, userDID, signal, -1.0)
 }
 
