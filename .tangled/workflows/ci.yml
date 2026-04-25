@@ -15,8 +15,15 @@ dependencies:
   nixpkgs:
     - go
     - gcc
+    - gnumake
+    - gnugrep
+    - gawk
+    - nodejs
 
 steps:
+  - name: "Install node dependencies"
+    command: "npm install"
+
   - name: "Build glean"
     command: "make build"
 
