@@ -1,0 +1,378 @@
+package cluster
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"log/slog"
+	"strings"
+
+	vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
+)
+
+const embedBatchSize = 100
+
+// ComputeArticleEmbeddings embeds new articles (title + summary) into the
+// article_embeddings vec0 table. Skipped when no embedder is configured.
+// Existing embeddings for deleted articles are cleaned up. Articles already
+// embedded are not re-embedded.
+func (e *Engine) ComputeArticleEmbeddings(ctx context.Context) error {
+	if e.embedder == nil {
+		e.logger.Debug("article embeddings skipped, no embedder")
+		return nil
+	}
+
+	conn, err := e.db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = conn.ExecContext(ctx, `
+		DELETE FROM recs.article_embeddings
+		WHERE article_id NOT IN (SELECT id FROM articles.articles)
+	`)
+	if err != nil {
+		return fmt.Errorf("clean stale article embeddings: %w", err)
+	}
+
+	rows, err := conn.QueryContext(ctx, `
+		SELECT a.id, COALESCE(a.title, '') || ' ' || COALESCE(a.summary, '') || ' ' || COALESCE(a.full_content, '') || ' ' || COALESCE(a.content, '')
+		FROM articles.articles a
+		WHERE (COALESCE(a.title, '') != '' OR COALESCE(a.summary, '') != '' OR COALESCE(a.full_content, '') != '' OR COALESCE(a.content, '') != '')
+		AND a.id NOT IN (SELECT article_id FROM recs.article_embeddings)
+		ORDER BY a.id
+	`)
+	if err != nil {
+		return err
+	}
+
+	type article struct {
+		id   int64
+		text string
+	}
+	var batch []article
+	for rows.Next() {
+		var a article
+		if err := rows.Scan(&a.id, &a.text); err != nil {
+			rows.Close()
+			return err
+		}
+		batch = append(batch, a)
+	}
+	rows.Close()
+
+	if len(batch) == 0 {
+		e.logger.Info("article embeddings up to date")
+		return nil
+	}
+
+	for i := 0; i < len(batch); i += embedBatchSize {
+		end := min(i+embedBatchSize, len(batch))
+		sub := batch[i:end]
+
+		texts := make([]string, len(sub))
+		for j, a := range sub {
+			texts[j] = a.text
+		}
+
+		embeddings, err := e.embedder.Embed(ctx, texts)
+		if err != nil {
+			return fmt.Errorf("embed batch %d: %w", i/embedBatchSize, err)
+		}
+
+		tx, err := conn.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback() }()
+
+		for j, emb := range embeddings {
+			blob, err := vec.SerializeFloat32(emb)
+			if err != nil {
+				return fmt.Errorf("serialize embedding: %w", err)
+			}
+			if _, err := tx.ExecContext(ctx,
+				`INSERT OR IGNORE INTO recs.article_embeddings(article_id, embedding) VALUES (?, ?)`,
+				sub[j].id, blob,
+			); err != nil {
+				return fmt.Errorf("insert embedding: %w", err)
+			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+
+		e.logger.Info("article embeddings batch computed",
+			slog.Int("batch", i/embedBatchSize),
+			slog.Int("count", len(sub)),
+		)
+	}
+
+	e.logger.Info("article embeddings computed", slog.Int("total", len(batch)))
+	return nil
+}
+
+func (e *Engine) populateContentBoost(ctx context.Context, conn *sql.Conn, userDID string) error {
+	rows, err := conn.QueryContext(ctx, `
+		SELECT a.id FROM articles.likes ul
+		JOIN articles.articles a ON a.feed_url = ul.feed_url AND a.url = ul.article_url
+		WHERE ul.author_did = ?
+	`, userDID)
+	if err != nil {
+		return err
+	}
+	var articleIDs []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		articleIDs = append(articleIDs, id)
+	}
+	rows.Close()
+
+	if len(articleIDs) == 0 {
+		return nil
+	}
+
+	ph := make([]string, len(articleIDs))
+	args := make([]any, len(articleIDs))
+	for i, id := range articleIDs {
+		ph[i] = "?"
+		args[i] = id
+	}
+	embRows, err := conn.QueryContext(ctx,
+		fmt.Sprintf("SELECT article_id, embedding FROM recs.article_embeddings WHERE article_id IN (%s)", joinPh(ph)),
+		args...,
+	)
+	if err != nil {
+		return err
+	}
+
+	dim := e.embedder.Dimension()
+	sumVec := make([]float32, dim)
+	count := 0
+	likedSet := make(map[int64]bool)
+	for embRows.Next() {
+		var id int64
+		var blob []byte
+		if err := embRows.Scan(&id, &blob); err != nil {
+			embRows.Close()
+			return err
+		}
+		v := deserializeFloat32(blob)
+		if len(v) != dim {
+			continue
+		}
+		for j := range sumVec {
+			sumVec[j] += v[j]
+		}
+		count++
+		likedSet[id] = true
+	}
+	embRows.Close()
+
+	if count == 0 {
+		return nil
+	}
+
+	avgVec := make([]float32, dim)
+	for j := range avgVec {
+		avgVec[j] = sumVec[j] / float32(count)
+	}
+
+	queryBlob, err := vec.SerializeFloat32(avgVec)
+	if err != nil {
+		return fmt.Errorf("serialize query vector: %w", err)
+	}
+
+	const topK = 200
+	knnRows, err := conn.QueryContext(ctx, `
+		SELECT article_id, distance FROM recs.article_embeddings
+		WHERE embedding MATCH ? AND k = ?
+		ORDER BY distance
+	`, queryBlob, topK+len(likedSet))
+	if err != nil {
+		return err
+	}
+
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	for knnRows.Next() {
+		var id int64
+		var dist float64
+		if err := knnRows.Scan(&id, &dist); err != nil {
+			knnRows.Close()
+			return err
+		}
+		if likedSet[id] {
+			continue
+		}
+		score := 1.0 - dist
+		if score <= 0 {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT OR IGNORE INTO _content_boost (article_id, score) VALUES (?, ?)`,
+			id, score,
+		); err != nil {
+			return err
+		}
+	}
+	knnRows.Close()
+
+	return tx.Commit()
+}
+
+// ComputeFeedEmbeddings embeds feed descriptions (title + description) into the
+// feed_embeddings vec0 table and tracks source text in feed_embedding_meta for
+// re-embedding on description change. Skipped when no embedder is configured.
+func (e *Engine) ComputeFeedEmbeddings(ctx context.Context) error {
+	if e.embedder == nil {
+		e.logger.Debug("feed embeddings skipped, no embedder")
+		return nil
+	}
+
+	conn, err := e.db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = conn.ExecContext(ctx, `
+		DELETE FROM recs.feed_embeddings
+		WHERE feed_url NOT IN (SELECT feed_url FROM articles.feeds)
+	`)
+	if err != nil {
+		return fmt.Errorf("clean stale feed embeddings: %w", err)
+	}
+	_, err = conn.ExecContext(ctx, `
+		DELETE FROM recs.feed_embedding_meta
+		WHERE feed_url NOT IN (SELECT feed_url FROM articles.feeds)
+	`)
+	if err != nil {
+		return fmt.Errorf("clean stale feed embeddings: %w", err)
+	}
+
+	rows, err := conn.QueryContext(ctx, `
+		SELECT f.feed_url, COALESCE(f.title, '') || ' ' || COALESCE(f.description, '')
+		FROM articles.feeds f
+		WHERE (COALESCE(f.title, '') != '' OR COALESCE(f.description, '') != '')
+		AND (
+			f.feed_url NOT IN (SELECT feed_url FROM recs.feed_embedding_meta)
+			OR EXISTS (
+				SELECT 1 FROM recs.feed_embedding_meta fm
+				WHERE fm.feed_url = f.feed_url
+				AND fm.source_text != COALESCE(f.title, '') || ' ' || COALESCE(f.description, '')
+			)
+		)
+		ORDER BY f.feed_url
+	`)
+	if err != nil {
+		return err
+	}
+
+	type feed struct {
+		url  string
+		text string
+	}
+	var batch []feed
+	for rows.Next() {
+		var f feed
+		if err := rows.Scan(&f.url, &f.text); err != nil {
+			rows.Close()
+			return err
+		}
+		batch = append(batch, f)
+	}
+	rows.Close()
+
+	if len(batch) == 0 {
+		e.logger.Info("feed embeddings up to date")
+		return nil
+	}
+
+	for i := 0; i < len(batch); i += embedBatchSize {
+		end := min(i+embedBatchSize, len(batch))
+		sub := batch[i:end]
+
+		texts := make([]string, len(sub))
+		for j, f := range sub {
+			texts[j] = f.text
+		}
+
+		embeddings, err := e.embedder.Embed(ctx, texts)
+		if err != nil {
+			return fmt.Errorf("embed feed batch %d: %w", i/embedBatchSize, err)
+		}
+
+		tx, err := conn.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback() }()
+
+		for j, emb := range embeddings {
+			blob, err := vec.SerializeFloat32(emb)
+			if err != nil {
+				return fmt.Errorf("serialize feed embedding: %w", err)
+			}
+			if _, err := tx.ExecContext(ctx,
+				`DELETE FROM recs.feed_embeddings WHERE feed_url = ?`, sub[j].url,
+			); err != nil {
+				return fmt.Errorf("delete feed embedding: %w", err)
+			}
+			if _, err := tx.ExecContext(ctx,
+				`INSERT INTO recs.feed_embeddings(feed_url, embedding) VALUES (?, ?)`,
+				sub[j].url, blob,
+			); err != nil {
+				return fmt.Errorf("insert feed embedding: %w", err)
+			}
+			if _, err := tx.ExecContext(ctx,
+				`INSERT OR REPLACE INTO recs.feed_embedding_meta(feed_url, source_text) VALUES (?, ?)`,
+				sub[j].url, sub[j].text,
+			); err != nil {
+				return fmt.Errorf("insert feed embedding: %w", err)
+			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+
+		e.logger.Info("feed embeddings batch computed",
+			slog.Int("batch", i/embedBatchSize),
+			slog.Int("count", len(sub)),
+		)
+	}
+
+	e.logger.Info("feed embeddings computed", slog.Int("total", len(batch)))
+	return nil
+}
+
+func (e *Engine) ensureContentBoostTable(ctx context.Context, conn *sql.Conn) error {
+	_, err := conn.ExecContext(ctx, `CREATE TEMP TABLE IF NOT EXISTS _content_boost (article_id INT PRIMARY KEY, score REAL)`)
+	if err != nil {
+		return err
+	}
+	_, err = conn.ExecContext(ctx, `DELETE FROM _content_boost`)
+	return err
+}
+
+func joinPh(ph []string) string {
+	var s strings.Builder
+	for i, p := range ph {
+		if i > 0 {
+			s.WriteString(",")
+		}
+		s.WriteString(p)
+	}
+	return s.String()
+}

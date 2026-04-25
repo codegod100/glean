@@ -13,7 +13,7 @@ The core idea: your RSS subscriptions are a strong signal about your interests. 
 | Layer            | Technology                                                      |
 | ---------------- | --------------------------------------------------------------- |
 | Backend          | Go                                                              |
-| Database         | SQLite (3 files: users, articles, recs via `mattn/go-sqlite3`)  |
+| Database         | SQLite (3 files: users, articles, recs via `mattn/go-sqlite3` + `sqlite-vec` for vector search)  |
 | Frontend         | htmx + TailwindCSS                                              |
 | Auth             | AT Protocol OAuth / DID resolution (configurable PLC directory) |
 | AT Protocol role | AppView for `at.glean.*` lexicons                               |
@@ -460,9 +460,10 @@ Profile data (handle, display name, avatar) is resolved on-the-fly via AT Protoc
 
 ```sql
 CREATE TABLE users (
-    did         TEXT PRIMARY KEY,
-    indexed_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    did            TEXT PRIMARY KEY,
+    indexed_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    follows_dirty  BOOLEAN NOT NULL DEFAULT 1
 );
 ```
 
@@ -649,9 +650,10 @@ Glean uses a multi-signal recommendation system that combines subscription overl
 | Subscription | `subscriptions`          | 1.0              | Jaccard over subscriber sets between similar users |
 | Like         | `likes`                  | 0.5              | Time-decayed like co-occurrence (30-day half-life) |
 | Tag          | `annotations.tags`       | 0.3              | Jaccard over annotation tag sets                   |
-| Social       | `follow_distances`       | 0.7              | Follow distance: 1-hop=1.0, 2-hop=0.3              |
+| Social       | `follow_distances`       | 0.7              | Follow distance: 1-hop=1.0, 2-hop=0.3, 3-hop=0.1  |
 | Popularity   | `feeds.subscriber_count` | 0.2              | `log(1 + subscribers) / log(1 + max)`              |
 | Category     | `subscriptions.category` | 0.4              | Boost feeds matching user's existing categories    |
+| Content      | `article_embeddings`     | 0.4              | Cosine similarity via embedding KNN (requires embedder) |
 
 ### 7.2 Feed Co-occurrence (Jaccard Similarity)
 
@@ -661,7 +663,7 @@ For any two feeds, the similarity is the Jaccard index of their subscriber sets:
 J(A, B) = |subscribers(A) ∩ subscribers(B)| / |subscribers(A) ∪ subscribers(B)|
 ```
 
-Feed description text similarity is also computed (word overlap after stopword removal) and added as a boost.
+Feed description similarity is also computed via embedding cosine similarity (requires embedder) and added as a boost.
 
 ### 7.3 User Similarity
 
@@ -700,8 +702,11 @@ Where:
 ```
 score = like_signal * w_like
       + social_signal * w_social
+      + content_signal * w_content
       + recency_signal * 0.2
 ```
+
+Content signal uses embedding vectors: the user's liked article embeddings are averaged into a single interest vector, then a KNN query against the `article_embeddings` vec0 table finds semantically similar articles. This requires an embedder to be configured; without it, the content signal is 0.
 
 ### 7.5 User Feedback (Dismiss)
 
@@ -711,7 +716,7 @@ Users can dismiss recommendations they don't want to see again:
 - `POST /articles/dismiss` — dismiss an article recommendation
 - Dismissals are stored locally in `dismissed_recommendations` (not on PDS)
 - Dismissed items are excluded from all future recommendation queries
-- Auto-dismiss: items shown >15 times over >30 days without action are auto-dismissed
+- Auto-dismiss: items shown ≥5 times over >5 days without action are auto-dismissed
 
 Impression tracking (`recommendation_impressions`) records how many times each recommendation was shown and whether the user acted on it.
 
@@ -729,11 +734,11 @@ new_weight = MAX(0.1, MIN(3.0, old_weight * (1 + learning_rate * delta)))
 
 ### 7.7 Social Graph
 
-Follow distances (1-hop and 2-hop) are pre-computed in `follow_distances` during the cron job:
+Follow distances (1-hop through 3-hop) are computed incrementally. A `follows_dirty` column on `users` tracks whose follow graph changed since the last cron run. Only dirty users are reprocessed — their existing rows in `follow_distances` are deleted and recomputed via BFS, then the dirty flag is cleared.
 
 - 1-hop: direct follows (weight 1.0)
 - 2-hop: friends-of-friends (weight 0.3)
-- 3-hop is excluded due to noise and computational cost
+- 3-hop: third-degree connections (weight 0.1)
 
 ### 7.8 Diversity & Freshness
 
@@ -754,15 +759,19 @@ New users with <5 subscriptions get a fallback strategy:
 
 A background goroutine runs on a configurable schedule (`GLEAN_CLUSTER_INTERVAL`, default 10m):
 
-1. **Compute feed similarity**: Batch-update `feed_similarity` table (Jaccard over subscriber sets + description similarity)
-2. **Compute user similarity**: Batch-update `user_similarity` table (subscription Jaccard + time-decayed likes + tags + follow boost)
-3. **Compute follow distances**: 1-hop and 2-hop from `follows` table
-4. **Compute signal profiles**: Per-user category/tag/like summaries
-5. **Auto-dismiss stale**: Dismiss items shown >15 times over >30 days without action
+1. **Compute feed embeddings**: Embed new feed descriptions via OpenAI-compatible API into `feed_embeddings` table (skipped if no embedder configured)
+2. **Compute feed similarity**: Batch-update `feed_similarity` table (Jaccard over subscriber sets + embedding cosine similarity)
+3. **Compute user similarity**: Batch-update `user_similarity` table (subscription Jaccard + time-decayed likes + tags + follow boost)
+4. **Compute article embeddings**: Embed new articles' full content (`title + summary + full_content + content`) via OpenAI-compatible API into `article_embeddings` vec0 table (skipped if no embedder configured)
+5. **Compute follow distances**: Incremental BFS for dirty users (1-hop through 3-hop from `follows` table)
+6. **Compute signal profiles**: Per-user category/tag/like summaries
+7. **Auto-dismiss stale**: Dismiss items shown >=5 times over >5 days without action
 
 Jetstream ingestion and record indexing happen in a separate persistent goroutine (the Jetstream consumer), not in the cron.
 
-### 7.11 Recommendation Tables (`<base>_recs`)
+### 7.11 User Interaction Tables (`<base>_users`)
+
+Per-user interaction state lives in the users database so that real-time writes (impressions, dismissals) never contend with cron batch writes to the recs database.
 
 ```sql
 CREATE TABLE dismissed_recommendations (
@@ -784,11 +793,38 @@ CREATE TABLE recommendation_impressions (
     acted          BOOLEAN NOT NULL DEFAULT 0,
     PRIMARY KEY (user_did, target_type, target_id)
 );
+```
+
+### 7.12 Computed Recommendation Tables (`<base>_recs`)
+
+Written exclusively by the cron. No user-facing writes — only reads during on-demand scoring.
+
+```sql
+CREATE TABLE feed_similarity (
+    feed_a     TEXT NOT NULL,
+    feed_b     TEXT NOT NULL,
+    jaccard    REAL NOT NULL,
+    computed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (feed_a, feed_b),
+    CHECK(feed_a < feed_b)
+);
+
+CREATE TABLE user_similarity (
+    user_a     TEXT NOT NULL,
+    user_b     TEXT NOT NULL,
+    jaccard    REAL NOT NULL,
+    common_feeds INTEGER NOT NULL,
+    common_likes INTEGER NOT NULL DEFAULT 0,
+    common_tags INTEGER NOT NULL DEFAULT 0,
+    computed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_a, user_b),
+    CHECK(user_a < user_b)
+);
 
 CREATE TABLE follow_distances (
     user_a   TEXT NOT NULL,
     user_b   TEXT NOT NULL,
-    distance INTEGER NOT NULL CHECK(distance IN (1, 2)),
+    distance INTEGER NOT NULL CHECK(distance IN (1, 2, 3)),
     PRIMARY KEY (user_a, user_b)
 );
 
@@ -800,6 +836,7 @@ CREATE TABLE user_signal_weights (
     w_social   REAL NOT NULL DEFAULT 0.7,
     w_pop      REAL NOT NULL DEFAULT 0.2,
     w_category REAL NOT NULL DEFAULT 0.4,
+    w_content  REAL NOT NULL DEFAULT 0.4,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -808,9 +845,41 @@ CREATE TABLE user_signal_profiles (
     total_likes     INTEGER NOT NULL DEFAULT 0,
     total_tags      INTEGER NOT NULL DEFAULT 0,
     top_categories  TEXT,
+    top_tags        TEXT,
     updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ```
+
+### 7.13 Embeddings (recommended)
+
+When `GLEAN_EMBED_BASE_URL` is configured, article text and feed descriptions are embedded into vectors stored in `sqlite-vec` virtual tables (`recs.feed_embeddings`, `recs.article_embeddings`). The vec0 extension provides native KNN vector search via `WHERE embedding MATCH ? AND k = ?`, replacing Go-side cosine similarity for large-scale lookups. Without embeddings, recommendations rely only on subscription overlap, like patterns, and social graph — no content-based signals.
+
+The embedder uses the official `github.com/openai/openai-go` SDK with `option.WithBaseURL()`, so any OpenAI-compatible `/v1/embeddings` endpoint works (OpenAI, Ollama, local inference servers).
+
+vec0 tables are created dynamically at startup with the configured dimension (`GLEAN_EMBED_DIMENSION`, default 1536):
+
+```sql
+CREATE VIRTUAL TABLE recs.feed_embeddings USING vec0(
+    feed_url TEXT PRIMARY KEY,
+    embedding float[1536]
+);
+
+CREATE VIRTUAL TABLE recs.article_embeddings USING vec0(
+    article_id INTEGER PRIMARY KEY,
+    embedding float[1536]
+);
+```
+
+Since vec0 virtual tables cannot hold metadata columns, a side table tracks the source text for re-embedding on description changes:
+
+```sql
+CREATE TABLE recs.feed_embedding_meta (
+    feed_url TEXT PRIMARY KEY,
+    source_text TEXT NOT NULL DEFAULT ''
+);
+```
+
+During cron, `ComputeArticleEmbeddings` embeds new articles in batches (using `title + summary + full_content + content` for maximum semantic coverage) and inserts them into the vec0 table. `ComputeFeedEmbeddings` embeds feed descriptions (`title || description`) and re-embeds when the source text changes (detected via `feed_embedding_meta`). During on-demand article recommendations, the user's liked article embeddings are averaged into an interest vector, then a vec0 KNN query finds the top-200 most semantically similar articles. For cold-start users (<5 subscriptions), their subscribed feed embeddings are averaged and a KNN query finds similar feeds.
 
 ## 8. HTTP API / htmx Endpoints
 
@@ -903,8 +972,10 @@ glean/
 │   │   └── metrics.go             # Prometheus metrics definitions
 │   ├── cluster/
 │   │   ├── jaccard.go             # Jaccard similarity computation
+│   │   ├── embed.go               # Embedder interface + OpenAI-compatible implementation
+│   │   ├── article.go             # Article + feed embedding computation, vec0 KNN content boost
 │   │   ├── scoring.go             # Feed + people + article recommendation queries (on-demand)
-│   │   ├── social.go              # Follow-distance computation (1-2 hop)
+│   │   ├── social.go              # Incremental follow-distance computation (1-3 hop, dirty-flag)
 │   │   ├── dismiss.go             # Dismiss + impression tracking
 │   │   ├── weights.go             # Bandit-style signal weight auto-tuning
 │   │   ├── diversity.go           # Post-query domain/category diversity filtering
@@ -994,12 +1065,13 @@ Browser ──GET /articles──► Server
 
 ```
 Cron (every 10m) ──► Cluster Engine
-                          │
-                          ├─► Compute feed similarity
-                          ├─► Compute user similarity
-                          ├─► Compute follow distances
-                          ├─► Compute signal profiles
-                          └─► Auto-dismiss stale recommendations
+                           │
+                           ├─► Compute feed similarity
+                           ├─► Compute user similarity
+                           ├─► Compute article embeddings (if embedder configured)
+                           ├─► Compute follow distances
+                           ├─► Compute signal profiles
+                           └─► Auto-dismiss stale recommendations
 
 Browser ──GET /dashboard──► Server
                                 │

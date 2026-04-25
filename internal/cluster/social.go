@@ -2,9 +2,69 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 )
 
-func (e *Engine) ComputeFollowDistances(ctx context.Context) error {
+const maxFollowDepth = 3
+
+type followDistance struct {
+	userA    string
+	userB    string
+	distance int
+}
+
+func (e *Engine) ComputeFollowDistancesData(ctx context.Context, sources []string) ([]followDistance, error) {
+	if len(sources) == 0 {
+		return nil, nil
+	}
+
+	rows, err := e.db.QueryContext(ctx, `SELECT user_did, target_did FROM main.follows WHERE user_did != target_did`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	adj := make(map[string][]string)
+	for rows.Next() {
+		var src, dst string
+		if err := rows.Scan(&src, &dst); err != nil {
+			return nil, err
+		}
+		adj[src] = append(adj[src], dst)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	var result []followDistance
+	for _, src := range sources {
+		dist := map[string]int{src: 0}
+		queue := []string{src}
+		for len(queue) > 0 {
+			cur := queue[0]
+			queue = queue[1:]
+			d := dist[cur]
+			if d >= maxFollowDepth {
+				continue
+			}
+			for _, next := range adj[cur] {
+				if _, ok := dist[next]; !ok {
+					dist[next] = d + 1
+					queue = append(queue, next)
+				}
+			}
+		}
+		for other, d := range dist {
+			if d > 0 {
+				result = append(result, followDistance{userA: src, userB: other, distance: d})
+			}
+		}
+	}
+
+	return result, nil
+}
+
+func (e *Engine) WriteFollowDistances(ctx context.Context, distances []followDistance) error {
 	tx, err := e.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -15,45 +75,88 @@ func (e *Engine) ComputeFollowDistances(ctx context.Context) error {
 		return err
 	}
 
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO recs.follow_distances (user_a, user_b, distance)
-		SELECT user_a, user_b, MIN(distance) FROM (
-			SELECT user_did AS user_a, target_did AS user_b, 1 AS distance FROM main.follows WHERE user_did != target_did
-			UNION ALL
-			SELECT f1.user_did, f2.target_did, 2
-			FROM main.follows f1
-			JOIN main.follows f2 ON f1.target_did = f2.user_did
-			WHERE f1.user_did != f2.target_did
-		) GROUP BY user_a, user_b
-	`)
+	stmt, err := tx.PrepareContext(ctx, `INSERT INTO recs.follow_distances (user_a, user_b, distance) VALUES (?, ?, ?)`)
 	if err != nil {
 		return err
 	}
+	defer stmt.Close()
 
-	e.logger.Info("follow distances computed")
+	for _, d := range distances {
+		if _, err := stmt.ExecContext(ctx, d.userA, d.userB, d.distance); err != nil {
+			return err
+		}
+	}
+
+	e.logger.Info("follow distances computed", "pairs", len(distances))
 	return tx.Commit()
 }
 
-func (e *Engine) ComputeFollowDistancesIncremental(ctx context.Context) error {
-	var maxFollowed string
-	err := e.db.QueryRowContext(ctx, `
-		SELECT COALESCE(MAX(followed_at), '1970-01-01') FROM main.follows
-	`).Scan(&maxFollowed)
+// ComputeFollowDistances incrementally recomputes follow distances for users
+// whose follows changed since the last run, as tracked by the follows_dirty column.
+func (e *Engine) ComputeFollowDistances(ctx context.Context) error {
+	rows, err := e.db.QueryContext(ctx, `SELECT did FROM main.users WHERE follows_dirty = 1`)
 	if err != nil {
 		return err
 	}
 
-	var lastComputed string
-	err = e.db.QueryRowContext(ctx, `
-		SELECT COALESCE(MAX(computed_at), '1970-01-01') FROM recs.user_similarity
-	`).Scan(&lastComputed)
-	if err != nil {
-		return err
+	var dirtyUsers []string
+	for rows.Next() {
+		var did string
+		if err := rows.Scan(&did); err != nil {
+			rows.Close()
+			return err
+		}
+		dirtyUsers = append(dirtyUsers, did)
 	}
+	rows.Close()
 
-	if maxFollowed <= lastComputed {
+	if len(dirtyUsers) == 0 {
 		return nil
 	}
 
-	return e.ComputeFollowDistances(ctx)
+	distances, err := e.ComputeFollowDistancesData(ctx, dirtyUsers)
+	if err != nil {
+		return err
+	}
+
+	tx, err := e.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	ph := make([]string, len(dirtyUsers))
+	args := make([]any, len(dirtyUsers))
+	for i, did := range dirtyUsers {
+		ph[i] = "?"
+		args[i] = did
+	}
+	if _, err := tx.ExecContext(ctx,
+		fmt.Sprintf("DELETE FROM recs.follow_distances WHERE user_a IN (%s)", joinPh(ph)),
+		args...,
+	); err != nil {
+		return err
+	}
+
+	stmt, err := tx.PrepareContext(ctx, `INSERT INTO recs.follow_distances (user_a, user_b, distance) VALUES (?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, d := range distances {
+		if _, err := stmt.ExecContext(ctx, d.userA, d.userB, d.distance); err != nil {
+			return err
+		}
+	}
+
+	if _, err := tx.ExecContext(ctx,
+		fmt.Sprintf("UPDATE main.users SET follows_dirty = 0 WHERE did IN (%s)", joinPh(ph)),
+		args...,
+	); err != nil {
+		return err
+	}
+
+	e.logger.Info("follow distances computed", "users", len(dirtyUsers), "pairs", len(distances))
+	return tx.Commit()
 }

@@ -8,6 +8,9 @@ import (
 const maxPerDomain = 2
 const maxPerCategory = 3
 
+// ApplyDiversity filters candidates to limit how many feeds come from the same
+// domain (max 2) or category (max 3). Candidates are assumed to be sorted by
+// score descending.
 func ApplyDiversity(candidates []*FeedRecommendation, topN int) []*FeedRecommendation {
 	domainCount := make(map[string]int, len(candidates))
 	categoryCount := make(map[string]int)

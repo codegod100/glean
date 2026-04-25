@@ -11,20 +11,22 @@ const (
 	minActionsTune = 5
 )
 
+// RewardSignal increases the weight of the given signal for a user. Only takes
+// effect after minActionsTune positive actions. Signal must be one of: "sub",
+// "like", "tag", "social", "pop", "category", "content".
 func (e *Engine) RewardSignal(ctx context.Context, userDID string, signal string) {
-	return
 	e.adjustWeight(ctx, userDID, signal, 1.0)
 }
 
+// PenalizeSignal decreases the weight of the given signal for a user.
 func (e *Engine) PenalizeSignal(ctx context.Context, userDID string, signal string) {
-	return
 	e.adjustWeight(ctx, userDID, signal, -1.0)
 }
 
 func (e *Engine) adjustWeight(ctx context.Context, userDID string, signal string, delta float64) {
 	var actedCount int
 	_ = e.db.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM recs.recommendation_impressions WHERE user_did = ? AND acted = 1
+		SELECT COUNT(*) FROM main.recommendation_impressions WHERE user_did = ? AND acted = 1
 	`, userDID).Scan(&actedCount)
 	if actedCount < minActionsTune {
 		return
@@ -35,8 +37,8 @@ func (e *Engine) adjustWeight(ctx context.Context, userDID string, signal string
 
 	if exists == 0 {
 		_, _ = e.db.ExecContext(ctx, `
-			INSERT INTO recs.user_signal_weights (user_did, w_sub, w_like, w_tag, w_social, w_pop, w_category)
-			VALUES (?, 1.0, 0.5, 0.3, 0.7, 0.2, 0.4)
+			INSERT INTO recs.user_signal_weights (user_did, w_sub, w_like, w_tag, w_social, w_pop, w_category, w_content)
+			VALUES (?, 1.0, 0.5, 0.3, 0.7, 0.2, 0.4, 0.4)
 		`, userDID)
 	}
 
@@ -68,11 +70,14 @@ func signalToColumn(signal string) string {
 		return "w_pop"
 	case "category":
 		return "w_category"
+	case "content":
+		return "w_content"
 	default:
 		return ""
 	}
 }
 
+// GetDominantSignal returns the signal name with the highest weight.
 func (e *Engine) GetDominantSignal(w SignalWeights) string {
 	signals := map[string]float64{
 		"sub":      w.WSub,
@@ -81,6 +86,7 @@ func (e *Engine) GetDominantSignal(w SignalWeights) string {
 		"social":   w.WSocial,
 		"pop":      w.WPop,
 		"category": w.WCategory,
+		"content":  w.WContent,
 	}
 
 	var best string

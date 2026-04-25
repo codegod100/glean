@@ -22,16 +22,28 @@ func (s *UserStore) UpsertFollow(ctx context.Context, userDID, targetDID, uri, c
 			uri = excluded.uri,
 			cid = excluded.cid
 	`, userDID, targetDID, nilIfEmpty(uri), nilIfEmpty(cid))
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `UPDATE users SET follows_dirty = 1 WHERE did = ?`, userDID)
 	return err
 }
 
 func (s *UserStore) DeleteFollow(ctx context.Context, userDID, targetDID string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM follows WHERE user_did = ? AND target_did = ?`, userDID, targetDID)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `UPDATE users SET follows_dirty = 1 WHERE did = ?`, userDID)
 	return err
 }
 
 func (s *UserStore) DeleteFollowByURI(ctx context.Context, uri string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM follows WHERE uri = ?`, uri)
+	_, err := s.db.ExecContext(ctx, `UPDATE users SET follows_dirty = 1 WHERE did IN (SELECT user_did FROM follows WHERE uri = ?)`, uri)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `DELETE FROM follows WHERE uri = ?`, uri)
 	return err
 }
 
@@ -139,11 +151,13 @@ func (s *UserStore) SyncFollows(ctx context.Context, userDID string, activeFollo
 	}
 	rows.Close()
 
+	var changed bool
 	for targetDID := range existing {
 		if _, ok := activeFollows[targetDID]; !ok {
 			if _, err := tx.ExecContext(ctx, `DELETE FROM follows WHERE user_did = ? AND target_did = ?`, userDID, targetDID); err != nil {
 				return err
 			}
+			changed = true
 		}
 	}
 
@@ -163,6 +177,13 @@ func (s *UserStore) SyncFollows(ctx context.Context, userDID string, activeFollo
 			if err != nil {
 				return err
 			}
+			changed = true
+		}
+	}
+
+	if changed {
+		if _, err := tx.ExecContext(ctx, `UPDATE users SET follows_dirty = 1 WHERE did = ?`, userDID); err != nil {
+			return err
 		}
 	}
 

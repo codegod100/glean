@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"math"
@@ -126,6 +127,21 @@ func (d *Databases) Close() error {
 	return nil
 }
 
+func (d *Databases) InitVecTables(dimension int) error {
+	if dimension <= 0 {
+		return nil
+	}
+	for _, stmt := range []string{
+		fmt.Sprintf(`CREATE VIRTUAL TABLE IF NOT EXISTS recs.feed_embeddings USING vec0(feed_url TEXT PRIMARY KEY, embedding float[%d])`, dimension),
+		fmt.Sprintf(`CREATE VIRTUAL TABLE IF NOT EXISTS recs.article_embeddings USING vec0(article_id INTEGER PRIMARY KEY, embedding float[%d])`, dimension),
+	} {
+		if _, err := d.db.ExecContext(context.Background(), stmt); err != nil {
+			return fmt.Errorf("create vec0 table: %w", err)
+		}
+	}
+	return nil
+}
+
 func (d *Databases) DB() *sql.DB {
 	return d.db.DB
 }
@@ -161,7 +177,8 @@ var usersSchema = []string{
 	`CREATE TABLE IF NOT EXISTS users (
 		did TEXT PRIMARY KEY,
 		indexed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		follows_dirty BOOLEAN NOT NULL DEFAULT 1
 	)`,
 
 	`CREATE TABLE IF NOT EXISTS follows (
@@ -189,6 +206,30 @@ var usersSchema = []string{
 	`CREATE INDEX IF NOT EXISTS idx_follows_target ON follows(target_did)`,
 	`CREATE INDEX IF NOT EXISTS idx_follows_uri ON follows(uri)`,
 	`CREATE INDEX IF NOT EXISTS idx_follows_followed_at ON follows(followed_at)`,
+
+	`CREATE TABLE IF NOT EXISTS dismissed_recommendations (
+		user_did     TEXT NOT NULL,
+		target_type  TEXT NOT NULL CHECK(target_type IN ('feed', 'article')),
+		target_id    TEXT NOT NULL,
+		reason       TEXT,
+		dismissed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (user_did, target_type, target_id)
+	)`,
+
+	`CREATE TABLE IF NOT EXISTS recommendation_impressions (
+		user_did       TEXT NOT NULL,
+		target_type    TEXT NOT NULL CHECK(target_type IN ('feed', 'article')),
+		target_id      TEXT NOT NULL,
+		first_shown_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		last_shown_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		shown_count    INTEGER NOT NULL DEFAULT 1,
+		acted          BOOLEAN NOT NULL DEFAULT 0,
+		PRIMARY KEY (user_did, target_type, target_id)
+	)`,
+
+	`CREATE INDEX IF NOT EXISTS idx_dismissed_user_type ON dismissed_recommendations(user_did, target_type)`,
+	`CREATE INDEX IF NOT EXISTS idx_impressions_user_unacted ON recommendation_impressions(user_did, acted, shown_count)`,
+	`CREATE INDEX IF NOT EXISTS idx_impressions_last_shown ON recommendation_impressions(last_shown_at)`,
 }
 
 var articlesSchema = []string{
@@ -318,30 +359,10 @@ var recsSchema = []string{
 		CHECK(user_a < user_b)
 	)`,
 
-	`CREATE TABLE IF NOT EXISTS recs.dismissed_recommendations (
-		user_did     TEXT NOT NULL,
-		target_type  TEXT NOT NULL CHECK(target_type IN ('feed', 'article')),
-		target_id    TEXT NOT NULL,
-		reason       TEXT,
-		dismissed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		PRIMARY KEY (user_did, target_type, target_id)
-	)`,
-
-	`CREATE TABLE IF NOT EXISTS recs.recommendation_impressions (
-		user_did       TEXT NOT NULL,
-		target_type    TEXT NOT NULL CHECK(target_type IN ('feed', 'article')),
-		target_id      TEXT NOT NULL,
-		first_shown_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		last_shown_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		shown_count    INTEGER NOT NULL DEFAULT 1,
-		acted          BOOLEAN NOT NULL DEFAULT 0,
-		PRIMARY KEY (user_did, target_type, target_id)
-	)`,
-
 	`CREATE TABLE IF NOT EXISTS recs.follow_distances (
 		user_a   TEXT NOT NULL,
 		user_b   TEXT NOT NULL,
-		distance INTEGER NOT NULL CHECK(distance IN (1, 2)),
+		distance INTEGER NOT NULL CHECK(distance IN (1, 2, 3)),
 		PRIMARY KEY (user_a, user_b)
 	)`,
 
@@ -353,6 +374,7 @@ var recsSchema = []string{
 		w_social   REAL NOT NULL DEFAULT 0.7,
 		w_pop      REAL NOT NULL DEFAULT 0.2,
 		w_category REAL NOT NULL DEFAULT 0.4,
+		w_content  REAL NOT NULL DEFAULT 0.4,
 		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`,
 
@@ -364,9 +386,11 @@ var recsSchema = []string{
 		updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`,
 
-	`CREATE INDEX IF NOT EXISTS recs.idx_dismissed_user_type ON dismissed_recommendations(user_did, target_type)`,
-	`CREATE INDEX IF NOT EXISTS recs.idx_impressions_user_unacted ON recommendation_impressions(user_did, acted, shown_count)`,
-	`CREATE INDEX IF NOT EXISTS recs.idx_impressions_last_shown ON recommendation_impressions(last_shown_at)`,
+	`CREATE TABLE IF NOT EXISTS recs.feed_embedding_meta (
+		feed_url TEXT PRIMARY KEY,
+		source_text TEXT NOT NULL DEFAULT ''
+	)`,
+
 	`CREATE INDEX IF NOT EXISTS recs.idx_follow_distances_b ON follow_distances(user_b)`,
 	`CREATE INDEX IF NOT EXISTS recs.idx_follow_distances_a_dist ON follow_distances(user_a, distance)`,
 	`CREATE INDEX IF NOT EXISTS recs.idx_user_similarity_b ON user_similarity(user_b)`,

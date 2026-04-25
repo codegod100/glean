@@ -16,6 +16,20 @@ Your subscriptions live as records on your PDS. You own them. If Glean goes away
 - OPML import and export
 - Sign in with Bluesky / Atmosphere account — no new account needed
 
+## How recommendations work
+
+Glean looks at what you and other users subscribe to, read, and like to suggest feeds and people you might enjoy.
+
+**Feed suggestions** come from readers who share your subscriptions. If a lot of people who follow the same blogs as you also follow a blog you haven't seen, that blog shows up as a recommendation. The system also considers which articles you've liked, whether you follow the person on Bluesky, and how popular the feed is overall.
+
+**People suggestions** are readers whose subscriptions overlap with yours. The more feeds you share, the higher they rank. You also see whether you have any Bluesky follows in common.
+
+**Dismissals** keep things tidy. If you dismiss a recommendation, it won't come back. If a suggestion sits ignored for more than 5 days, it's automatically removed so newer recommendations can take its place.
+
+**Cold start.** If you're new and have fewer than five subscriptions, Glean shows feeds from people you follow on Bluesky alongside popular feeds from the community, so there's something to explore right away.
+
+The system improves over time: as you subscribe to feeds and like articles, Glean learns which signals matter most to you and adjusts accordingly.
+
 ## Self-hosting
 
 ### Docker
@@ -51,6 +65,10 @@ Then open `http://localhost:8080`.
 | `GLEAN_PLC_URL`              | `https://didplc.glean.at`  | PLC directory URL for DID resolution                       |
 | `GLEAN_OAUTH_CLIENT_ID`      | _(empty)_                  | OAuth client metadata URL (leave empty for localhost dev)  |
 | `GLEAN_OAUTH_REDIRECT_URL`   | _(empty)_                  | OAuth redirect URL (leave empty for localhost dev)         |
+| `GLEAN_EMBED_BASE_URL`       | _(empty)_                  | Embeddings API base URL (recommended, see below)           |
+| `GLEAN_EMBED_API_KEY`        | _(empty)_                  | API key for the embeddings endpoint                        |
+| `GLEAN_EMBED_MODEL`          | `text-embedding-3-small`   | Embedding model name                                       |
+| `GLEAN_EMBED_DIMENSION`      | `1536`                     | Embedding vector dimension                                 |
 
 For production:
 

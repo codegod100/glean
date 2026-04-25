@@ -6,12 +6,13 @@ import (
 )
 
 type User struct {
-	DID         string
-	Handle      string
-	DisplayName string
-	AvatarURL   string
-	IndexedAt   sql.NullTime
-	UpdatedAt   sql.NullTime
+	DID          string
+	Handle       string
+	DisplayName  string
+	AvatarURL    string
+	IndexedAt    sql.NullTime
+	UpdatedAt    sql.NullTime
+	FollowsDirty bool
 }
 
 type UserStore struct {
@@ -60,8 +61,8 @@ func (s *UserStore) CreateUser(ctx context.Context, did string) (*User, error) {
 func (s *UserStore) GetUser(ctx context.Context, did string) (*User, error) {
 	u := &User{}
 	err := s.db.QueryRowContext(ctx, `
-		SELECT * FROM users WHERE did = ?
-	`, did).Scan(&u.DID, &u.IndexedAt, &u.UpdatedAt)
+		SELECT did, indexed_at, updated_at, follows_dirty FROM users WHERE did = ?
+	`, did).Scan(&u.DID, &u.IndexedAt, &u.UpdatedAt, &u.FollowsDirty)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +89,7 @@ func (s *UserStore) ListUserDIDs(ctx context.Context) (map[string]bool, error) {
 
 func (s *UserStore) ListUsers(ctx context.Context) ([]*User, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT did, indexed_at, updated_at
+		SELECT did, indexed_at, updated_at, follows_dirty
 		FROM users ORDER BY updated_at DESC
 	`)
 	if err != nil {
@@ -99,7 +100,7 @@ func (s *UserStore) ListUsers(ctx context.Context) ([]*User, error) {
 	var users []*User
 	for rows.Next() {
 		u := &User{}
-		if err := rows.Scan(&u.DID, &u.IndexedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.DID, &u.IndexedAt, &u.UpdatedAt, &u.FollowsDirty); err != nil {
 			return nil, err
 		}
 		users = append(users, u)

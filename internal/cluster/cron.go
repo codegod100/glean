@@ -8,16 +8,22 @@ import (
 	"pkg.rbrt.fr/glean/internal/metrics"
 )
 
+// Cron periodically runs all cluster engine computations (similarity, embeddings,
+// follow distances, signal profiles, auto-dismiss) on a fixed interval.
 type Cron struct {
 	engine   *Engine
 	interval time.Duration
 	logger   *slog.Logger
 }
 
+// NewCron creates a new cron runner with the given engine and interval.
 func NewCron(engine *Engine, interval time.Duration, logger *slog.Logger) *Cron {
 	return &Cron{engine: engine, interval: interval, logger: logger}
 }
 
+// Run starts the cron loop. It blocks until ctx is cancelled. Each tick runs
+// all computations sequentially; if a previous run is still in progress the
+// tick is skipped.
 func (c *Cron) Run(ctx context.Context) error {
 	for {
 		c.logger.Info("starting similarity computation")
@@ -26,19 +32,25 @@ func (c *Cron) Run(ctx context.Context) error {
 		if !c.engine.mu.TryLock() {
 			c.logger.Info("skipping computation: already in progress")
 		} else {
+			if err := c.engine.ComputeFeedEmbeddings(ctx); err != nil {
+				c.engine.logger.Error("feed embeddings failed", "error", err)
+			}
 			if err := c.engine.ComputeFeedSimilarity(ctx); err != nil {
 				c.engine.logger.Error("feed similarity failed", "error", err)
 			}
 			if err := c.engine.ComputeUserSimilarity(ctx); err != nil {
 				c.engine.logger.Error("user similarity failed", "error", err)
 			}
-			if err := c.engine.ComputeFollowDistances(ctx); err != nil {
-				c.engine.logger.Error("follow distances failed", "error", err)
+			if err := c.engine.ComputeArticleEmbeddings(ctx); err != nil {
+				c.engine.logger.Error("article embeddings failed", "error", err)
 			}
 			if err := c.engine.ComputeSignalProfiles(ctx); err != nil {
 				c.engine.logger.Error("signal profiles failed", "error", err)
 			}
-			if err := c.engine.AutoDismissStale(ctx, 15, 30); err != nil {
+			if err := c.engine.ComputeFollowDistances(ctx); err != nil {
+				c.logger.Error("follow distances failed", "error", err)
+			}
+			if err := c.engine.AutoDismissStale(ctx, 5, 5); err != nil {
 				c.engine.logger.Error("auto dismiss failed", "error", err)
 			}
 			c.engine.mu.Unlock()

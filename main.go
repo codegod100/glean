@@ -17,6 +17,8 @@ import (
 	"pkg.rbrt.fr/glean/internal/db"
 	"pkg.rbrt.fr/glean/internal/feed"
 	"pkg.rbrt.fr/glean/internal/server"
+
+	vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 )
 
 func main() {
@@ -40,6 +42,7 @@ func main() {
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
+	vec.Auto()
 	dbs, err := db.OpenAll(*dbPath)
 	if err != nil {
 		logger.Error("failed to open databases", "error", err)
@@ -53,7 +56,24 @@ func main() {
 	storeAdapter := db.NewFeedStoreAdapter(dbs.Articles)
 	scheduler := feed.NewScheduler(storeAdapter, logger, *fetchInterval, 30*time.Minute)
 
-	engine := cluster.NewEngine(dbs.DB(), logger)
+	var embedder cluster.Embedder
+	if embedURL := envOr("GLEAN_EMBED_BASE_URL", ""); embedURL != "" {
+		embedder = cluster.NewOpenAIEmbedder(cluster.OpenAIEmbedderConfig{
+			BaseURL:   embedURL,
+			APIKey:    envOr("GLEAN_EMBED_API_KEY", ""),
+			Model:     envOr("GLEAN_EMBED_MODEL", "text-embedding-3-small"),
+			Dimension: envInt("GLEAN_EMBED_DIMENSION", 1536),
+		})
+	}
+
+	if embedder != nil {
+		if err := dbs.InitVecTables(embedder.Dimension()); err != nil {
+			logger.Error("failed to init vec tables", "error", err)
+			os.Exit(1)
+		}
+	}
+
+	engine := cluster.NewEngine(dbs.DB(), embedder, logger)
 
 	srv := server.New(dbs, clientID, callbackURL, *addr, scheduler, engine, logger, []byte(sessionKey))
 

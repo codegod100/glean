@@ -3,6 +3,9 @@ package cluster
 import (
 	"context"
 	"database/sql"
+	"fmt"
+
+	vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 )
 
 type FeedRecommendation struct {
@@ -40,6 +43,10 @@ type ArticleRecommendation struct {
 	Score      float64
 }
 
+// GetFeedRecommendations returns feed recommendations for a user. Users with
+// fewer than 5 subscriptions get cold-start recommendations (embedding-based
+// KNN or graph+popular fallback). Results are min-max normalized and
+// diversity-filtered before returning.
 func (e *Engine) GetFeedRecommendations(ctx context.Context, userDID string, limit int) ([]*FeedRecommendation, error) {
 	subCount := 0
 	_ = e.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM articles.subscriptions WHERE user_did = ?`, userDID).Scan(&subCount)
@@ -47,6 +54,7 @@ func (e *Engine) GetFeedRecommendations(ctx context.Context, userDID string, lim
 	if subCount < 5 {
 		recs, err := e.ColdStartRecommendations(ctx, userDID, limit*2)
 		if err == nil && len(recs) > 0 {
+			normalizeFeedScores(recs)
 			return ApplyDiversity(recs, limit), nil
 		}
 	}
@@ -56,17 +64,39 @@ func (e *Engine) GetFeedRecommendations(ctx context.Context, userDID string, lim
 		return nil, err
 	}
 
+	normalizeFeedScores(recs)
 	return ApplyDiversity(recs, limit), nil
 }
 
+// GetPeopleRecommendations returns similar users based on subscription overlap,
+// like co-occurrence, tag overlap, and follow relationships. Scores are min-max
+// normalized on the Jaccard field.
 func (e *Engine) GetPeopleRecommendations(ctx context.Context, userDID string, limit int) ([]*PersonRecommendation, error) {
-	return e.ComputePeopleRecommendationsOnDemand(ctx, userDID, limit)
+	recs, err := e.ComputePeopleRecommendationsOnDemand(ctx, userDID, limit)
+	if err != nil {
+		return nil, err
+	}
+	normalizePersonScores(recs)
+	return recs, nil
 }
 
+// GetArticleRecommendations returns article recommendations combining social
+// signals (liked by similar users, followed users' feeds), content similarity
+// (embedding KNN against user's liked articles), and recency. Scores are
+// min-max normalized.
 func (e *Engine) GetArticleRecommendations(ctx context.Context, userDID string, limit int) ([]*ArticleRecommendation, error) {
-	return e.ComputeArticleRecommendationsOnDemand(ctx, userDID, limit)
+	recs, err := e.ComputeArticleRecommendationsOnDemand(ctx, userDID, limit)
+	if err != nil {
+		return nil, err
+	}
+	normalizeArticleScores(recs)
+	return recs, nil
 }
 
+// SignalWeights holds per-signal multipliers used in the recommendation scoring
+// formula. Weights are auto-tuned per user via a bandit-style reward/penalty
+// system (see weights.go). Each field maps to a column in
+// recs.user_signal_weights.
 type SignalWeights struct {
 	WSub      float64
 	WLike     float64
@@ -74,6 +104,7 @@ type SignalWeights struct {
 	WSocial   float64
 	WPop      float64
 	WCategory float64
+	WContent  float64
 }
 
 func defaultWeights() SignalWeights {
@@ -84,6 +115,7 @@ func defaultWeights() SignalWeights {
 		WSocial:   0.7,
 		WPop:      0.2,
 		WCategory: 0.4,
+		WContent:  0.4,
 	}
 }
 
@@ -91,9 +123,9 @@ func (e *Engine) GetWeights(ctx context.Context, userDID string) SignalWeights {
 	w := defaultWeights()
 	var dbW SignalWeights
 	err := e.db.QueryRowContext(ctx, `
-		SELECT w_sub, w_like, w_tag, w_social, w_pop, w_category
+		SELECT w_sub, w_like, w_tag, w_social, w_pop, w_category, w_content
 		FROM recs.user_signal_weights WHERE user_did = ?
-	`, userDID).Scan(&dbW.WSub, &dbW.WLike, &dbW.WTag, &dbW.WSocial, &dbW.WPop, &dbW.WCategory)
+	`, userDID).Scan(&dbW.WSub, &dbW.WLike, &dbW.WTag, &dbW.WSocial, &dbW.WPop, &dbW.WCategory, &dbW.WContent)
 	if err == nil {
 		return dbW
 	}
@@ -115,7 +147,7 @@ func (e *Engine) ComputeFeedRecommendationsOnDemand(ctx context.Context, userDID
 			FROM similar_users su
 			JOIN articles.subscriptions s ON s.user_did = su.peer
 			WHERE s.feed_url NOT IN (SELECT feed_url FROM articles.subscriptions WHERE user_did = ?)
-			  AND s.feed_url NOT IN (SELECT target_id FROM recs.dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
+			  AND s.feed_url NOT IN (SELECT target_id FROM main.dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
 			GROUP BY s.feed_url
 		),
 		like_signals AS (
@@ -125,17 +157,17 @@ func (e *Engine) ComputeFeedRecommendationsOnDemand(ctx context.Context, userDID
 			JOIN articles.likes l ON l.author_did = su.peer
 			JOIN articles.subscriptions s ON s.feed_url = l.feed_url
 			WHERE s.feed_url NOT IN (SELECT feed_url FROM articles.subscriptions WHERE user_did = ?)
-			  AND s.feed_url NOT IN (SELECT target_id FROM recs.dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
+			  AND s.feed_url NOT IN (SELECT target_id FROM main.dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
 			GROUP BY s.feed_url
 		),
 		social_boost AS (
 			SELECT s.feed_url,
-				SUM(CASE WHEN fd.distance = 1 THEN 1.0 ELSE 0.3 END) AS social
+				SUM(CASE fd.distance WHEN 1 THEN 1.0 WHEN 2 THEN 0.3 WHEN 3 THEN 0.1 ELSE 0 END) AS social
 			FROM recs.follow_distances fd
 			JOIN articles.subscriptions s ON s.user_did = fd.user_b
 			WHERE fd.user_a = ?
 			  AND s.feed_url NOT IN (SELECT feed_url FROM articles.subscriptions WHERE user_did = ?)
-			  AND s.feed_url NOT IN (SELECT target_id FROM recs.dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
+			  AND s.feed_url NOT IN (SELECT target_id FROM main.dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
 			GROUP BY s.feed_url
 		),
 		category_counts AS (
@@ -183,10 +215,192 @@ func (e *Engine) ComputeFeedRecommendationsOnDemand(ctx context.Context, userDID
 	return results, rows.Err()
 }
 
+func normalizeFeedScores(recs []*FeedRecommendation) {
+	if len(recs) < 2 {
+		return
+	}
+	min, max := recs[0].Score, recs[0].Score
+	for _, r := range recs[1:] {
+		if r.Score < min {
+			min = r.Score
+		}
+		if r.Score > max {
+			max = r.Score
+		}
+	}
+	if max == min {
+		return
+	}
+	span := max - min
+	for _, r := range recs {
+		r.Score = (r.Score - min) / span
+	}
+}
+
+func normalizeArticleScores(recs []*ArticleRecommendation) {
+	if len(recs) < 2 {
+		return
+	}
+	min, max := recs[0].Score, recs[0].Score
+	for _, r := range recs[1:] {
+		if r.Score < min {
+			min = r.Score
+		}
+		if r.Score > max {
+			max = r.Score
+		}
+	}
+	if max == min {
+		return
+	}
+	span := max - min
+	for _, r := range recs {
+		r.Score = (r.Score - min) / span
+	}
+}
+
+func normalizePersonScores(recs []*PersonRecommendation) {
+	if len(recs) < 2 {
+		return
+	}
+	min, max := recs[0].Jaccard, recs[0].Jaccard
+	for _, r := range recs[1:] {
+		if r.Jaccard < min {
+			min = r.Jaccard
+		}
+		if r.Jaccard > max {
+			max = r.Jaccard
+		}
+	}
+	if max == min {
+		return
+	}
+	span := max - min
+	for _, r := range recs {
+		r.Jaccard = (r.Jaccard - min) / span
+	}
+}
+
+func (e *Engine) coldStartFromEmbeddings(ctx context.Context, userDID string, limit int) ([]*FeedRecommendation, error) {
+	if e.embedder == nil {
+		return nil, nil
+	}
+
+	conn, err := e.db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	subRows, err := conn.QueryContext(ctx, `
+		SELECT fe.feed_url, fe.embedding FROM articles.subscriptions s
+		JOIN recs.feed_embeddings fe ON fe.feed_url = s.feed_url
+		WHERE s.user_did = ?
+	`, userDID)
+	if err != nil {
+		return nil, err
+	}
+
+	dim := e.embedder.Dimension()
+	sumVec := make([]float32, dim)
+	subCount := 0
+	var subFeedURLs []string
+	for subRows.Next() {
+		var url string
+		var blob []byte
+		if err := subRows.Scan(&url, &blob); err != nil {
+			subRows.Close()
+			return nil, err
+		}
+		v := deserializeFloat32(blob)
+		if len(v) != dim {
+			continue
+		}
+		for j := range sumVec {
+			sumVec[j] += v[j]
+		}
+		subCount++
+		subFeedURLs = append(subFeedURLs, url)
+	}
+	subRows.Close()
+
+	if subCount == 0 {
+		return nil, nil
+	}
+
+	avgVec := make([]float32, dim)
+	for j := range avgVec {
+		avgVec[j] = sumVec[j] / float32(subCount)
+	}
+
+	subSet := make(map[string]bool, len(subFeedURLs))
+	for _, u := range subFeedURLs {
+		subSet[u] = true
+	}
+
+	queryBlob, err := vec.SerializeFloat32(avgVec)
+	if err != nil {
+		return nil, fmt.Errorf("serialize query vector: %w", err)
+	}
+
+	knnRows, err := conn.QueryContext(ctx, `
+		SELECT fe.feed_url, fe.distance, COALESCE(f.title, ''), COALESCE(f.site_url, ''),
+			COALESCE(f.description, ''), f.subscriber_count, COALESCE(f.favicon_url, '')
+		FROM recs.feed_embeddings fe
+		JOIN articles.feeds f ON f.feed_url = fe.feed_url
+		WHERE fe.embedding MATCH ? AND fe.k = ?
+		ORDER BY fe.distance
+	`, queryBlob, limit+len(subSet))
+	if err != nil {
+		return nil, err
+	}
+
+	var results []*FeedRecommendation
+	for knnRows.Next() {
+		var r FeedRecommendation
+		var dist float64
+		if err := knnRows.Scan(&r.FeedURL, &dist, &r.Title, &r.SiteURL,
+			&r.Description, &r.SubscriberCount, &r.FaviconURL); err != nil {
+			knnRows.Close()
+			return nil, err
+		}
+		if subSet[r.FeedURL] {
+			continue
+		}
+		r.Score = 1.0 - dist
+		if r.Score <= 0 {
+			continue
+		}
+		results = append(results, &r)
+		if len(results) >= limit {
+			break
+		}
+	}
+	knnRows.Close()
+
+	return results, nil
+}
+
 func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, userDID string, limit int) ([]*ArticleRecommendation, error) {
 	w := e.GetWeights(ctx, userDID)
 
-	rows, err := e.db.QueryContext(ctx, `
+	conn, err := e.db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	if err := e.ensureContentBoostTable(ctx, conn); err != nil {
+		return nil, err
+	}
+
+	if e.embedder != nil {
+		if err := e.populateContentBoost(ctx, conn, userDID); err != nil {
+			e.logger.Warn("content boost failed", "error", err)
+		}
+	}
+
+	rows, err := conn.QueryContext(ctx, `
 		WITH similar_users AS (
 			SELECT user_b AS peer, jaccard FROM recs.user_similarity WHERE user_a = ? AND jaccard > 0.15
 			UNION ALL
@@ -201,13 +415,13 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 				SELECT 1 FROM articles.likes ul WHERE ul.author_did = ? AND ul.feed_url = l.feed_url AND ul.article_url = l.article_url
 			)
 			AND NOT EXISTS (
-				SELECT 1 FROM recs.dismissed_recommendations d WHERE d.user_did = ? AND d.target_type = 'article' AND d.target_id = l.article_url
+				SELECT 1 FROM main.dismissed_recommendations d WHERE d.user_did = ? AND d.target_type = 'article' AND d.target_id = l.article_url
 			)
 			GROUP BY l.feed_url, l.article_url
 		),
 		social_likes AS (
 			SELECT l.feed_url, l.article_url,
-				SUM(CASE WHEN fd.distance = 1 THEN 1.0 ELSE 0.3 END) AS social
+				SUM(CASE fd.distance WHEN 1 THEN 1.0 WHEN 2 THEN 0.3 WHEN 3 THEN 0.1 ELSE 0 END) AS social
 			FROM recs.follow_distances fd
 			JOIN articles.likes l ON l.author_did = fd.user_b
 			WHERE fd.user_a = ?
@@ -222,17 +436,20 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 		       COALESCE(rs.is_read, 0),
 		       COALESCE(la.like_signal, 0) * ?
 		     + COALESCE(sl.social, 0) * ?
+		     + COALESCE(cb.score, 0) * ?
 		     + EXP(-0.023 * CAST(julianday('now') - julianday(a.published) AS REAL)) * 0.2
 		       AS score
 		FROM liked_articles la
 		JOIN articles.articles a ON a.feed_url = la.feed_url AND a.url = la.article_url
 		LEFT JOIN articles.feeds f ON f.feed_url = la.feed_url
 		LEFT JOIN social_likes sl ON sl.feed_url = la.feed_url AND sl.article_url = la.article_url
+		LEFT JOIN _content_boost cb ON cb.article_id = a.id
 		LEFT JOIN articles.read_state rs ON rs.article_id = a.id AND rs.user_did = ?
 		WHERE COALESCE(rs.is_read, 0) = 0
 		ORDER BY score DESC, (CASE WHEN a.published > 'now' THEN 1 ELSE 0 END), a.published DESC
 		LIMIT ?
-	`, userDID, userDID, userDID, userDID, userDID, userDID, w.WLike, w.WSocial, userDID, limit)
+	`, userDID, userDID, userDID, userDID, userDID, userDID,
+		w.WLike, w.WSocial, w.WContent, userDID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -282,92 +499,124 @@ func (e *Engine) ComputePeopleRecommendationsOnDemand(ctx context.Context, userD
 }
 
 func (e *Engine) ComputeSignalProfiles(ctx context.Context) error {
-	tx, err := e.db.BeginTx(ctx, nil)
+	conn, err := e.db.Conn(ctx)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback() }()
+	defer conn.Close()
 
-	if _, err := tx.ExecContext(ctx, `DELETE FROM recs.user_signal_profiles`); err != nil {
-		return err
+	{
+		tx, err := conn.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback() }()
+
+		if _, err := tx.ExecContext(ctx, `
+			CREATE TEMP TABLE IF NOT EXISTS _user_like_counts (user_did TEXT PRIMARY KEY, cnt INT)
+		`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM _user_like_counts`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO _user_like_counts SELECT author_did, COUNT(*) FROM articles.likes GROUP BY author_did
+		`); err != nil {
+			return err
+		}
+
+		if _, err := tx.ExecContext(ctx, `
+			CREATE TEMP TABLE IF NOT EXISTS _user_tag_counts (user_did TEXT PRIMARY KEY, cnt INT)
+		`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM _user_tag_counts`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO _user_tag_counts
+			WITH user_tags AS (
+				SELECT author_did, TRIM(value) AS tag
+				FROM articles.annotations, json_each('["' || REPLACE(tags, ',', '","') || '"]')
+				WHERE tags IS NOT NULL AND tags != ''
+			)
+			SELECT author_did, COUNT(DISTINCT tag) FROM user_tags GROUP BY author_did
+		`); err != nil {
+			return err
+		}
+
+		if _, err := tx.ExecContext(ctx, `
+			CREATE TEMP TABLE IF NOT EXISTS _user_top_categories (user_did TEXT PRIMARY KEY, categories TEXT)
+		`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM _user_top_categories`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO _user_top_categories
+			SELECT user_did, '[' || GROUP_CONCAT('{"c":"' || category || '","n":"' || CAST(cnt AS TEXT) || '}') || ']'
+			FROM (
+				SELECT user_did, category, COUNT(*) AS cnt
+				FROM articles.subscriptions
+				WHERE category IS NOT NULL AND category != ''
+				GROUP BY user_did, category
+				ORDER BY COUNT(*) DESC
+				LIMIT 5
+			)
+			GROUP BY user_did
+		`); err != nil {
+			return err
+		}
+
+		if _, err := tx.ExecContext(ctx, `
+			CREATE TEMP TABLE IF NOT EXISTS _signal_profiles_staging (
+				user_did TEXT PRIMARY KEY, total_likes INT, total_tags INT, top_categories TEXT
+			)
+		`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM _signal_profiles_staging`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO _signal_profiles_staging (user_did, total_likes, total_tags, top_categories)
+			SELECT
+				u.did,
+				COALESCE(lc.cnt, 0),
+				COALESCE(tc.cnt, 0),
+				COALESCE(cc.categories, '[]')
+			FROM main.users u
+			LEFT JOIN _user_like_counts lc ON lc.user_did = u.did
+			LEFT JOIN _user_tag_counts tc ON tc.user_did = u.did
+			LEFT JOIN _user_top_categories cc ON cc.user_did = u.did
+		`); err != nil {
+			return err
+		}
+
+		if err := tx.Commit(); err != nil {
+			return err
+		}
 	}
 
-	if _, err := tx.ExecContext(ctx, `
-		CREATE TEMP TABLE IF NOT EXISTS _user_like_counts (user_did TEXT PRIMARY KEY, cnt INT)
-	`); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM _user_like_counts`); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO _user_like_counts SELECT author_did, COUNT(*) FROM articles.likes GROUP BY author_did
-	`); err != nil {
-		return err
-	}
+	{
+		tx, err := conn.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.ExecContext(ctx, `
-		CREATE TEMP TABLE IF NOT EXISTS _user_tag_counts (user_did TEXT PRIMARY KEY, cnt INT)
-	`); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM _user_tag_counts`); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO _user_tag_counts
-		WITH user_tags AS (
-			SELECT author_did, TRIM(value) AS tag
-			FROM articles.annotations, json_each('["' || REPLACE(tags, ',', '","') || '"]')
-			WHERE tags IS NOT NULL AND tags != ''
-		)
-		SELECT author_did, COUNT(DISTINCT tag) FROM user_tags GROUP BY author_did
-	`); err != nil {
-		return err
-	}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM recs.user_signal_profiles`); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO recs.user_signal_profiles (user_did, total_likes, total_tags, top_categories) SELECT user_did, total_likes, total_tags, top_categories FROM _signal_profiles_staging`); err != nil {
+			return err
+		}
 
-	if _, err := tx.ExecContext(ctx, `
-		CREATE TEMP TABLE IF NOT EXISTS _user_top_categories (user_did TEXT PRIMARY KEY, categories TEXT)
-	`); err != nil {
-		return err
+		e.logger.Info("signal profiles computed")
+		return tx.Commit()
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM _user_top_categories`); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO _user_top_categories
-		SELECT user_did, '[' || GROUP_CONCAT('{"c":"' || category || '","n":"' || CAST(cnt AS TEXT) || '}') || ']'
-		FROM (
-			SELECT user_did, category, COUNT(*) AS cnt
-			FROM articles.subscriptions
-			WHERE category IS NOT NULL AND category != ''
-			GROUP BY user_did, category
-			ORDER BY COUNT(*) DESC
-			LIMIT 5
-		)
-		GROUP BY user_did
-	`); err != nil {
-		return err
-	}
-
-	_, err = tx.ExecContext(ctx, `
-		INSERT INTO recs.user_signal_profiles (user_did, total_likes, total_tags, top_categories)
-		SELECT
-			u.did,
-			COALESCE(lc.cnt, 0),
-			COALESCE(tc.cnt, 0),
-			COALESCE(cc.categories, '[]')
-		FROM main.users u
-		LEFT JOIN _user_like_counts lc ON lc.user_did = u.did
-		LEFT JOIN _user_tag_counts tc ON tc.user_did = u.did
-		LEFT JOIN _user_top_categories cc ON cc.user_did = u.did
-	`)
-	if err != nil {
-		return err
-	}
-
-	e.logger.Info("signal profiles computed")
-	return tx.Commit()
 }
 
 func (e *Engine) ColdStartRecommendations(ctx context.Context, userDID string, limit int) ([]*FeedRecommendation, error) {
@@ -377,6 +626,18 @@ func (e *Engine) ColdStartRecommendations(ctx context.Context, userDID string, l
 		return nil, nil
 	}
 
+	recs, err := e.coldStartFromEmbeddings(ctx, userDID, limit)
+	if err != nil {
+		e.logger.Warn("embedding cold start failed", "error", err)
+	}
+	if len(recs) > 0 {
+		return recs, nil
+	}
+
+	return e.coldStartFromGraphAndPopular(ctx, userDID, limit)
+}
+
+func (e *Engine) coldStartFromGraphAndPopular(ctx context.Context, userDID string, limit int) ([]*FeedRecommendation, error) {
 	rows, err := e.db.QueryContext(ctx, `
 		WITH followed_feeds AS (
 			SELECT s.feed_url, 1.0 AS weight
@@ -384,7 +645,7 @@ func (e *Engine) ColdStartRecommendations(ctx context.Context, userDID string, l
 			JOIN articles.subscriptions s ON s.user_did = fd.user_b
 			WHERE fd.user_a = ? AND fd.distance = 1
 			AND s.feed_url NOT IN (SELECT feed_url FROM articles.subscriptions WHERE user_did = ?)
-			AND s.feed_url NOT IN (SELECT target_id FROM recs.dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
+			AND s.feed_url NOT IN (SELECT target_id FROM main.dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
 		),
 		popular_feeds AS (
 			SELECT feed_url, subscriber_count,
@@ -392,7 +653,7 @@ func (e *Engine) ColdStartRecommendations(ctx context.Context, userDID string, l
 			FROM articles.feeds
 			WHERE subscriber_count > 0
 			AND feed_url NOT IN (SELECT feed_url FROM articles.subscriptions WHERE user_did = ?)
-			AND feed_url NOT IN (SELECT target_id FROM recs.dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
+			AND feed_url NOT IN (SELECT target_id FROM main.dismissed_recommendations WHERE user_did = ? AND target_type = 'feed')
 			ORDER BY subscriber_count DESC
 			LIMIT 50
 		),
