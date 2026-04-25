@@ -161,7 +161,7 @@ func (s *Scheduler) fetchAll(ctx context.Context, olderThan time.Duration) {
 	s.logger.Info("fetching feeds", "count", len(feeds), "older_than", olderThan)
 
 	g, gCtx := errgroup.WithContext(ctx)
-	g.SetLimit(50)
+	g.SetLimit(10)
 	for _, f := range feeds {
 		g.Go(func() error {
 			s.FetchFeed(gCtx, f)
