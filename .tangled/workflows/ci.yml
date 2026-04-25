@@ -18,7 +18,7 @@ dependencies:
 
 steps:
   - name: "Build glean"
-    command: "go build -tags fts5  ./..."
+    command: "make build"
 
   - name: "Run tests"
-    command: "go test -tags fts5 ./... -v"
+    command: "make test"
