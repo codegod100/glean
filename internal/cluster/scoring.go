@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-
-	vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 )
 
 type FeedRecommendation struct {
@@ -292,6 +290,7 @@ func (e *Engine) coldStartFromEmbeddings(ctx context.Context, userDID string, li
 	}
 	defer conn.Close()
 
+	dim := e.embedder.Dimension()
 	subRows, err := conn.QueryContext(ctx, `
 		SELECT fe.feed_url, fe.embedding FROM articles.subscriptions s
 		JOIN recs.feed_embeddings fe ON fe.feed_url = s.feed_url
@@ -301,10 +300,8 @@ func (e *Engine) coldStartFromEmbeddings(ctx context.Context, userDID string, li
 		return nil, err
 	}
 
-	dim := e.embedder.Dimension()
-	sumVec := make([]float32, dim)
-	subCount := 0
 	var subFeedURLs []string
+	var blobs [][]byte
 	for subRows.Next() {
 		var url string
 		var blob []byte
@@ -312,25 +309,16 @@ func (e *Engine) coldStartFromEmbeddings(ctx context.Context, userDID string, li
 			subRows.Close()
 			return nil, err
 		}
-		v := deserializeFloat32(blob)
-		if len(v) != dim {
+		if len(blob) != dim*4 {
 			continue
 		}
-		for j := range sumVec {
-			sumVec[j] += v[j]
-		}
-		subCount++
 		subFeedURLs = append(subFeedURLs, url)
+		blobs = append(blobs, blob)
 	}
 	subRows.Close()
 
-	if subCount == 0 {
+	if len(blobs) == 0 {
 		return nil, nil
-	}
-
-	avgVec := make([]float32, dim)
-	for j := range avgVec {
-		avgVec[j] = sumVec[j] / float32(subCount)
 	}
 
 	subSet := make(map[string]bool, len(subFeedURLs))
@@ -338,7 +326,7 @@ func (e *Engine) coldStartFromEmbeddings(ctx context.Context, userDID string, li
 		subSet[u] = true
 	}
 
-	queryBlob, err := vec.SerializeFloat32(avgVec)
+	queryBlob, err := avgEmbeddings(blobs, dim)
 	if err != nil {
 		return nil, fmt.Errorf("serialize query vector: %w", err)
 	}

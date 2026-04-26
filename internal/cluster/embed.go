@@ -1,35 +1,34 @@
 package cluster
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
+	"unsafe"
 
+	vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 )
 
-// Embedder generates vector embeddings for text inputs. Implementations must be
-// safe for concurrent use.
+// Embedder generates vector embeddings for text inputs.
 type Embedder interface {
-	Embed(ctx context.Context, texts []string) ([][]float32, error)
+	Embed(ctx context.Context, texts []string, instruction string) ([][]float32, error)
 	Dimension() int
 }
 
-type OpenAIEmbedder struct {
+type EmbedderClient struct {
 	client    openai.Client
 	model     string
 	dimension int
 }
 
-type OpenAIEmbedderConfig struct {
+type EmbedderClientConfig struct {
 	BaseURL   string
 	APIKey    string
 	Model     string
 	Dimension int
 }
 
-func NewOpenAIEmbedder(cfg OpenAIEmbedderConfig) *OpenAIEmbedder {
+func NewEmbedderClient(cfg EmbedderClientConfig) *EmbedderClient {
 	opts := []option.RequestOption{}
 	if cfg.BaseURL != "" {
 		opts = append(opts, option.WithBaseURL(cfg.BaseURL))
@@ -37,22 +36,29 @@ func NewOpenAIEmbedder(cfg OpenAIEmbedderConfig) *OpenAIEmbedder {
 	if cfg.APIKey != "" {
 		opts = append(opts, option.WithAPIKey(cfg.APIKey))
 	}
-	return &OpenAIEmbedder{
+	return &EmbedderClient{
 		client:    openai.NewClient(opts...),
 		model:     cfg.Model,
 		dimension: cfg.Dimension,
 	}
 }
 
-func (e *OpenAIEmbedder) Dimension() int {
+func (e *EmbedderClient) Dimension() int {
 	return e.dimension
 }
 
-func (e *OpenAIEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+func (e *EmbedderClient) Embed(ctx context.Context, texts []string, instruction string) ([][]float32, error) {
+	inputs := texts
+	if instruction != "" {
+		inputs = make([]string, len(texts))
+		for i, t := range texts {
+			inputs[i] = instruction + "\n" + t
+		}
+	}
 	resp, err := e.client.Embeddings.New(ctx, openai.EmbeddingNewParams{
 		Model: e.model,
 		Input: openai.EmbeddingNewParamsInputUnion{
-			OfArrayOfStrings: texts,
+			OfArrayOfStrings: inputs,
 		},
 	})
 	if err != nil {
@@ -69,12 +75,31 @@ func (e *OpenAIEmbedder) Embed(ctx context.Context, texts []string) ([][]float32
 	return embeddings, nil
 }
 
-func deserializeFloat32(data []byte) []float32 {
-	if len(data)%4 != 0 {
+func avgEmbeddings(blobs [][]byte, dim int) ([]byte, error) {
+	sum := make([]float32, dim)
+	count := 0
+	for _, blob := range blobs {
+		v := bytesToFloat32s(blob, dim)
+		if v == nil {
+			continue
+		}
+		for j := range sum {
+			sum[j] += v[j]
+		}
+		count++
+	}
+	if count == 0 {
+		return nil, nil
+	}
+	for j := range sum {
+		sum[j] /= float32(count)
+	}
+	return vec.SerializeFloat32(sum)
+}
+
+func bytesToFloat32s(data []byte, expectedDim int) []float32 {
+	if len(data) != expectedDim*4 {
 		return nil
 	}
-	result := make([]float32, len(data)/4)
-	r := bytes.NewReader(data)
-	_ = binary.Read(r, binary.LittleEndian, &result)
-	return result
+	return unsafe.Slice((*float32)(unsafe.Pointer(&data[0])), expectedDim)
 }

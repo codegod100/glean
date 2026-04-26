@@ -76,7 +76,7 @@ func (e *Engine) ComputeArticleEmbeddings(ctx context.Context) error {
 			texts[j] = a.text
 		}
 
-		embeddings, err := e.embedder.Embed(ctx, texts)
+		embeddings, err := e.embedder.Embed(ctx, texts, "Represent this news article for retrieving topically similar articles. Focus on the subjects, themes, and key entities discussed.")
 		if err != nil {
 			return fmt.Errorf("embed batch %d: %w", i/embedBatchSize, err)
 		}
@@ -153,8 +153,7 @@ func (e *Engine) populateContentBoost(ctx context.Context, conn *sql.Conn, userD
 	}
 
 	dim := e.embedder.Dimension()
-	sumVec := make([]float32, dim)
-	count := 0
+	var blobs [][]byte
 	likedSet := make(map[int64]bool)
 	for embRows.Next() {
 		var id int64
@@ -163,28 +162,19 @@ func (e *Engine) populateContentBoost(ctx context.Context, conn *sql.Conn, userD
 			embRows.Close()
 			return err
 		}
-		v := deserializeFloat32(blob)
-		if len(v) != dim {
+		if len(blob) != dim*4 {
 			continue
 		}
-		for j := range sumVec {
-			sumVec[j] += v[j]
-		}
-		count++
+		blobs = append(blobs, blob)
 		likedSet[id] = true
 	}
 	embRows.Close()
 
-	if count == 0 {
+	if len(blobs) == 0 {
 		return nil
 	}
 
-	avgVec := make([]float32, dim)
-	for j := range avgVec {
-		avgVec[j] = sumVec[j] / float32(count)
-	}
-
-	queryBlob, err := vec.SerializeFloat32(avgVec)
+	queryBlob, err := avgEmbeddings(blobs, dim)
 	if err != nil {
 		return fmt.Errorf("serialize query vector: %w", err)
 	}
@@ -308,7 +298,7 @@ func (e *Engine) ComputeFeedEmbeddings(ctx context.Context) error {
 			texts[j] = f.text
 		}
 
-		embeddings, err := e.embedder.Embed(ctx, texts)
+		embeddings, err := e.embedder.Embed(ctx, texts, "Represent this RSS feed description for discovering feeds with similar editorial focus and topic coverage.")
 		if err != nil {
 			return fmt.Errorf("embed feed batch %d: %w", i/embedBatchSize, err)
 		}

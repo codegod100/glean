@@ -584,7 +584,7 @@ func NewMockEmbedder(dimension int) *MockEmbedder {
 	return &MockEmbedder{dimension: dimension}
 }
 
-func (m *MockEmbedder) Embed(_ context.Context, texts []string) ([][]float32, error) {
+func (m *MockEmbedder) Embed(_ context.Context, texts []string, _ string) ([][]float32, error) {
 	result := make([][]float32, len(texts))
 	for i, text := range texts {
 		vec := make([]float32, m.dimension)

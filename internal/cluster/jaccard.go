@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"math"
 	"sync"
 )
 
@@ -122,94 +121,81 @@ func (e *Engine) computeEmbeddingSimilarity(ctx context.Context, tx *sql.Tx) err
 	if e.embedder == nil {
 		return nil
 	}
-	e.logger.Debug("computing embedding similarity")
+	e.logger.Debug("computing embedding similarity via vec0 KNN")
 
-	stagingRows, err := tx.QueryContext(ctx, `SELECT feed_a, feed_b FROM _feed_sim_staging`)
+	feedRows, err := tx.QueryContext(ctx, `SELECT feed_url, embedding FROM recs.feed_embeddings`)
 	if err != nil {
 		return err
 	}
 
-	type pair struct{ a, b string }
-	var pairs []pair
-	feedSet := make(map[string]bool)
-	for stagingRows.Next() {
-		var p pair
-		if err := stagingRows.Scan(&p.a, &p.b); err != nil {
-			stagingRows.Close()
+	type feedEmb struct {
+		url string
+		vec []byte
+	}
+	var feeds []feedEmb
+	for feedRows.Next() {
+		var f feedEmb
+		if err := feedRows.Scan(&f.url, &f.vec); err != nil {
+			feedRows.Close()
 			return err
 		}
-		pairs = append(pairs, p)
-		feedSet[p.a] = true
-		feedSet[p.b] = true
+		feeds = append(feeds, f)
 	}
-	stagingRows.Close()
+	feedRows.Close()
 
-	if len(feedSet) == 0 {
+	if len(feeds) == 0 {
 		return nil
 	}
 
-	ph := make([]string, 0, len(feedSet))
-	args := make([]any, 0, len(feedSet))
-	for url := range feedSet {
-		ph = append(ph, "?")
-		args = append(args, url)
+	const knnLimit = 50
+	stmt, err := tx.PrepareContext(ctx, `
+		SELECT feed_url, distance
+		FROM recs.feed_embeddings
+		WHERE embedding MATCH ? AND k = ?
+		ORDER BY distance
+	`)
+	if err != nil {
+		return err
 	}
-	embRows, err := tx.QueryContext(ctx,
-		fmt.Sprintf("SELECT feed_url, embedding FROM recs.feed_embeddings WHERE feed_url IN (%s)", joinPh(ph)),
-		args...,
+	defer stmt.Close()
+
+	updateStmt, err := tx.PrepareContext(ctx,
+		`UPDATE _feed_sim_staging SET jaccard = jaccard + ? WHERE feed_a = ? AND feed_b = ?`,
 	)
 	if err != nil {
 		return err
 	}
+	defer updateStmt.Close()
 
-	embeddings := make(map[string][]float32)
-	for embRows.Next() {
-		var url string
-		var blob []byte
-		if err := embRows.Scan(&url, &blob); err != nil {
-			embRows.Close()
+	for _, f := range feeds {
+		knnRows, err := stmt.QueryContext(ctx, f.vec, knnLimit)
+		if err != nil {
 			return err
 		}
-		v := deserializeFloat32(blob)
-		if len(v) > 0 {
-			embeddings[url] = v
+		for knnRows.Next() {
+			var neighborURL string
+			var dist float64
+			if err := knnRows.Scan(&neighborURL, &dist); err != nil {
+				knnRows.Close()
+				return err
+			}
+			if neighborURL == f.url || dist <= 0 {
+				continue
+			}
+			boost := 1.0 / (1.0 + dist) * e.config.DescriptionWeight
+			a, b := f.url, neighborURL
+			if a > b {
+				a, b = b, a
+			}
+			if _, err := updateStmt.ExecContext(ctx, boost, a, b); err != nil {
+				knnRows.Close()
+				return err
+			}
 		}
-	}
-	embRows.Close()
-
-	for _, p := range pairs {
-		vecA, okA := embeddings[p.a]
-		vecB, okB := embeddings[p.b]
-		if !okA || !okB {
-			continue
-		}
-		sim := cosineSimilarity(vecA, vecB)
-		if sim <= 0 {
-			continue
-		}
-		boost := sim * e.config.DescriptionWeight
-		if _, err := tx.ExecContext(ctx,
-			`UPDATE _feed_sim_staging SET jaccard = jaccard + ? WHERE feed_a = ? AND feed_b = ?`,
-			boost, p.a, p.b,
-		); err != nil {
-			return err
-		}
+		knnRows.Close()
 	}
 
 	return nil
-}
-
-func cosineSimilarity(a, b []float32) float64 {
-	var dot, normA, normB float64
-	for i := range a {
-		dot += float64(a[i]) * float64(b[i])
-		normA += float64(a[i]) * float64(a[i])
-		normB += float64(b[i]) * float64(b[i])
-	}
-	if normA == 0 || normB == 0 {
-		return 0
-	}
-	return dot / (math.Sqrt(normA) * math.Sqrt(normB))
 }
 
 // ComputeUserSimilarity recomputes the user_similarity table: subscription

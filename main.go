@@ -58,7 +58,7 @@ func main() {
 
 	var embedder cluster.Embedder
 	if embedURL := envOr("GLEAN_EMBED_BASE_URL", ""); embedURL != "" {
-		embedder = cluster.NewOpenAIEmbedder(cluster.OpenAIEmbedderConfig{
+		embedder = cluster.NewEmbedderClient(cluster.EmbedderClientConfig{
 			BaseURL:   embedURL,
 			APIKey:    envOr("GLEAN_EMBED_API_KEY", ""),
 			Model:     envOr("GLEAN_EMBED_MODEL", "text-embedding-3-small"),
