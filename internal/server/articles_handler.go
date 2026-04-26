@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -77,6 +78,11 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 	page = page.Paginate(totalFetched)
 	if page.HasNext {
 		articles = articles[:page.PageSize]
+	}
+
+	navSuffix := buildNavSuffix(feedURL, false)
+	for _, a := range articles {
+		a.NavSuffix = navSuffix
 	}
 
 	data := map[string]any{
@@ -195,6 +201,14 @@ func (s *Server) handleArticleDetail(w http.ResponseWriter, r *http.Request) {
 		s.logger.Warn("failed to get feed", "error", err, "feed", article.FeedURL)
 	}
 
+	fromFeedURL := r.URL.Query().Get("from_feed")
+	navLiked := r.URL.Query().Get("liked") == "1"
+
+	nextID, err := s.dbs.Articles.GetNextArticleID(ctx, user.DID, id, fromFeedURL, navLiked)
+	if err != nil {
+		s.logger.Warn("failed to get next article", "error", err, "id", id)
+	}
+
 	s.render(w, r, "article_detail.html", map[string]any{
 		"User":           user,
 		"CurrentUserDID": user.DID,
@@ -204,6 +218,8 @@ func (s *Server) handleArticleDetail(w http.ResponseWriter, r *http.Request) {
 		"LikeCount":      likeCount,
 		"HasLiked":       liked,
 		"Annotations":    annotations,
+		"NextID":         nextID,
+		"NextSuffix":     buildNavSuffix(fromFeedURL, navLiked),
 	})
 }
 
@@ -403,4 +419,18 @@ func (s *Server) handleFetchContent(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	_, _ = fmt.Fprintf(w, `<div id="article-content" class="article-body">%s</div>`, cleaned)
 	s.logger.Info("scraped article content", "id", id, "url", article.URL.String, "content_len", len(cleaned))
+}
+
+func buildNavSuffix(feedURL string, liked bool) string {
+	v := url.Values{}
+	if feedURL != "" {
+		v.Set("from_feed", feedURL)
+	}
+	if liked {
+		v.Set("liked", "1")
+	}
+	if len(v) == 0 {
+		return ""
+	}
+	return "?" + v.Encode()
 }

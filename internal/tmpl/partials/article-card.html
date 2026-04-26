@@ -4,7 +4,7 @@
         <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
                 {{if not .IsRead.Bool}}<span class="w-2 h-2 rounded-full bg-spot-green shrink-0"></span>{{end}}
-                <a href="/articles/{{.ID}}" class="font-bold text-spot-text hover:text-spot-green transition text-lg leading-tight">{{.Title}}</a>
+                <a href="/articles/{{.ID}}{{.NavSuffix}}" class="font-bold text-spot-text hover:text-spot-green transition text-lg leading-tight">{{.Title}}</a>
             </div>
             <div class="text-sm text-spot-secondary mt-1 flex items-center gap-2">
                 {{template "favicon" dict "src" .FeedFaviconURL.String "size" "w-4 h-4"}}

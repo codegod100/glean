@@ -48,6 +48,11 @@ func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 		likedPage.NextPage = likedPage.Page + 1
 	}
 
+	navSuffix := buildNavSuffix("", true)
+	for _, a := range articles {
+		a.NavSuffix = navSuffix
+	}
+
 	annotations, err := s.dbs.Articles.ListAnnotations(ctx, "", "", user.DID, limit+1, annotPage.Offset())
 	if err != nil {
 		s.logger.Warn("failed to list annotations", "error", err, "did", user.DID)

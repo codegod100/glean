@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 	"time"
 	"unicode"
@@ -38,6 +39,9 @@ type Article struct {
 	IsRead         sql.NullBool
 	LikeCount      int
 	HasLiked       bool
+	// NavSuffix holds the query string appended to article detail links to preserve
+	// listing context (feed scope, liked) for next-article navigation.
+	NavSuffix string
 }
 
 type ReadState struct {
@@ -403,6 +407,58 @@ func (s *ArticleStore) CountNewArticles(ctx context.Context, userDID string, sin
 		WHERE a.fetched_at > ?
 	`, userDID, since).Scan(&count)
 	return count, err
+}
+
+func (s *ArticleStore) GetNextArticleID(ctx context.Context, userDID string, articleID int64, feedURL string, liked bool) (*int64, error) {
+	var fromParts []string
+	var whereParts []string
+
+	fromParts = append(fromParts, "articles.articles a")
+
+	if feedURL != "" {
+		whereParts = append(whereParts, "a.feed_url = ?")
+	} else {
+		fromParts = append(fromParts, "JOIN articles.subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?")
+	}
+
+	if liked {
+		fromParts = append(fromParts, "JOIN articles.likes l ON l.author_did = ? AND l.article_url = a.url")
+	}
+
+	whereParts = append(whereParts, "a.id != ?")
+
+	fromClause := strings.Join(fromParts, " ")
+	whereClause := strings.Join(whereParts, " AND ")
+
+	query := fmt.Sprintf(`
+		WITH cur AS (SELECT published FROM articles.articles WHERE id = ?)
+		SELECT a.id FROM %s, cur
+		WHERE %s AND (
+			(CASE WHEN a.published > 'now' THEN 1 ELSE 0 END) > (CASE WHEN cur.published > 'now' THEN 1 ELSE 0 END)
+			OR (CASE WHEN a.published > 'now' THEN 1 ELSE 0 END) = (CASE WHEN cur.published > 'now' THEN 1 ELSE 0 END) AND a.published < cur.published
+			OR (CASE WHEN a.published > 'now' THEN 1 ELSE 0 END) = (CASE WHEN cur.published > 'now' THEN 1 ELSE 0 END) AND a.published = cur.published AND a.id > ?
+		)
+		ORDER BY (CASE WHEN a.published > 'now' THEN 1 ELSE 0 END) ASC, a.published DESC, a.id ASC
+		LIMIT 1
+	`, fromClause, whereClause)
+
+	var args []any
+	args = append(args, articleID)
+	if feedURL != "" {
+		args = append(args, feedURL)
+	} else {
+		args = append(args, userDID)
+	}
+	if liked {
+		args = append(args, userDID)
+	}
+	args = append(args, articleID, articleID)
+
+	var next sql.NullInt64
+	if err := s.db.QueryRowContext(ctx, query, args...).Scan(&next); err != nil {
+		return nil, nil
+	}
+	return &next.Int64, nil
 }
 
 func escapeFTS5(query string) string {
