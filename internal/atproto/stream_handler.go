@@ -121,35 +121,50 @@ func (h *StreamDBHandler) handleLike(ctx context.Context, event *Event) error {
 func (h *StreamDBHandler) handleAnnotation(ctx context.Context, event *Event) error {
 	switch event.Type {
 	case actionCreate:
-		var rec AnnotationRecord
-		if err := json.Unmarshal(event.Value, &rec); err != nil {
+		a, err := parseAnnotationRecord(event)
+		if err != nil || a == nil {
 			return err
 		}
-		if rec.FeedURL == "" || rec.ArticleURL == "" {
-			return nil
-		}
-
-		t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
-		a := &db.Annotation{
-			URI:        event.URI,
-			AuthorDID:  event.DID,
-			FeedURL:    rec.FeedURL,
-			ArticleURL: rec.ArticleURL,
-			Quote:      db.NullStr(rec.Quote),
-			Note:       db.NullStr(rec.Note),
-			Tags:       db.NullStrTags(rec.Tags),
-			CreatedAt:  sql.NullTime{Time: t, Valid: true},
-			CID:        sql.NullString{String: event.CID, Valid: event.CID != ""},
-		}
-		if rec.Rating > 0 {
-			a.Rating = sql.NullInt64{Int64: int64(rec.Rating), Valid: true}
-		}
 		return h.articles.CreateAnnotation(ctx, a)
+
+	case actionUpdate:
+		a, err := parseAnnotationRecord(event)
+		if err != nil || a == nil {
+			return err
+		}
+		return h.articles.UpdateAnnotation(ctx, a)
 
 	case actionDelete:
 		return h.articles.DeleteAnnotation(ctx, event.URI)
 	}
 	return nil
+}
+
+func parseAnnotationRecord(event *Event) (*db.Annotation, error) {
+	var rec AnnotationRecord
+	if err := json.Unmarshal(event.Value, &rec); err != nil {
+		return nil, err
+	}
+	if rec.FeedURL == "" || rec.ArticleURL == "" {
+		return nil, nil
+	}
+
+	t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
+	a := &db.Annotation{
+		URI:        event.URI,
+		AuthorDID:  event.DID,
+		FeedURL:    rec.FeedURL,
+		ArticleURL: rec.ArticleURL,
+		Quote:      db.NullStr(rec.Quote),
+		Note:       db.NullStr(rec.Note),
+		Tags:       db.NullStrTags(rec.Tags),
+		CreatedAt:  sql.NullTime{Time: t, Valid: true},
+		CID:        sql.NullString{String: event.CID, Valid: event.CID != ""},
+	}
+	if rec.Rating > 0 {
+		a.Rating = sql.NullInt64{Int64: int64(rec.Rating), Valid: true}
+	}
+	return a, nil
 }
 
 func (h *StreamDBHandler) handleFollow(ctx context.Context, event *Event) error {
@@ -172,36 +187,50 @@ func (h *StreamDBHandler) handleFollow(ctx context.Context, event *Event) error 
 
 func (h *StreamDBHandler) handleMarginNote(ctx context.Context, event *Event) error {
 	switch event.Type {
-	case actionCreate, actionUpdate:
-		var rec MarginNoteRecord
-		if err := json.Unmarshal(event.Value, &rec); err != nil {
+	case actionCreate:
+		a, err := h.parseMarginNoteRecord(ctx, event)
+		if err != nil || a == nil {
 			return err
 		}
-
-		articleURL, quote, note, tags := rec.ToAnnotation()
-		if articleURL == "" {
-			return nil
-		}
-
-		feedURL := h.resolveFeedURL(ctx, articleURL)
-
-		t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
-		a := &db.Annotation{
-			URI:        event.URI,
-			AuthorDID:  event.DID,
-			FeedURL:    feedURL,
-			ArticleURL: articleURL,
-			Quote:      db.NullStr(quote),
-			Note:       db.NullStr(note),
-			Tags:       db.NullStrTags(tags),
-			CreatedAt:  sql.NullTime{Time: t, Valid: true},
-			CID:        sql.NullString{String: event.CID, Valid: event.CID != ""},
-		}
 		return h.articles.CreateAnnotation(ctx, a)
+
+	case actionUpdate:
+		a, err := h.parseMarginNoteRecord(ctx, event)
+		if err != nil || a == nil {
+			return err
+		}
+		return h.articles.UpdateAnnotation(ctx, a)
 
 	case actionDelete:
 	}
 	return nil
+}
+
+func (h *StreamDBHandler) parseMarginNoteRecord(ctx context.Context, event *Event) (*db.Annotation, error) {
+	var rec MarginNoteRecord
+	if err := json.Unmarshal(event.Value, &rec); err != nil {
+		return nil, err
+	}
+
+	articleURL, quote, note, tags := rec.ToAnnotation()
+	if articleURL == "" {
+		return nil, nil
+	}
+
+	feedURL := h.resolveFeedURL(ctx, articleURL)
+
+	t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
+	return &db.Annotation{
+		URI:        event.URI,
+		AuthorDID:  event.DID,
+		FeedURL:    feedURL,
+		ArticleURL: articleURL,
+		Quote:      db.NullStr(quote),
+		Note:       db.NullStr(note),
+		Tags:       db.NullStrTags(tags),
+		CreatedAt:  sql.NullTime{Time: t, Valid: true},
+		CID:        sql.NullString{String: event.CID, Valid: event.CID != ""},
+	}, nil
 }
 
 func (h *StreamDBHandler) handleSkyreaderSubscription(ctx context.Context, event *Event) error {

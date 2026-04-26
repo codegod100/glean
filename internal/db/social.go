@@ -39,6 +39,14 @@ func (s *ArticleStore) CreateAnnotation(ctx context.Context, a *Annotation) erro
 	return s.BatchCreateAnnotations(ctx, []*Annotation{a})
 }
 
+func (s *ArticleStore) UpdateAnnotation(ctx context.Context, a *Annotation) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE articles.annotations SET quote = ?, note = ?, tags = ?, rating = ?, cid = ?
+		WHERE uri = ?
+	`, a.Quote, a.Note, a.Tags, a.Rating, a.CID, a.URI)
+	return err
+}
+
 func (s *ArticleStore) GetAnnotation(ctx context.Context, id int64) (*Annotation, error) {
 	a := &Annotation{}
 	err := s.db.QueryRowContext(ctx, `

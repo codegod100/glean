@@ -121,19 +121,24 @@ func (s *ArticleStore) decrementSubscriberCount(ctx context.Context, feedURL str
 
 func (s *ArticleStore) CreateSubscription(ctx context.Context, userDID, feedURL, title, category, uri, cid string) error {
 	existing, err := s.GetSubscription(ctx, userDID, feedURL)
-	if err == nil && existing != nil {
-		if !existing.URI.Valid || existing.URI.String == "" {
-			return s.updateSubscriptionURI(ctx, userDID, feedURL, uri, cid)
-		}
+	if err != nil || existing == nil {
+		return s.BatchReconcileSubscriptions(ctx, userDID, []SubData{{FeedURL: feedURL, Title: title, Category: category, URI: uri, CID: cid}})
+	}
+
+	unchanged := existing.FeedTitle == title && existing.Category.String == category && existing.CID.String == cid
+	if unchanged {
 		return ErrDuplicateSubscription
 	}
-	return s.BatchReconcileSubscriptions(ctx, userDID, []SubData{{FeedURL: feedURL, Title: title, Category: category, URI: uri, CID: cid}})
-}
 
-func (s *ArticleStore) updateSubscriptionURI(ctx context.Context, userDID, feedURL, uri, cid string) error {
-	_, err := s.db.ExecContext(ctx, `
-		UPDATE articles.subscriptions SET uri = ?, cid = ? WHERE user_did = ? AND feed_url = ?
-	`, uri, cid, userDID, feedURL)
+	if !existing.URI.Valid || existing.URI.String == "" {
+		_, err := s.db.ExecContext(ctx, `
+			UPDATE articles.subscriptions SET title = ?, category = ?, uri = ?, cid = ? WHERE user_did = ? AND feed_url = ?
+		`, nilIfEmpty(title), nilIfEmpty(category), nilIfEmpty(uri), nilIfEmpty(cid), userDID, feedURL)
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `
+		UPDATE articles.subscriptions SET title = ?, category = ?, cid = ? WHERE user_did = ? AND feed_url = ?
+	`, nilIfEmpty(title), nilIfEmpty(category), nilIfEmpty(cid), userDID, feedURL)
 	return err
 }
 
@@ -411,8 +416,16 @@ func (s *ArticleStore) BatchReconcileSubscriptions(ctx context.Context, userDID 
 	}
 	defer insertStmt.Close()
 
+	backfillStmt, err := tx.PrepareContext(ctx, `
+		UPDATE articles.subscriptions SET title = ?, category = ?, uri = ?, cid = ? WHERE user_did = ? AND feed_url = ?
+	`)
+	if err != nil {
+		return err
+	}
+	defer backfillStmt.Close()
+
 	updateStmt, err := tx.PrepareContext(ctx, `
-		UPDATE articles.subscriptions SET uri = ?, cid = ? WHERE user_did = ? AND feed_url = ?
+		UPDATE articles.subscriptions SET title = ?, category = ?, cid = ? WHERE user_did = ? AND feed_url = ?
 	`)
 	if err != nil {
 		return err
@@ -428,7 +441,11 @@ func (s *ArticleStore) BatchReconcileSubscriptions(ctx context.Context, userDID 
 	for _, sub := range subs {
 		if existingURI, ok := existing[sub.FeedURL]; ok {
 			if existingURI == "" && sub.URI != "" {
-				if _, err := updateStmt.ExecContext(ctx, sub.URI, sub.CID, userDID, sub.FeedURL); err != nil {
+				if _, err := backfillStmt.ExecContext(ctx, nilIfEmpty(sub.Title), nilIfEmpty(sub.Category), sub.URI, nilIfEmpty(sub.CID), userDID, sub.FeedURL); err != nil {
+					return err
+				}
+			} else if existingURI == sub.URI {
+				if _, err := updateStmt.ExecContext(ctx, nilIfEmpty(sub.Title), nilIfEmpty(sub.Category), nilIfEmpty(sub.CID), userDID, sub.FeedURL); err != nil {
 					return err
 				}
 			}

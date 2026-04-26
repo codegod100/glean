@@ -162,6 +162,63 @@ func TestBatchReconcileSubscriptions_SkipsExistingWithURI(t *testing.T) {
 	assert.Equal(t, s.URI.String, "at://existing")
 }
 
+func TestBatchReconcileSubscriptions_UpdatesCategoryAndTitle(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+	userDID := seedSubscriptionData(t, ctx, dbs)
+
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://a.com/feed.xml", Title: NullStr("Feed A")})
+	err := dbs.Articles.CreateSubscription(ctx, userDID, "https://a.com/feed.xml", "Feed A", "old-cat", "at://existing", "cid")
+	assert.NilError(t, err)
+
+	subs := []SubData{
+		{FeedURL: "https://a.com/feed.xml", Title: "New Title", Category: "new-cat", URI: "at://existing", CID: "cid"},
+	}
+	err = dbs.Articles.BatchReconcileSubscriptions(ctx, userDID, subs)
+	assert.NilError(t, err)
+
+	s, err := dbs.Articles.GetSubscription(ctx, userDID, "https://a.com/feed.xml")
+	assert.NilError(t, err)
+	assert.Equal(t, s.Category.String, "new-cat")
+	assert.Equal(t, s.FeedTitle, "New Title")
+
+	f, err := dbs.Articles.GetFeed(ctx, "https://a.com/feed.xml")
+	assert.NilError(t, err)
+	assert.Equal(t, f.SubscriberCount, 1)
+}
+
+func TestCreateSubscription_UpdatesCategoryAndTitle(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+	userDID := seedSubscriptionData(t, ctx, dbs)
+
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://a.com/feed.xml", Title: NullStr("Feed A")})
+	err := dbs.Articles.CreateSubscription(ctx, userDID, "https://a.com/feed.xml", "Feed A", "old-cat", "at://existing", "cid")
+	assert.NilError(t, err)
+
+	err = dbs.Articles.CreateSubscription(ctx, userDID, "https://a.com/feed.xml", "New Title", "new-cat", "at://existing", "cid2")
+	assert.NilError(t, err)
+
+	s, err := dbs.Articles.GetSubscription(ctx, userDID, "https://a.com/feed.xml")
+	assert.NilError(t, err)
+	assert.Equal(t, s.Category.String, "new-cat")
+	assert.Equal(t, s.FeedTitle, "New Title")
+	assert.Equal(t, s.CID.String, "cid2")
+}
+
+func TestCreateSubscription_ReturnsDuplicateWhenUnchanged(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+	userDID := seedSubscriptionData(t, ctx, dbs)
+
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://a.com/feed.xml", Title: NullStr("Feed A")})
+	err := dbs.Articles.CreateSubscription(ctx, userDID, "https://a.com/feed.xml", "Feed A", "cat", "at://existing", "cid")
+	assert.NilError(t, err)
+
+	err = dbs.Articles.CreateSubscription(ctx, userDID, "https://a.com/feed.xml", "Feed A", "cat", "at://existing", "cid")
+	assert.Equal(t, err, ErrDuplicateSubscription)
+}
+
 func TestBatchCreateLikes_InsertsAll(t *testing.T) {
 	ctx := context.Background()
 	dbs := setupTestDB(t)
