@@ -69,7 +69,7 @@ func (s *UserStore) GetUser(ctx context.Context, did string) (*User, error) {
 	return u, nil
 }
 
-func (s *UserStore) ListUserDIDs(ctx context.Context) (map[string]bool, error) {
+func (s *UserStore) UserDIDs(ctx context.Context) (map[string]bool, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT did FROM users`)
 	if err != nil {
 		return nil, err

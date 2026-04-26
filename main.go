@@ -43,7 +43,7 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	vec.Auto()
-	dbs, err := db.OpenAll(*dbPath)
+	dbs, err := db.Open(*dbPath)
 	if err != nil {
 		logger.Error("failed to open databases", "error", err)
 		os.Exit(1)
@@ -53,7 +53,7 @@ func main() {
 	clientID := envOr("GLEAN_OAUTH_CLIENT_ID", "")
 	callbackURL := envOr("GLEAN_OAUTH_REDIRECT_URL", "")
 
-	storeAdapter := db.NewFeedStoreAdapter(dbs.Articles)
+	storeAdapter := db.NewFeedAdapter(dbs.Articles)
 	scheduler := feed.NewScheduler(storeAdapter, logger, *fetchInterval, 30*time.Minute)
 
 	var embedder cluster.Embedder
@@ -73,7 +73,7 @@ func main() {
 		}
 	}
 
-	engine := cluster.NewEngine(dbs.DB(), embedder, logger)
+	engine := cluster.NewEngine(dbs.SQLDB(), embedder, logger)
 
 	srv := server.New(dbs, clientID, callbackURL, *addr, scheduler, engine, logger, []byte(sessionKey))
 

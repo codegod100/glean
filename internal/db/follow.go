@@ -106,7 +106,7 @@ func (s *UserStore) IsFollowing(ctx context.Context, userDID, targetDID string) 
 	return true, nil
 }
 
-func (s *UserStore) GetFollowDIDs(ctx context.Context, userDID string) ([]string, error) {
+func (s *UserStore) FollowDIDs(ctx context.Context, userDID string) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT target_did FROM follows WHERE user_did = ?
 	`, userDID)

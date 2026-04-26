@@ -9,7 +9,7 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func setupTestDB(t *testing.T) *Databases {
+func setupTestDB(t *testing.T) *Store {
 	t.Helper()
 	f, err := os.CreateTemp("", "glean-test-*.db")
 	assert.NilError(t, err)
@@ -21,33 +21,33 @@ func setupTestDB(t *testing.T) *Databases {
 		}
 	})
 
-	dbs, err := OpenAll(path)
+	dbs, err := Open(path)
 	assert.NilError(t, err)
 	t.Cleanup(func() { _ = dbs.Close() })
 	return dbs
 }
 
-func seedArticleReadState(t *testing.T, ctx context.Context, dbs *Databases) (userDID string, feedURL string, readArticleID, unreadArticleID int64) {
+func seedArticleReadState(t *testing.T, ctx context.Context, dbs *Store) (userDID string, feedURL string, readArticleID, unreadArticleID int64) {
 	t.Helper()
 
 	userDID = "did:test:user1"
 	feedURL = "https://example.com/feed.xml"
 
-	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, userDID)
+	_, err := dbs.SQLDB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, userDID)
 	assert.NilError(t, err)
 
-	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO articles.feeds (feed_url, title) VALUES (?, ?)`, feedURL, "Test Feed")
+	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.feeds (feed_url, title) VALUES (?, ?)`, feedURL, "Test Feed")
 	assert.NilError(t, err)
 
-	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO articles.subscriptions (user_did, feed_url) VALUES (?, ?)`, userDID, feedURL)
+	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.subscriptions (user_did, feed_url) VALUES (?, ?)`, userDID, feedURL)
 	assert.NilError(t, err)
 
-	res, err := dbs.DB().ExecContext(ctx, `INSERT INTO articles.articles (feed_url, guid, title, url) VALUES (?, ?, ?, ?)`,
+	res, err := dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.articles (feed_url, guid, title, url) VALUES (?, ?, ?, ?)`,
 		feedURL, "guid-read", "Read Article", "https://example.com/read")
 	assert.NilError(t, err)
 	readArticleID, _ = res.LastInsertId()
 
-	res, err = dbs.DB().ExecContext(ctx, `INSERT INTO articles.articles (feed_url, guid, title, url) VALUES (?, ?, ?, ?)`,
+	res, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.articles (feed_url, guid, title, url) VALUES (?, ?, ?, ?)`,
 		feedURL, "guid-unread", "Unread Article", "https://example.com/unread")
 	assert.NilError(t, err)
 	unreadArticleID, _ = res.LastInsertId()
@@ -190,19 +190,19 @@ func TestGetArticle_IncludesFullContent(t *testing.T) {
 	assert.Assert(t, !article.FullContent.Valid)
 }
 
-func seedSearchData(t *testing.T, ctx context.Context, dbs *Databases) (userDID, feedURL string) {
+func seedSearchData(t *testing.T, ctx context.Context, dbs *Store) (userDID, feedURL string) {
 	t.Helper()
 
 	userDID = "did:test:searcher"
 	feedURL = "https://search.example.com/feed.xml"
 
-	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, userDID)
+	_, err := dbs.SQLDB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, userDID)
 	assert.NilError(t, err)
 
-	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO articles.feeds (feed_url, title) VALUES (?, ?)`, feedURL, "Tech Blog")
+	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.feeds (feed_url, title) VALUES (?, ?)`, feedURL, "Tech Blog")
 	assert.NilError(t, err)
 
-	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO articles.subscriptions (user_did, feed_url) VALUES (?, ?)`, userDID, feedURL)
+	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.subscriptions (user_did, feed_url) VALUES (?, ?)`, userDID, feedURL)
 	assert.NilError(t, err)
 
 	articles := []struct {
@@ -213,7 +213,7 @@ func seedSearchData(t *testing.T, ctx context.Context, dbs *Databases) (userDID,
 		{"g3", "Python Data Science", "NumPy and Pandas tutorial", "Python is popular for data analysis"},
 	}
 	for _, a := range articles {
-		_, err := dbs.DB().ExecContext(ctx, `
+		_, err := dbs.SQLDB().ExecContext(ctx, `
 			INSERT INTO articles.articles (feed_url, guid, title, summary, content) VALUES (?, ?, ?, ?, ?)
 		`, feedURL, a.guid, a.title, a.summary, a.content)
 		assert.NilError(t, err)
@@ -289,10 +289,10 @@ func TestSearchArticles_ScopedToSubscriptions(t *testing.T) {
 	userDID, feedURL := seedSearchData(t, ctx, dbs)
 
 	otherFeed := "https://other.example.com/feed.xml"
-	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO articles.feeds (feed_url, title) VALUES (?, ?)`, otherFeed, "Other Feed")
+	_, err := dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.feeds (feed_url, title) VALUES (?, ?)`, otherFeed, "Other Feed")
 	assert.NilError(t, err)
 
-	_, err = dbs.DB().ExecContext(ctx, `
+	_, err = dbs.SQLDB().ExecContext(ctx, `
 		INSERT INTO articles.articles (feed_url, guid, title) VALUES (?, ?, ?)
 	`, otherFeed, "other-1", "Go Concurrency Tips")
 	assert.NilError(t, err)

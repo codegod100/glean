@@ -7,15 +7,15 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-func seedFollowData(t *testing.T, ctx context.Context, dbs *Databases) (userDID, targetDID string) {
+func seedFollowData(t *testing.T, ctx context.Context, dbs *Store) (userDID, targetDID string) {
 	t.Helper()
 
 	userDID = "did:test:follower"
 	targetDID = "did:test:followed"
 
-	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, userDID)
+	_, err := dbs.SQLDB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, userDID)
 	assert.NilError(t, err)
-	_, err = dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, targetDID)
+	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, targetDID)
 	assert.NilError(t, err)
 
 	return userDID, targetDID
@@ -83,7 +83,7 @@ func TestListFollows(t *testing.T) {
 	userDID, _ := seedFollowData(t, ctx, dbs)
 
 	target2 := "did:test:followed2"
-	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, target2)
+	_, err := dbs.SQLDB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, target2)
 	assert.NilError(t, err)
 
 	err = dbs.Users.UpsertFollow(ctx, userDID, "did:test:followed", "uri1", "cid1")
@@ -102,7 +102,7 @@ func TestListFollowers(t *testing.T) {
 	_, targetDID := seedFollowData(t, ctx, dbs)
 
 	follower2 := "did:test:follower2"
-	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, follower2)
+	_, err := dbs.SQLDB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, follower2)
 	assert.NilError(t, err)
 
 	err = dbs.Users.UpsertFollow(ctx, "did:test:follower", targetDID, "uri1", "cid1")
@@ -115,13 +115,13 @@ func TestListFollowers(t *testing.T) {
 	assert.Equal(t, len(followers), 2)
 }
 
-func TestGetFollowDIDs(t *testing.T) {
+func TestFollowDIDs(t *testing.T) {
 	ctx := context.Background()
 	dbs := setupTestDB(t)
 	userDID, _ := seedFollowData(t, ctx, dbs)
 
 	target2 := "did:test:followed2"
-	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, target2)
+	_, err := dbs.SQLDB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, target2)
 	assert.NilError(t, err)
 
 	err = dbs.Users.UpsertFollow(ctx, userDID, "did:test:followed", "uri1", "cid1")
@@ -129,7 +129,7 @@ func TestGetFollowDIDs(t *testing.T) {
 	err = dbs.Users.UpsertFollow(ctx, userDID, target2, "uri2", "cid2")
 	assert.NilError(t, err)
 
-	dids, err := dbs.Users.GetFollowDIDs(ctx, userDID)
+	dids, err := dbs.Users.FollowDIDs(ctx, userDID)
 	assert.NilError(t, err)
 	assert.Equal(t, len(dids), 2)
 }
@@ -162,7 +162,7 @@ func TestSyncFollows_AddsNewRemovesStale(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, following2, true)
 
-	dids, err := dbs.Users.GetFollowDIDs(ctx, userDID)
+	dids, err := dbs.Users.FollowDIDs(ctx, userDID)
 	assert.NilError(t, err)
 	assert.Equal(t, len(dids), 2)
 }

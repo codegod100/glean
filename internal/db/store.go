@@ -8,15 +8,15 @@ import (
 	"pkg.rbrt.fr/glean/internal/feed"
 )
 
-type FeedStoreAdapter struct {
+type FeedAdapter struct {
 	store *ArticleStore
 }
 
-func NewFeedStoreAdapter(store *ArticleStore) *FeedStoreAdapter {
-	return &FeedStoreAdapter{store: store}
+func NewFeedAdapter(store *ArticleStore) *FeedAdapter {
+	return &FeedAdapter{store: store}
 }
 
-func (a *FeedStoreAdapter) GetFeedsToFetch(ctx context.Context, olderThan time.Duration, limit int) ([]*feed.Feed, error) {
+func (a *FeedAdapter) GetFeedsToFetch(ctx context.Context, olderThan time.Duration, limit int) ([]*feed.Feed, error) {
 	dbFeeds, err := a.store.GetFeedsToFetch(ctx, olderThan, limit)
 	if err != nil {
 		return nil, err
@@ -28,13 +28,13 @@ func (a *FeedStoreAdapter) GetFeedsToFetch(ctx context.Context, olderThan time.D
 	return feeds, nil
 }
 
-func (a *FeedStoreAdapter) RecordFetchError(ctx context.Context, feedURL, lastError string) error {
+func (a *FeedAdapter) RecordFetchError(ctx context.Context, feedURL, lastError string) error {
 	return a.store.MarkFeedFetchError(ctx, feedURL, lastError)
 }
 
-func (a *FeedStoreAdapter) StoreFetchResult(ctx context.Context, feedURL string, articles []feed.Article, faviconURL string) error {
+func (a *FeedAdapter) StoreFetchResult(ctx context.Context, feedURL string, articles []feed.Article, faviconURL string) error {
 	if len(articles) > 0 {
-		if err := a.store.UpsertArticlesBatch(ctx, articles); err != nil {
+		if err := a.store.BatchUpsertArticles(ctx, articles); err != nil {
 			return fmt.Errorf("failed to save articles: %w", err)
 		}
 	}

@@ -47,10 +47,10 @@ func TestBatchCreateUsers_Empty(t *testing.T) {
 	assert.NilError(t, err)
 }
 
-func seedSubscriptionData(t *testing.T, ctx context.Context, dbs *Databases) (userDID string) {
+func seedSubscriptionData(t *testing.T, ctx context.Context, dbs *Store) (userDID string) {
 	t.Helper()
 	userDID = "did:test:subuser"
-	_, err := dbs.DB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, userDID)
+	_, err := dbs.SQLDB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, userDID)
 	assert.NilError(t, err)
 	return userDID
 }

@@ -16,7 +16,7 @@ type DB struct {
 	*sql.DB
 }
 
-type Databases struct {
+type Store struct {
 	Users    *UserStore
 	Articles *ArticleStore
 
@@ -25,7 +25,7 @@ type Databases struct {
 
 var multiDriverSeq int64
 
-func OpenAll(basePath string) (*Databases, error) {
+func Open(basePath string) (*Store, error) {
 	articlesPath := basePath + "_articles"
 	recsPath := basePath + "_recs"
 
@@ -113,21 +113,21 @@ func OpenAll(basePath string) (*Databases, error) {
 		return nil, err
 	}
 
-	return &Databases{
+	return &Store{
 		Users:    NewUserStore(d),
 		Articles: NewArticleStore(d),
 		db:       d,
 	}, nil
 }
 
-func (d *Databases) Close() error {
-	if d.db != nil {
-		_ = d.db.Close()
+func (s *Store) Close() error {
+	if s.db != nil {
+		_ = s.db.Close()
 	}
 	return nil
 }
 
-func (d *Databases) InitVecTables(dimension int) error {
+func (s *Store) InitVecTables(dimension int) error {
 	if dimension <= 0 {
 		return nil
 	}
@@ -135,15 +135,15 @@ func (d *Databases) InitVecTables(dimension int) error {
 		fmt.Sprintf(`CREATE VIRTUAL TABLE IF NOT EXISTS recs.feed_embeddings USING vec0(feed_url TEXT PRIMARY KEY, embedding float[%d])`, dimension),
 		fmt.Sprintf(`CREATE VIRTUAL TABLE IF NOT EXISTS recs.article_embeddings USING vec0(article_id INTEGER PRIMARY KEY, embedding float[%d])`, dimension),
 	} {
-		if _, err := d.db.ExecContext(context.Background(), stmt); err != nil {
+		if _, err := s.db.ExecContext(context.Background(), stmt); err != nil {
 			return fmt.Errorf("create vec0 table: %w", err)
 		}
 	}
 	return nil
 }
 
-func (d *Databases) DB() *sql.DB {
-	return d.db.DB
+func (s *Store) SQLDB() *sql.DB {
+	return s.db.DB
 }
 
 func initUsersSchema(db *DB) error {

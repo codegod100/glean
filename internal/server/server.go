@@ -58,7 +58,7 @@ func splitString(s, sep string) []string {
 }
 
 type Server struct {
-	dbs         *db.Databases
+	dbs         *db.Store
 	router      *chi.Mux
 	templates   *template.Template
 	logger      *slog.Logger
@@ -73,7 +73,7 @@ type Server struct {
 	sessionKey  []byte
 }
 
-func New(dbs *db.Databases, clientID, callbackURL, addr string, scheduler *feed.Scheduler, engine *cluster.Engine, logger *slog.Logger, sessionKey []byte) *Server {
+func New(dbs *db.Store, clientID, callbackURL, addr string, scheduler *feed.Scheduler, engine *cluster.Engine, logger *slog.Logger, sessionKey []byte) *Server {
 	oauthStore := db.NewOAuthStore(dbs)
 
 	var config oauth.ClientConfig
@@ -204,7 +204,7 @@ func (s *Server) setupRoutes() {
 	s.router.Post("/auth/logout", s.handleAuthLogout)
 	s.router.Get("/oauth/client-metadata", s.handleOAuthClientMetadata)
 
-	xrpc := atproto.NewXRPCHandler(s.dbs.DB(), s.engine)
+	xrpc := atproto.NewXRPCHandler(s.dbs.SQLDB(), s.engine)
 	s.router.Get("/xrpc/at.glean.listSubscriptions", xrpc.ListSubscriptions)
 	s.router.Get("/xrpc/at.glean.listAnnotations", xrpc.ListAnnotations)
 	s.router.Get("/xrpc/at.glean.listLikes", xrpc.ListLikes)
@@ -416,7 +416,7 @@ func (s *Server) BackfillFromCollectionDir(ctx context.Context, collectionDirURL
 		return
 	}
 
-	existing, err := s.dbs.Users.ListUserDIDs(ctx)
+	existing, err := s.dbs.Users.UserDIDs(ctx)
 	if err != nil {
 		s.logger.Error("failed to list existing users", "error", err)
 		return

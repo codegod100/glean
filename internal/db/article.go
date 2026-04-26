@@ -51,7 +51,7 @@ type ReadState struct {
 	ReadAt    sql.NullTime
 }
 
-func (s *ArticleStore) UpsertArticlesBatch(ctx context.Context, articles []feed.Article) error {
+func (s *ArticleStore) BatchUpsertArticles(ctx context.Context, articles []feed.Article) error {
 	if len(articles) == 0 {
 		return nil
 	}

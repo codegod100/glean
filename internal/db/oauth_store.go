@@ -14,7 +14,7 @@ type OAuthStore struct {
 	db *DB
 }
 
-func NewOAuthStore(dbs *Databases) *OAuthStore {
+func NewOAuthStore(dbs *Store) *OAuthStore {
 	return &OAuthStore{db: dbs.db}
 }
 
