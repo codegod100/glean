@@ -3,9 +3,24 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"iter"
 )
 
 const maxFollowDepth = 3
+
+func chunk[T any](s []T, size int) iter.Seq[[]T] {
+	return func(yield func([]T) bool) {
+		for i := 0; i < len(s); i += size {
+			end := i + size
+			if end > len(s) {
+				end = len(s)
+			}
+			if !yield(s[i:end]) {
+				return
+			}
+		}
+	}
+}
 
 type followDistance struct {
 	userA    string
@@ -125,17 +140,20 @@ func (e *Engine) ComputeFollowDistances(ctx context.Context) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	ph := make([]string, len(dirtyUsers))
-	args := make([]any, len(dirtyUsers))
-	for i, did := range dirtyUsers {
-		ph[i] = "?"
-		args[i] = did
-	}
-	if _, err := tx.ExecContext(ctx,
-		fmt.Sprintf("DELETE FROM recs.follow_distances WHERE user_a IN (%s)", joinPh(ph)),
-		args...,
-	); err != nil {
-		return err
+	const sqliteMaxVars = 500
+	for chunk := range chunk(dirtyUsers, sqliteMaxVars) {
+		ph := make([]string, len(chunk))
+		args := make([]any, len(chunk))
+		for i, did := range chunk {
+			ph[i] = "?"
+			args[i] = did
+		}
+		if _, err := tx.ExecContext(ctx,
+			fmt.Sprintf("DELETE FROM recs.follow_distances WHERE user_a IN (%s)", joinPh(ph)),
+			args...,
+		); err != nil {
+			return err
+		}
 	}
 
 	stmt, err := tx.PrepareContext(ctx, `INSERT INTO recs.follow_distances (user_a, user_b, distance) VALUES (?, ?, ?)`)
@@ -150,11 +168,19 @@ func (e *Engine) ComputeFollowDistances(ctx context.Context) error {
 		}
 	}
 
-	if _, err := tx.ExecContext(ctx,
-		fmt.Sprintf("UPDATE main.users SET follows_dirty = 0 WHERE did IN (%s)", joinPh(ph)),
-		args...,
-	); err != nil {
-		return err
+	for chunk := range chunk(dirtyUsers, sqliteMaxVars) {
+		ph := make([]string, len(chunk))
+		args := make([]any, len(chunk))
+		for i, did := range chunk {
+			ph[i] = "?"
+			args[i] = did
+		}
+		if _, err := tx.ExecContext(ctx,
+			fmt.Sprintf("UPDATE main.users SET follows_dirty = 0 WHERE did IN (%s)", joinPh(ph)),
+			args...,
+		); err != nil {
+			return err
+		}
 	}
 
 	e.logger.Info("follow distances computed", "users", len(dirtyUsers), "pairs", len(distances))
