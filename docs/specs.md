@@ -10,14 +10,14 @@ The core idea: your RSS subscriptions are a strong signal about your interests. 
 
 ## 2. Stack
 
-| Layer            | Technology                                                      |
-| ---------------- | --------------------------------------------------------------- |
-| Backend          | Go                                                              |
-| Database         | SQLite (3 files: users, articles, recs via `mattn/go-sqlite3` + `sqlite-vec` for vector search)  |
-| Frontend         | htmx + TailwindCSS                                              |
-| Auth             | AT Protocol OAuth / DID resolution (configurable PLC directory) |
-| AT Protocol role | AppView for `at.glean.*` lexicons                               |
-| Data source      | AT Protocol Jetstream → SQLite index                            |
+| Layer            | Technology                                                                                      |
+| ---------------- | ----------------------------------------------------------------------------------------------- |
+| Backend          | Go                                                                                              |
+| Database         | SQLite (3 files: users, articles, recs via `mattn/go-sqlite3` + `sqlite-vec` for vector search) |
+| Frontend         | htmx + TailwindCSS                                                                              |
+| Auth             | AT Protocol OAuth / DID resolution (configurable PLC directory)                                 |
+| AT Protocol role | AppView for `at.glean.*` lexicons                                                               |
+| Data source      | AT Protocol Jetstream → SQLite index                                                            |
 
 ## 3. AT Protocol Lexicons
 
@@ -645,14 +645,14 @@ Glean uses a multi-signal recommendation system that combines subscription overl
 
 ### 7.1 Signals
 
-| Signal       | Source                   | Weight (default) | Description                                        |
-| ------------ | ------------------------ | ---------------- | -------------------------------------------------- |
-| Subscription | `subscriptions`          | 1.0              | Jaccard over subscriber sets between similar users |
-| Like         | `likes`                  | 0.5              | Time-decayed like co-occurrence (30-day half-life) |
-| Tag          | `annotations.tags`       | 0.3              | Jaccard over annotation tag sets                   |
-| Social       | `follow_distances`       | 0.7              | Follow distance: 1-hop=1.0, 2-hop=0.3, 3-hop=0.1  |
-| Popularity   | `feeds.subscriber_count` | 0.2              | `log(1 + subscribers) / log(1 + max)`              |
-| Category     | `subscriptions.category` | 0.4              | Boost feeds matching user's existing categories    |
+| Signal       | Source                   | Weight (default) | Description                                             |
+| ------------ | ------------------------ | ---------------- | ------------------------------------------------------- |
+| Subscription | `subscriptions`          | 1.0              | Jaccard over subscriber sets between similar users      |
+| Like         | `likes`                  | 0.5              | Time-decayed like co-occurrence (30-day half-life)      |
+| Tag          | `annotations.tags`       | 0.3              | Jaccard over annotation tag sets                        |
+| Social       | `follow_distances`       | 0.7              | Follow distance: 1-hop=1.0, 2-hop=0.3, 3-hop=0.1        |
+| Popularity   | `feeds.subscriber_count` | 0.2              | `log(1 + subscribers) / log(1 + max)`                   |
+| Category     | `subscriptions.category` | 0.4              | Boost feeds matching user's existing categories         |
 | Content      | `article_embeddings`     | 0.4              | Cosine similarity via embedding KNN (requires embedder) |
 
 ### 7.2 Feed Co-occurrence (Jaccard Similarity)
@@ -759,10 +759,10 @@ New users with <5 subscriptions get a fallback strategy:
 
 A background goroutine runs on a configurable schedule (`GLEAN_CLUSTER_INTERVAL`, default 10m):
 
-1. **Compute feed embeddings**: Embed new feed descriptions via OpenAI-compatible API into `feed_embeddings` table (skipped if no embedder configured)
+1. **Compute feed embeddings**: Embed new feed descriptions via embedding API into `feed_embeddings` table (skipped if no embedder configured)
 2. **Compute feed similarity**: Batch-update `feed_similarity` table (Jaccard over subscriber sets + embedding cosine similarity)
 3. **Compute user similarity**: Batch-update `user_similarity` table (subscription Jaccard + time-decayed likes + tags + follow boost)
-4. **Compute article embeddings**: Embed new articles' full content (`title + summary + full_content + content`) via OpenAI-compatible API into `article_embeddings` vec0 table (skipped if no embedder configured)
+4. **Compute article embeddings**: Embed new articles (`title + summary + content`, excluding `full_content` to stay within embedding model token limits) via embedding API into `article_embeddings` vec0 table (skipped if no embedder configured)
 5. **Compute follow distances**: Incremental BFS for dirty users (1-hop through 3-hop from `follows` table)
 6. **Compute signal profiles**: Per-user category/tag/like summaries
 7. **Auto-dismiss stale**: Dismiss items shown >=5 times over >5 days without action
@@ -854,7 +854,7 @@ CREATE TABLE user_signal_profiles (
 
 When `GLEAN_EMBED_BASE_URL` is configured, article text and feed descriptions are embedded into vectors stored in `sqlite-vec` virtual tables (`recs.feed_embeddings`, `recs.article_embeddings`). The vec0 extension provides native KNN vector search via `WHERE embedding MATCH ? AND k = ?`, replacing Go-side cosine similarity for large-scale lookups. Without embeddings, recommendations rely only on subscription overlap, like patterns, and social graph — no content-based signals.
 
-The embedder uses the official `github.com/openai/openai-go` SDK with `option.WithBaseURL()`, so any OpenAI-compatible `/v1/embeddings` endpoint works (OpenAI, Ollama, local inference servers).
+The embedder uses the official `github.com/openai/openai-go` SDK with `option.WithBaseURL()`, so any OpenAI-compatible `/v1/embeddings` endpoint works (OpenAI, Gemini, Ollama, local inference servers).
 
 vec0 tables are created dynamically at startup with the configured dimension (`GLEAN_EMBED_DIMENSION`, default 1536):
 
@@ -879,7 +879,7 @@ CREATE TABLE recs.feed_embedding_meta (
 );
 ```
 
-During cron, `ComputeArticleEmbeddings` embeds new articles in batches (using `title + summary + full_content + content` for maximum semantic coverage) and inserts them into the vec0 table. `ComputeFeedEmbeddings` embeds feed descriptions (`title || description`) and re-embeds when the source text changes (detected via `feed_embedding_meta`). During on-demand article recommendations, the user's liked article embeddings are averaged into an interest vector, then a vec0 KNN query finds the top-200 most semantically similar articles. For cold-start users (<5 subscriptions), their subscribed feed embeddings are averaged and a KNN query finds similar feeds.
+During cron, `ComputeArticleEmbeddings` embeds new articles in batches using `title + summary + content` (the scraped `full_content` is excluded to stay within model token limits — most embedding models cap at ~8k tokens). Text is truncated to 8000 characters as a safety net. Batches are capped at 100 inputs per API call. `ComputeFeedEmbeddings` embeds feed descriptions (`title || description`) and re-embeds when the source text changes (detected via `feed_embedding_meta`). During on-demand article recommendations, the user's liked article embeddings are averaged into an interest vector, then a vec0 KNN query finds the top-200 most semantically similar articles. For cold-start users (<5 subscriptions), their subscribed feed embeddings are averaged and a KNN query finds similar feeds.
 
 ## 8. HTTP API / htmx Endpoints
 

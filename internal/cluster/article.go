@@ -10,12 +10,28 @@ import (
 	vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 )
 
+// embedBatchSize caps how many texts are sent in a single embedding API call.
+// Most /v1/embeddings endpoints accept up to ~2048 inputs per request; lower
+// values reduce payload size and memory pressure.
 const embedBatchSize = 100
 
-// ComputeArticleEmbeddings embeds new articles (title + summary) into the
-// article_embeddings vec0 table. Skipped when no embedder is configured.
-// Existing embeddings for deleted articles are cleaned up. Articles already
-// embedded are not re-embedded.
+// maxEmbedChars truncates text sent to the embedding model. Most models have
+// a token context window (~4 chars/token); title+summary+content stays well
+// under this, but the cap is kept as a safety net.
+const maxEmbedChars = 8000
+
+func truncateForEmbed(s string) string {
+	if len(s) <= maxEmbedChars {
+		return s
+	}
+	return s[:maxEmbedChars]
+}
+
+// ComputeArticleEmbeddings embeds new articles (title + summary + content) into
+// the article_embeddings vec0 table. full_content (scraped body) is excluded
+// because embedding models have token context limits and the feed-provided
+// content already captures the topical signal needed for recommendation KNN.
+
 func (e *Engine) ComputeArticleEmbeddings(ctx context.Context) error {
 	if e.embedder == nil {
 		e.logger.Debug("article embeddings skipped, no embedder")
@@ -37,9 +53,9 @@ func (e *Engine) ComputeArticleEmbeddings(ctx context.Context) error {
 	}
 
 	rows, err := conn.QueryContext(ctx, `
-		SELECT a.id, COALESCE(a.title, '') || ' ' || COALESCE(a.summary, '') || ' ' || COALESCE(a.full_content, '') || ' ' || COALESCE(a.content, '')
+		SELECT a.id, COALESCE(a.title, '') || ' ' || COALESCE(a.summary, '') || ' ' || COALESCE(a.content, '')
 		FROM articles.articles a
-		WHERE (COALESCE(a.title, '') != '' OR COALESCE(a.summary, '') != '' OR COALESCE(a.full_content, '') != '' OR COALESCE(a.content, '') != '')
+		WHERE (COALESCE(a.title, '') != '' OR COALESCE(a.summary, '') != '' OR COALESCE(a.content, '') != '')
 		AND a.id NOT IN (SELECT article_id FROM recs.article_embeddings)
 		ORDER BY a.id
 	`)
@@ -58,6 +74,7 @@ func (e *Engine) ComputeArticleEmbeddings(ctx context.Context) error {
 			rows.Close()
 			return err
 		}
+		a.text = truncateForEmbed(a.text)
 		batch = append(batch, a)
 	}
 	rows.Close()
