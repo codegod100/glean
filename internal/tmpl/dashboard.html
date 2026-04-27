@@ -94,14 +94,24 @@
         </div>
         {{end}}
 
-        {{if .PeopleRecommendations}}
+        {{if or .FollowedPeople .DiscoverPeople}}
         <div>
-            <h2 class="text-lg font-semibold text-spot-text mb-4">Similar readers</h2>
+            {{if .FollowedPeople}}
+            <h2 class="text-lg font-semibold text-spot-text mb-4">Your network</h2>
             <div class="space-y-3">
-                {{range .PeopleRecommendations}}
+                {{range .FollowedPeople}}
                 {{template "profile-card.html" .}}
                 {{end}}
             </div>
+            {{end}}
+            {{if .DiscoverPeople}}
+            <h2 class="text-lg font-semibold text-spot-text mb-4 {{if .FollowedPeople}}mt-6{{end}}">Discover new readers</h2>
+            <div class="space-y-3">
+                {{range .DiscoverPeople}}
+                {{template "profile-card.html" .}}
+                {{end}}
+            </div>
+            {{end}}
         </div>
         {{end}}
 
@@ -138,7 +148,7 @@
 </div>
 {{end}}
 
-{{if or .PersonalTrending .PeopleRecommendations .FeedRecommendations}}
+{{if or .PersonalTrending (or .FollowedPeople .DiscoverPeople) .FeedRecommendations}}
 <div class="space-y-8">
     {{if .PersonalTrending}}
     <div>
@@ -154,12 +164,28 @@
     </div>
     {{end}}
 
-    {{if .PeopleRecommendations}}
+    {{if or .FollowedPeople .DiscoverPeople}}
     <div>
-        <h2 class="text-lg font-semibold text-spot-text mb-4">Similar readers</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {{range .PeopleRecommendations}}
-            {{template "profile-card.html" .}}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {{if .FollowedPeople}}
+            <div>
+                <h2 class="text-lg font-semibold text-spot-text mb-4">Your network</h2>
+                <div class="space-y-3">
+                    {{range .FollowedPeople}}
+                    {{template "profile-card.html" .}}
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
+            {{if .DiscoverPeople}}
+            <div>
+                <h2 class="text-lg font-semibold text-spot-text mb-4">Discover new readers</h2>
+                <div class="space-y-3">
+                    {{range .DiscoverPeople}}
+                    {{template "profile-card.html" .}}
+                    {{end}}
+                </div>
+            </div>
             {{end}}
         </div>
     </div>

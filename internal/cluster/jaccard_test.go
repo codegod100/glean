@@ -486,6 +486,7 @@ func TestOnDemandPeopleRecommendations(t *testing.T) {
 	ctx := context.Background()
 	dbs := setupClusterTestDB(t)
 	seedClusterData(t, ctx, dbs)
+	seedFollowData(t, ctx, dbs)
 
 	engine := newTestEngine(dbs)
 	assert.NilError(t, engine.ComputeUserSimilarity(ctx))
@@ -493,6 +494,15 @@ func TestOnDemandPeopleRecommendations(t *testing.T) {
 	recs, err := engine.GetPeopleRecommendations(ctx, "did:test:carol", 10)
 	assert.NilError(t, err)
 	assert.Assert(t, len(recs) > 0, "carol should get people recommendations")
+
+	for _, r := range recs {
+		if r.DID == "did:test:dave" {
+			assert.Assert(t, r.IsFollowed, "carol follows dave, should be marked as followed")
+		}
+		if r.DID == "did:test:alice" || r.DID == "did:test:bob" {
+			assert.Assert(t, !r.IsFollowed, "carol does not follow %s, should not be marked as followed", r.DID)
+		}
+	}
 }
 
 func TestDismissArticle(t *testing.T) {

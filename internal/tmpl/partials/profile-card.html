@@ -1,10 +1,15 @@
 {{define "profile-card.html"}}
-<div class="bg-spot-surface rounded-xl p-4 flex items-center gap-3 hover:bg-spot-hover-50 transition">
+<a href="/profile/{{.DID}}" class="bg-spot-surface rounded-xl p-4 flex items-center gap-3 hover:bg-spot-hover-50 transition">
     {{if .AvatarURL}}<img src="{{.AvatarURL}}" class="w-10 h-10 rounded-full">{{end}}
     <div class="min-w-0 flex-1">
-        <a href="/profile/{{.DID}}" class="font-bold text-spot-text hover:text-spot-green transition">@{{.Handle}}</a>
+        <div class="flex items-center gap-1.5">
+            <span class="font-bold text-spot-text hover:text-spot-green transition">@{{.Handle}}</span>
+            {{if .IsFollowed}}
+            <span class="inline-flex items-center gap-0.5 text-[10px] font-medium text-spot-green bg-spot-green/10 px-1.5 py-0.5 rounded-full">Following</span>
+            {{end}}
+        </div>
         {{if .DisplayName}}<div class="text-sm text-spot-secondary">{{.DisplayName}}</div>{{end}}
     </div>
-    <span class="text-xs text-spot-secondary">{{.CommonFeeds}} shared</span>
-</div>
+    <span class="text-xs text-spot-secondary shrink-0">{{.CommonFeeds}} shared</span>
+</a>
 {{end}}

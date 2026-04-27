@@ -68,6 +68,15 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 		s.logger.Warn("failed to get categories", "error", err, "did", user.DID)
 	}
 
+	var followedPeople, discoverPeople []*cluster.PersonRecommendation
+	for _, p := range peopleRecs {
+		if p.IsFollowed {
+			followedPeople = append(followedPeople, p)
+		} else {
+			discoverPeople = append(discoverPeople, p)
+		}
+	}
+
 	s.render(w, r, "feeds.html", map[string]any{
 		"User":                  user,
 		"Subscriptions":         subs,
@@ -75,7 +84,8 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 		"Categories":            categories,
 		"Category":              category,
 		"FeedRecommendations":   feedRecs,
-		"PeopleRecommendations": peopleRecs,
+		"FollowedPeople":        followedPeople,
+		"DiscoverPeople":        discoverPeople,
 		"DeadFeeds":             deadFeeds,
 		"Page":                  page,
 		"BaseURL":               "/feeds",

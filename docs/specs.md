@@ -267,7 +267,7 @@ Input:
 
 Output:
   feeds: [{ feedUrl, title, siteUrl, description, subscriberCount, score }]
-  people: [{ did, handle, displayName, avatar, jaccard, commonFeeds }]
+  people: [{ did, handle, displayName, avatar, jaccard, commonFeeds, isFollowed }]
 ```
 
 ### 3.9 AppView Jetstream Consumption

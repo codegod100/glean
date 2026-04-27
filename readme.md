@@ -22,7 +22,7 @@ Glean looks at what you and other users subscribe to, read, and like to suggest 
 
 **Feed suggestions** come from readers who share your subscriptions. If a lot of people who follow the same blogs as you also follow a blog you haven't seen, that blog shows up as a recommendation. The system also considers which articles you've liked, whether you follow the person on Bluesky, and how popular the feed is overall.
 
-**People suggestions** are readers whose subscriptions overlap with yours. The more feeds you share, the higher they rank. You also see whether you have any Bluesky follows in common.
+**People suggestions** are split into two groups: "Your network" shows people you already follow on Bluesky who share your reading habits, and "Discover new readers" surfaces readers you don't follow but who have overlapping subscriptions and likes.
 
 **Dismissals** keep things tidy. If you dismiss a recommendation, it won't come back. If a suggestion sits ignored for more than 5 days, it's automatically removed so newer recommendations can take its place.
 

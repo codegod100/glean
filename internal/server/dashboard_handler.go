@@ -77,6 +77,15 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		s.logger.Warn("failed to list global trending", "error", err, "did", user.DID)
 	}
 
+	var followedPeople, discoverPeople []*cluster.PersonRecommendation
+	for _, p := range peopleRecs {
+		if p.IsFollowed {
+			followedPeople = append(followedPeople, p)
+		} else {
+			discoverPeople = append(discoverPeople, p)
+		}
+	}
+
 	s.render(w, r, "dashboard.html", map[string]any{
 		"User":                   user,
 		"UnreadCount":            unreadCount,
@@ -84,7 +93,8 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"Articles":               articles,
 		"ArticleRecommendations": articleRecs,
 		"FeedRecommendations":    feedRecs,
-		"PeopleRecommendations":  peopleRecs,
+		"FollowedPeople":         followedPeople,
+		"DiscoverPeople":         discoverPeople,
 		"PersonalTrending":       personalTrending,
 		"GlobalTrending":         globalTrending,
 		"Page":                   page,
