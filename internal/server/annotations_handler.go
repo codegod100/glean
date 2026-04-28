@@ -161,6 +161,8 @@ func (s *Server) handleDeleteAnnotation(w http.ResponseWriter, r *http.Request) 
 			if ok {
 				if delErr := client.DeleteRecord(ctx, user.DID, parsed.Collection, parsed.RKey); delErr != nil {
 					s.logger.Error("failed to delete annotation from PDS", "error", delErr)
+					http.Error(w, "failed to delete annotation from PDS: "+delErr.Error(), http.StatusBadGateway)
+					return
 				}
 			}
 		}

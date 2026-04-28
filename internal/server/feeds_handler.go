@@ -251,6 +251,8 @@ func (s *Server) handleClearAllSubscriptions(w http.ResponseWriter, r *http.Requ
 				if ok {
 					if delErr := client.DeleteRecord(r.Context(), user.DID, parsed.Collection, parsed.RKey); delErr != nil {
 						s.logger.Error("failed to delete subscription from PDS", "error", delErr, "uri", sub.URI.String)
+						http.Error(w, "failed to delete subscription from PDS: "+delErr.Error(), http.StatusBadGateway)
+						return
 					}
 				}
 			}
