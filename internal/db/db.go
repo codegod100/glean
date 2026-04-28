@@ -209,7 +209,7 @@ var usersSchema = []string{
 
 	`CREATE TABLE IF NOT EXISTS dismissed_recommendations (
 		user_did     TEXT NOT NULL,
-		target_type  TEXT NOT NULL CHECK(target_type IN ('feed', 'article')),
+		target_type  TEXT NOT NULL CHECK(target_type IN ('feed', 'article', 'person')),
 		target_id    TEXT NOT NULL,
 		reason       TEXT,
 		dismissed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -218,7 +218,7 @@ var usersSchema = []string{
 
 	`CREATE TABLE IF NOT EXISTS recommendation_impressions (
 		user_did       TEXT NOT NULL,
-		target_type    TEXT NOT NULL CHECK(target_type IN ('feed', 'article')),
+		target_type    TEXT NOT NULL CHECK(target_type IN ('feed', 'article', 'person')),
 		target_id      TEXT NOT NULL,
 		first_shown_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		last_shown_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -166,7 +166,6 @@ func (s *Server) setupRoutes() {
 		r.Post("/retry", s.handleRetryFeed)
 		r.Get("/list", s.handleFeedList)
 		r.Post("/clear", s.handleClearAllSubscriptions)
-		r.Post("/dismiss", s.handleDismissFeedRecommendation)
 	})
 
 	s.router.Route("/articles", func(r chi.Router) {
@@ -179,7 +178,6 @@ func (s *Server) setupRoutes() {
 		r.Post("/{id}/like", s.handleLikeArticle)
 		r.Post("/{id}/fetch-content", s.handleFetchContent)
 		r.Post("/mark-all-read", s.handleMarkAllRead)
-		r.Post("/dismiss", s.handleDismissArticleRecommendation)
 	})
 
 	s.router.Route("/trending", func(r chi.Router) {
@@ -196,6 +194,13 @@ func (s *Server) setupRoutes() {
 		r.Get("/", s.handleLibrary)
 		r.Post("/create", s.handleCreateAnnotation)
 		r.Post("/{id}/delete", s.handleDeleteAnnotation)
+	})
+
+	s.router.Route("/recs", func(r chi.Router) {
+		r.Use(s.requireAuth)
+		r.Post("/dismiss-feed", s.handleDismissFeedRecommendation)
+		r.Post("/dismiss-article", s.handleDismissArticleRecommendation)
+		r.Post("/dismiss-person", s.handleDismissPersonRecommendation)
 	})
 
 	s.router.Get("/auth/login", s.handleAuthLogin)

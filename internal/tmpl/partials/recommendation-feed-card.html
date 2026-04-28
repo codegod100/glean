@@ -10,7 +10,7 @@
         </a>
         <div class="flex items-center gap-2 shrink-0">
             <span class="text-xs text-spot-secondary">{{.subscriber_count}} subs</span>
-            <form hx-post="/feeds/dismiss" hx-target="closest .recommendation-card" hx-swap="outerHTML" class="inline">
+            <form hx-post="/recs/dismiss-feed" hx-target="closest .recommendation-card" hx-swap="outerHTML" class="inline">
                 {{csrfInput .CSRFToken}}
                 <input type="hidden" name="feed_url" value="{{.feed_url}}">
                 <button type="submit" title="Not interested" class="text-spot-muted hover:text-spot-red transition -m-1 p-1 rounded-full hover:bg-spot-hover-50 flex items-center">

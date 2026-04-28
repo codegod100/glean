@@ -29,6 +29,15 @@ func (e *Engine) DismissArticle(ctx context.Context, userDID, articleURL, reason
 	return err
 }
 
+func (e *Engine) DismissPerson(ctx context.Context, userDID, targetDID, reason string) error {
+	_, err := e.db.ExecContext(ctx, `
+		INSERT INTO main.dismissed_recommendations (user_did, target_type, target_id, reason)
+		VALUES (?, 'person', ?, ?)
+		ON CONFLICT(user_did, target_type, target_id) DO UPDATE SET reason = excluded.reason, dismissed_at = CURRENT_TIMESTAMP
+	`, userDID, targetDID, reason)
+	return err
+}
+
 func (e *Engine) RecordImpressions(ctx context.Context, userDID string, impressions []Impression) error {
 	tx, err := e.db.BeginTx(ctx, nil)
 	if err != nil {

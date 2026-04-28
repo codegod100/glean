@@ -104,28 +104,6 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleDismissArticleRecommendation(w http.ResponseWriter, r *http.Request) {
-	user := currentUser(r)
-	articleURL := r.FormValue("article_url")
-	if articleURL == "" {
-		http.Error(w, "article_url required", http.StatusBadRequest)
-		return
-	}
-
-	reason := r.FormValue("reason")
-	if reason == "" {
-		reason = "not_interested"
-	}
-
-	if err := s.engine.DismissArticle(r.Context(), user.DID, articleURL, reason); err != nil {
-		s.logger.Error("failed to dismiss article recommendation", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-}
-
 func resolvePeopleHandles(ctx context.Context, people []*cluster.PersonRecommendation) {
 	g, gCtx := errgroup.WithContext(ctx)
 	g.SetLimit(5)

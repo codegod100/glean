@@ -469,9 +469,10 @@ func (e *Engine) ComputePeopleRecommendationsOnDemand(ctx context.Context, userD
 		JOIN main.users u ON u.did = sim.peer_did
 		LEFT JOIN main.follows f ON f.user_did = ? AND f.target_did = u.did
 		WHERE EXISTS (SELECT 1 FROM articles.subscriptions s JOIN articles.feeds f ON s.feed_url = f.feed_url WHERE s.user_did = u.did AND f.subscriber_count > 0)
+		  AND NOT EXISTS (SELECT 1 FROM main.dismissed_recommendations d WHERE d.user_did = ? AND d.target_type = 'person' AND d.target_id = u.did)
 		ORDER BY sim.jaccard DESC
 		LIMIT ?
-	`, userDID, userDID, userDID, limit)
+	`, userDID, userDID, userDID, userDID, limit)
 	if err != nil {
 		return nil, err
 	}
