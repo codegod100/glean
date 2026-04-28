@@ -131,12 +131,36 @@ func (s *Store) InitVecTables(dimension int) error {
 	if dimension <= 0 {
 		return nil
 	}
-	for _, stmt := range []string{
-		fmt.Sprintf(`CREATE VIRTUAL TABLE IF NOT EXISTS recs.feed_embeddings USING vec0(feed_url TEXT PRIMARY KEY, embedding float[%d])`, dimension),
-		fmt.Sprintf(`CREATE VIRTUAL TABLE IF NOT EXISTS recs.article_embeddings USING vec0(article_id INTEGER PRIMARY KEY, embedding float[%d])`, dimension),
+
+	for _, tbl := range []struct {
+		name   string
+		col    string
+		create string
+	}{
+		{
+			name:   "recs.feed_embeddings",
+			col:    "feed_url",
+			create: fmt.Sprintf(`CREATE VIRTUAL TABLE recs.feed_embeddings USING vec0(feed_url TEXT PRIMARY KEY, embedding float[%d])`, dimension),
+		},
+		{
+			name:   "recs.article_embeddings",
+			col:    "article_id",
+			create: fmt.Sprintf(`CREATE VIRTUAL TABLE recs.article_embeddings USING vec0(article_id INTEGER PRIMARY KEY, embedding float[%d])`, dimension),
+		},
 	} {
-		if _, err := s.db.ExecContext(context.Background(), stmt); err != nil {
-			return fmt.Errorf("create vec0 table: %w", err)
+		var schema string
+		_ = s.db.QueryRow("SELECT sql FROM recs.sqlite_master WHERE type='table' AND name=?", strings.TrimPrefix(tbl.name, "recs.")).Scan(&schema)
+		expected := fmt.Sprintf("float[%d]", dimension)
+		if strings.Contains(schema, expected) {
+			continue
+		}
+
+		if schema != "" {
+			s.db.Exec(fmt.Sprintf("DROP TABLE %s", tbl.name))
+		}
+
+		if _, err := s.db.ExecContext(context.Background(), tbl.create); err != nil {
+			return fmt.Errorf("create vec0 table %s: %w", tbl.name, err)
 		}
 	}
 	return nil
