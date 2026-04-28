@@ -50,7 +50,7 @@ func (s *Server) handleAuthStart(w http.ResponseWriter, r *http.Request) {
 
 		did, resolveErr := atproto.ResolveHandle(r.Context(), handle)
 		if resolveErr != nil {
-			s.renderError(w, r, http.StatusBadGateway, "Handle not found", "Could not resolve that handle. Please check and try again.")
+			s.renderError(w, r, http.StatusBadRequest, "Handle not found", "Could not resolve that handle. Please check and try again.")
 			return
 		}
 		user, createErr := s.dbs.Users.CreateUser(r.Context(), did)
@@ -83,7 +83,7 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 	did, err := atproto.ResolveHandle(r.Context(), handle)
 	if err != nil {
 		s.logger.Error("failed to resolve handle", "error", err)
-		s.renderError(w, r, http.StatusBadGateway, "Handle not found", "Could not resolve that handle. Please check and try again.")
+		s.renderError(w, r, http.StatusBadRequest, "Handle not found", "Could not resolve that handle. Please check and try again.")
 		return
 	}
 

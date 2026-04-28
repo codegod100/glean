@@ -164,7 +164,7 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 		uri, cid, err := client.CreateRecord(r.Context(), user.DID, atproto.CollectionSubscription, record)
 		if err != nil {
 			s.logger.Error("failed to write subscription to PDS", "error", err)
-			http.Error(w, "failed to write subscription to PDS: "+err.Error(), http.StatusBadGateway)
+			http.Error(w, "failed to write subscription to PDS: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		subURI = uri
@@ -221,7 +221,7 @@ func (s *Server) handleRemoveFeed(w http.ResponseWriter, r *http.Request) {
 			if ok {
 				if delErr := client.DeleteRecord(r.Context(), user.DID, parsed.Collection, parsed.RKey); delErr != nil {
 					s.logger.Error("failed to delete subscription from PDS", "error", delErr)
-					http.Error(w, "failed to delete subscription from PDS: "+delErr.Error(), http.StatusBadGateway)
+					http.Error(w, "failed to delete subscription from PDS: "+delErr.Error(), http.StatusInternalServerError)
 					return
 				}
 			}
@@ -251,7 +251,7 @@ func (s *Server) handleClearAllSubscriptions(w http.ResponseWriter, r *http.Requ
 				if ok {
 					if delErr := client.DeleteRecord(r.Context(), user.DID, parsed.Collection, parsed.RKey); delErr != nil {
 						s.logger.Error("failed to delete subscription from PDS", "error", delErr, "uri", sub.URI.String)
-						http.Error(w, "failed to delete subscription from PDS: "+delErr.Error(), http.StatusBadGateway)
+						http.Error(w, "failed to delete subscription from PDS: "+delErr.Error(), http.StatusInternalServerError)
 						return
 					}
 				}

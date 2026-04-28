@@ -114,7 +114,7 @@ func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) 
 		uri, cid, err := client.CreateRecord(ctx, user.DID, atproto.CollectionAnnotation, record)
 		if err != nil {
 			s.logger.Error("failed to write annotation to PDS", "error", err)
-			http.Error(w, "failed to write annotation to PDS: "+err.Error(), http.StatusBadGateway)
+			http.Error(w, "failed to write annotation to PDS: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		a.URI = uri
@@ -161,7 +161,7 @@ func (s *Server) handleDeleteAnnotation(w http.ResponseWriter, r *http.Request) 
 			if ok {
 				if delErr := client.DeleteRecord(ctx, user.DID, parsed.Collection, parsed.RKey); delErr != nil {
 					s.logger.Error("failed to delete annotation from PDS", "error", delErr)
-					http.Error(w, "failed to delete annotation from PDS: "+delErr.Error(), http.StatusBadGateway)
+					http.Error(w, "failed to delete annotation from PDS: "+delErr.Error(), http.StatusInternalServerError)
 					return
 				}
 			}
