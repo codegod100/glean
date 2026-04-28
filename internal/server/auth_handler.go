@@ -17,6 +17,26 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "login.html", map[string]any{})
 }
 
+func (s *Server) handleAuthResolve(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimPrefix(r.URL.Query().Get("q"), "@")
+	if q == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"actors":[]}`))
+		return
+	}
+
+	actors, err := atproto.SearchActorsTypeahead(r.Context(), q, 5)
+	if err != nil {
+		s.logger.Warn("actor typeahead failed", "error", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"actors":[]}`))
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"actors": actors})
+}
+
 func (s *Server) handleAuthStart(w http.ResponseWriter, r *http.Request) {
 	handle := strings.TrimPrefix(r.FormValue("handle"), "@")
 	if handle == "" {

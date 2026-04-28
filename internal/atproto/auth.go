@@ -146,16 +146,16 @@ func ResolveProfile(ctx context.Context, did string) Profile {
 		Handle:      ident.Handle.String(),
 	}
 
-	h, dn, avatar, err := FetchProfile(ctx, did)
+	actor, err := FetchProfile(ctx, did)
 	if err != nil {
 		return p
 	}
 
-	if h != "" {
-		p.Handle = h
+	if actor.Handle != "" {
+		p.Handle = actor.Handle
 	}
-	p.DisplayName = dn
-	p.AvatarURL = avatar
+	p.DisplayName = actor.DisplayName
+	p.AvatarURL = actor.Avatar
 
 	profileCache.Store(did, &profileEntry{profile: p, fetched: time.Now()})
 	return p

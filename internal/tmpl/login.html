@@ -9,9 +9,12 @@
 
         <form action="/auth/start" method="POST" id="login-form">
             {{csrfInput .CSRFToken}}
-            <input type="text" name="handle" placeholder="you.bsky.social"
-                   class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-3 mb-5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder"
-                   required>
+            <div class="relative mb-5">
+                <input type="text" name="handle" placeholder="you.bsky.social" id="handle-input"
+                       class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder"
+                       required autocomplete="off">
+                <div id="handle-suggestions" class="absolute left-0 right-0 top-full mt-1 bg-spot-surface border border-spot-divider rounded-xl shadow-spot-heavy z-50 overflow-hidden hidden"></div>
+            </div>
         </form>
 
         <div class="space-y-3">
@@ -30,7 +33,7 @@
 
         <div class="mt-6 pt-6 border-t border-spot-divider text-center">
             <p class="text-xs text-spot-secondary mb-3">No account yet?</p>
-            <a href="https://eurosky.social" target="_blank" rel="noopener noreferrer"
+            <a href="https://portal.eurosky.tech/create-account" target="_blank" rel="noopener noreferrer"
                class="inline-flex items-center justify-center gap-2 w-full border border-spot-outline text-spot-text rounded-pill px-4 py-2.5 text-sm font-bold uppercase tracking-button hover:bg-spot-hover-50 transition">
                 <span class="text-base">&#127466;&#127482;</span>
                 Create an account on Eurosky
@@ -38,4 +41,82 @@
         </div>
     </div>
 </div>
+<script>
+(function() {
+    var input = document.getElementById('handle-input');
+    var box = document.getElementById('handle-suggestions');
+    var timer = null;
+    var selected = -1;
+
+    function close() {
+        box.classList.add('hidden');
+        box.innerHTML = '';
+        selected = -1;
+    }
+
+    function highlight(items, idx) {
+        items.forEach(function(el, i) {
+            el.classList.toggle('bg-spot-hover', i === idx);
+        });
+    }
+
+    input.addEventListener('input', function() {
+        clearTimeout(timer);
+        var q = input.value.trim().replace(/^@/, '');
+        if (q.length < 1) { close(); return; }
+        timer = setTimeout(function() {
+            fetch('/auth/resolve?q=' + encodeURIComponent(q))
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (!data.actors || !data.actors.length) { close(); return; }
+                    selected = -1;
+                    box.innerHTML = '';
+                    data.actors.forEach(function(a) {
+                        var row = document.createElement('button');
+                        row.type = 'button';
+                        row.className = 'w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-spot-hover transition';
+                        var img = a.avatar
+                            ? '<img src="' + a.avatar + '" class="w-8 h-8 rounded-full shrink-0">'
+                            : '<div class="w-8 h-8 rounded-full bg-spot-hover shrink-0"></div>';
+                        row.innerHTML = img +
+                            '<div class="min-w-0">' +
+                            '<div class="text-sm text-spot-text truncate">@' + a.handle + '</div>' +
+                            (a.displayName ? '<div class="text-xs text-spot-secondary truncate">' + a.displayName + '</div>' : '') +
+                            '</div>';
+                        row.addEventListener('click', function() {
+                            input.value = a.handle;
+                            close();
+                        });
+                        box.appendChild(row);
+                    });
+                    box.classList.remove('hidden');
+                })
+                .catch(function() { close(); });
+        }, 250);
+    });
+
+    input.addEventListener('keydown', function(e) {
+        var items = box.querySelectorAll('button');
+        if (!items.length) return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selected = Math.min(selected + 1, items.length - 1);
+            highlight(items, selected);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selected = Math.max(selected - 1, 0);
+            highlight(items, selected);
+        } else if (e.key === 'Enter' && selected >= 0) {
+            e.preventDefault();
+            items[selected].click();
+        } else if (e.key === 'Escape') {
+            close();
+        }
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!box.contains(e.target) && e.target !== input) close();
+    });
+})();
+</script>
 {{end}}

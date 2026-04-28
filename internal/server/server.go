@@ -204,6 +204,7 @@ func (s *Server) setupRoutes() {
 	})
 
 	s.router.Get("/auth/login", s.handleAuthLogin)
+	s.router.Get("/auth/resolve", s.handleAuthResolve)
 	s.router.Post("/auth/start", s.handleAuthStart)
 	s.router.Get("/auth/callback", s.handleAuthCallback)
 	s.router.Post("/auth/logout", s.handleAuthLogout)
