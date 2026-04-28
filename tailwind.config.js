@@ -30,12 +30,19 @@ module.exports = {
         }
       },
       borderRadius: {
-        pill: '9999px',
-        'pill-lg': '500px',
+        DEFAULT: 'var(--radius-sm)',
+        pill: 'var(--radius-pill)',
+        'pill-lg': 'var(--radius-pill)',
+        sm: 'var(--radius-sm)',
+        md: 'var(--radius-md)',
+        lg: 'var(--radius-md)',
+        xl: 'var(--radius-lg)',
+        full: 'var(--radius-full)',
       },
       boxShadow: {
         'spot': 'var(--spot-shadow)',
         'spot-heavy': 'var(--spot-shadow-heavy)',
+        'spot-elevated': 'var(--spot-shadow-elevated)',
       },
       letterSpacing: {
         button: '1.4px',

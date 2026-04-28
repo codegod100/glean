@@ -19,8 +19,14 @@
     --spot-placeholder: rgba(255,255,255,0.45);
     --spot-active-bg: #ffffff;
     --spot-active-text: #1E3932;
-    --spot-shadow: 0 0 0.5px rgba(0,0,0,0.20), 0 1px 1px rgba(0,0,0,0.30);
-    --spot-shadow-heavy: 0 0 6px rgba(0,0,0,0.30), 0 8px 12px rgba(0,0,0,0.20);
+    --radius-sm: 0.25rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-pill: 9999px;
+    --radius-full: 50%;
+    --spot-shadow: 0 1px 2px rgba(0,0,0,0.40), 0 2px 4px rgba(0,0,0,0.20);
+    --spot-shadow-heavy: 0 4px 8px rgba(0,0,0,0.35), 0 12px 24px rgba(0,0,0,0.25);
+    --spot-shadow-elevated: 0 8px 16px rgba(0,0,0,0.40), 0 24px 48px rgba(0,0,0,0.30);
   }
 
   [data-theme="light"] {
@@ -39,8 +45,16 @@
     --spot-placeholder: rgba(0,0,0,0.30);
     --spot-active-bg: #1E3932;
     --spot-active-text: #ffffff;
-    --spot-shadow: 0 0 0.5px rgba(0,0,0,0.14), 0 1px 1px rgba(0,0,0,0.24);
-    --spot-shadow-heavy: 0 0 6px rgba(0,0,0,0.14), 0 8px 12px rgba(0,0,0,0.08);
+    --spot-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
+    --spot-shadow-heavy: 0 4px 12px rgba(0,0,0,0.08), 0 12px 28px rgba(0,0,0,0.06);
+    --spot-shadow-elevated: 0 8px 24px rgba(0,0,0,0.10), 0 24px 48px rgba(0,0,0,0.08);
+  }
+
+  [data-shape="squared"] {
+    --radius-sm: 0;
+    --radius-md: 0;
+    --radius-lg: 0;
+    --radius-pill: 0;
   }
 }
 
@@ -96,7 +110,7 @@ body {
 
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: var(--spot-bg); }
-::-webkit-scrollbar-thumb { background: var(--spot-muted); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: var(--spot-muted); border-radius: var(--radius-md); }
 ::-webkit-scrollbar-thumb:hover { background: var(--spot-outline); }
 
 .htmx-swapping {

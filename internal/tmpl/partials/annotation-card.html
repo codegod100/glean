@@ -16,7 +16,7 @@
     {{end}}
     {{if .annotation.Tags.Valid}}
     <div class="flex gap-1.5 mt-3 flex-wrap">
-        {{range $tag := split .annotation.Tags.String ","}}<span class="text-xs bg-spot-hover text-spot-secondary px-2.5 py-0.5 rounded-full">{{$tag}}</span>{{end}}
+        {{range $tag := split .annotation.Tags.String ","}}<span class="text-xs bg-spot-hover text-spot-secondary px-2.5 py-0.5 rounded-pill">{{$tag}}</span>{{end}}
     </div>
     {{end}}
     {{if .annotation.Rating.Valid}}

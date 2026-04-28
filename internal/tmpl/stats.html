@@ -27,7 +27,7 @@
                     {{if .Labels}}
                     <div class="flex gap-2 mt-1">
                         {{range $key, $value := .Labels}}
-                        <span class="text-xs bg-spot-hover text-spot-secondary px-2 py-0.5 rounded-full">{{$key}}={{$value}}</span>
+                        <span class="text-xs bg-spot-hover text-spot-secondary px-2 py-0.5 rounded-pill">{{$key}}={{$value}}</span>
                         {{end}}
                     </div>
                     {{end}}

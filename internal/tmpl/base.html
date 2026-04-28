@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Glean</title>
     <script>
-    (function(){var p=localStorage.getItem('theme')||'system';var r=p==='system'?(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):p;document.documentElement.setAttribute('data-theme',r)})();
+    (function(){var p=localStorage.getItem('theme')||'system';var r=p==='system'?(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):p;document.documentElement.setAttribute('data-theme',r);var s=localStorage.getItem('shape');if(s)document.documentElement.setAttribute('data-shape',s)})();
     </script>
     <link rel="stylesheet" href="/static/output.css">
     <script src="https://unpkg.com/htmx.org@2"></script>
@@ -37,14 +37,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body class="bg-spot-bg text-spot-text min-h-screen flex">
-    <dialog id="confirm-dialog" class="bg-spot-surface rounded-xl p-6 max-w-sm shadow-lg border border-spot-divider backdrop:bg-black/50" onclick="if(event.target===this)this.close()">
+    <dialog id="confirm-dialog" class="bg-spot-surface rounded-xl p-6 max-w-sm shadow-spot-elevated border border-spot-divider backdrop:bg-black/50" onclick="if(event.target===this)this.close()">
         <p id="confirm-dialog-msg" class="text-spot-text text-sm mb-6"></p>
         <div class="flex justify-end gap-3">
             <button onclick="document.getElementById('confirm-dialog').close(false)" class="text-sm text-spot-secondary hover:text-spot-text px-4 py-2 rounded-pill border border-spot-outline transition">Cancel</button>
             <button id="confirm-dialog-ok" class="text-sm text-white bg-spot-red hover:brightness-110 px-4 py-2 rounded-pill font-bold uppercase tracking-button transition">Confirm</button>
         </div>
     </dialog>
-    <dialog id="shortcuts-dialog" class="bg-spot-surface rounded-xl p-6 max-w-xs shadow-lg border border-spot-divider backdrop:bg-black/50" onclick="if(event.target===this)this.close()">
+    <dialog id="shortcuts-dialog" class="bg-spot-surface rounded-xl p-6 max-w-xs shadow-spot-elevated border border-spot-divider backdrop:bg-black/50" onclick="if(event.target===this)this.close()">
         <h3 class="text-sm font-bold text-spot-text uppercase tracking-wide mb-4">Keyboard shortcuts</h3>
         <div class="space-y-2 text-sm">
             <div class="text-spot-secondary font-bold text-xs uppercase tracking-wide">Navigation</div>
@@ -198,6 +198,10 @@
                                     <span class="theme-text-light hidden">Light</span>
                                     <span class="theme-text-system hidden">System</span>
                                 </button>
+                                <button onclick="toggleShape()" class="text-xs text-spot-secondary hover:text-spot-text hover:underline inline-flex gap-1.5 items-center transition text-left">
+                                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h16v16H4z"/></svg>
+                                    <span class="shape-text">Squared</span>
+                                </button>
                                 <button onclick="document.getElementById('shortcuts-dialog').showModal()" class="text-xs text-spot-secondary hover:text-spot-text hover:underline inline-flex gap-1.5 items-center transition text-left">
                                     <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6.75 7.5 3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0 0 21 18V6a2.25 2.25 0 0 0-2.25-2.25H5.25A2.25 2.25 0 0 0 3 6v12a2.25 2.25 0 0 0 2.25 2.25Z"/></svg>
                                     Keyboard shortcuts
@@ -235,6 +239,10 @@
                                     <span class="theme-text-light hidden">Light</span>
                                     <span class="theme-text-system hidden">System</span>
                                 </button>
+                                <button onclick="toggleShape()" class="text-xs text-spot-secondary hover:text-spot-text inline-flex gap-1.5 items-center transition">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h16v16H4z"/></svg>
+                                    <span class="shape-text">Squared</span>
+                                </button>
                             </div>
                             <span class="text-xs text-spot-secondary">&copy; {{now.Format "2006"}} <a href="https://bsky.app/profile/julien.rbrt.fr">julien.rbrt.fr</a> &middot; Made in Europe &#127466;&#127482;</span>
                         </div>
@@ -269,11 +277,35 @@
         applyTheme();
     }
 
+    function applyShape() {
+        var shapePref = localStorage.getItem('shape') || 'rounded';
+        if (shapePref === 'squared') {
+            document.documentElement.setAttribute('data-shape', 'squared');
+        } else {
+            document.documentElement.removeAttribute('data-shape');
+        }
+        document.querySelectorAll('.shape-text').forEach(function(el) {
+            el.textContent = shapePref === 'squared' ? 'Rounded' : 'Squared';
+        });
+    }
+
+    function toggleShape() {
+        var current = localStorage.getItem('shape') || 'rounded';
+        var next = current === 'squared' ? 'rounded' : 'squared';
+        if (next === 'rounded') {
+            localStorage.removeItem('shape');
+        } else {
+            localStorage.setItem('shape', next);
+        }
+        applyShape();
+    }
+
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
         if (themePref === 'system') applyTheme();
     });
 
     applyTheme();
+    applyShape();
 
     function closeAnnotate(el) {
         var form = el.closest('.annotate-form');

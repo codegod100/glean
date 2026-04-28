@@ -10,6 +10,8 @@ Typography uses **Inter** (Google Fonts) as the universal typeface, with tight `
 
 Surfaces breathe through rounded geometry: pill buttons (`9999px`), `12px` card corners, and `50%` circular avatars. Shadows are whisper-soft dual-layers, never heavy. The system feels like a well-lit reading room.
 
+All radii are driven by CSS custom properties (`--radius-sm`, `--radius-md`, `--radius-lg`, `--radius-pill`, `--radius-full`) wired through `tailwind.config.js`. A **squared** shape mode is available via `data-shape="squared"` on the root element, which sets all radius variables to `0`. The toggle lives in the footer alongside the theme switcher and persists via `localStorage('shape')`.
+
 **Color-block rhythm (landing page):** Cream/forest hero → white card sections → House Green (`#1E3932`) feature band with white text → cream utility zone → House Green footer.
 
 Logo is a stylized bee: body with horizontal stripes (like text lines on a page), semi-transparent wings that evoke open book pages, round eyes, curved antennae, and a small smile. The bee represents gleaning (collecting nectar/knowledge), social behavior (hives/communities), and reading (the striped body reads like lines of text, wings like turning pages).
@@ -105,10 +107,11 @@ bg-spot-surface rounded-xl p-4 shadow-spot hover:bg-spot-hover-50 transition
 
 ### Shadows
 
-| Token               | Value                                                    | Use          |
-| ------------------- | -------------------------------------------------------- | ------------ |
-| `shadow-spot`       | `0 0 0.5px rgba(0,0,0,0.14), 0 1px 1px rgba(0,0,0,0.24)` | Cards        |
-| `shadow-spot-heavy` | `0 0 6px rgba(0,0,0,0.24), 0 8px 12px rgba(0,0,0,0.14)`  | Modals, hero |
+| Token                  | Use          |
+| ---------------------- | ------------ |
+| `shadow-spot`          | Cards        |
+| `shadow-spot-heavy`    | Modals, hero |
+| `shadow-spot-elevated` | Dialogs, floating elements |
 
 ### Navigation
 

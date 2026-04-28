@@ -35,9 +35,9 @@ function gleanRefreshPoll(){setTimeout(function(){htmx.ajax('GET','/feeds/list',
     <div class="lg:col-span-2">
         {{if .Categories}}
         <div class="flex gap-2 mb-6 flex-wrap">
-            <a href="/feeds" class="text-sm px-4 py-1.5 rounded-full font-bold {{if not .Category}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}} transition">All</a>
+            <a href="/feeds" class="text-sm px-4 py-1.5 rounded-pill font-bold {{if not .Category}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}} transition">All</a>
             {{range .Categories}}
-            <a href="/feeds?category={{.}}" class="text-sm px-4 py-1.5 rounded-full font-bold {{if eq $.Category .}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}} transition">{{.}}</a>
+            <a href="/feeds?category={{.}}" class="text-sm px-4 py-1.5 rounded-pill font-bold {{if eq $.Category .}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}} transition">{{.}}</a>
             {{end}}
         </div>
         {{end}}

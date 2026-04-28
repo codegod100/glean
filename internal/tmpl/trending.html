@@ -12,9 +12,9 @@
     <h1 class="text-2xl font-bold text-spot-text">Trending</h1>
     <div class="flex gap-2">
         <a href="/trending?scope=all"
-           class="text-sm px-4 py-1.5 rounded-full font-bold {{if ne .Scope "for-me"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}} transition">All</a>
+           class="text-sm px-4 py-1.5 rounded-pill font-bold {{if ne .Scope "for-me"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}} transition">All</a>
         <a href="/trending?scope=for-me"
-           class="text-sm px-4 py-1.5 rounded-full font-bold {{if eq .Scope "for-me"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}} transition">For me</a>
+           class="text-sm px-4 py-1.5 rounded-pill font-bold {{if eq .Scope "for-me"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}} transition">For me</a>
     </div>
 </div>
 <p class="text-sm text-spot-secondary mb-6">

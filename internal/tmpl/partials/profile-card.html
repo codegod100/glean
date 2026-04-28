@@ -4,7 +4,7 @@
     <div class="min-w-0 flex-1">
         <span class="font-bold text-spot-text hover:text-spot-green transition">@{{.Handle}}</span>
         {{if .IsFollowed}}
-        <span class="inline-flex items-center gap-0.5 text-[10px] font-medium text-spot-green bg-spot-green/10 px-1.5 py-0.5 rounded-full ml-1.5">Following</span>
+        <span class="inline-flex items-center gap-0.5 text-[10px] font-medium text-spot-green bg-spot-green/10 px-1.5 py-0.5 rounded-pill ml-1.5">Following</span>
         {{end}}
         {{if .DisplayName}}<div class="text-sm text-spot-secondary">{{.DisplayName}}</div>{{end}}
     </div>
