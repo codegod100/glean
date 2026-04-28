@@ -1,0 +1,14 @@
+{
+  "name": "Glean",
+  "short_name": "Glean",
+  "description": "A social RSS reader on the AT Protocol.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0a1814",
+  "theme_color": "#00754A",
+  "icons": [
+    { "src": "/static/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/static/favicon.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/static/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

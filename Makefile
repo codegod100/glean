@@ -37,13 +37,18 @@ css:
 css-watch:
 	npx tailwindcss -i ./static/input.css -o ./static/output.css --watch
 
+.PHONY: icons
+icons:
+	magick static/favicon.svg -background none -density 1200 -resize 512x512 -depth 8 PNG32:static/favicon.png
+	magick static/favicon.svg -background none -density 1200 -resize 180x180 -depth 8 PNG32:static/apple-touch-icon.png
+
 .PHONY: test
 test:
 	go test -tags fts5 ./...
 
 .PHONY: clean
 clean:
-	rm -f glean glean.db static/output.css
+	rm -f glean glean.db static/output.css static/favicon.png static/apple-touch-icon.png
 
 .PHONY: docker-build
 docker-build:

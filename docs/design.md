@@ -156,8 +156,8 @@ All custom colors live under the `spot` namespace in `tailwind.config.js`. CSS v
 - **CSS build:** `make css` (minified) or `make css-watch` (dev with live reload)
 - **Source:** `static/input.css` — contains `@tailwind` directives, CSS variables for themes, `@layer components` for article-body styles, and base utilities
 - **Output:** `static/output.css` (gitignored, rebuilt on deploy)
-- **Favicon:** `static/favicon.svg` — wheat stalk SVG on House Green background
-- **Logo:** Inline SVG in base.html sidebar and index.html hero
+- **Favicon:** `static/favicon.svg` — bee logo (gradient green background, rounded rect). `static/favicon.png` — 512x512 raster fallback. Both linked in `base.html` `<head>`.
+- **Logo:** `<img>` referencing `/static/favicon.svg`, defined in `partials/logo.html` (`logo-icon`, `logo-link`, `logo-text` templates).
 
 ## 8. Page Structure
 
