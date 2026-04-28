@@ -78,19 +78,39 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.render(w, r, "feeds.html", map[string]any{
-		"User":                  user,
-		"Subscriptions":         subs,
-		"SubscriptionCount":     subCount,
-		"Categories":            categories,
-		"Category":              category,
-		"FeedRecommendations":   feedRecs,
-		"FollowedPeople":        followedPeople,
-		"DiscoverPeople":        discoverPeople,
-		"DeadFeeds":             deadFeeds,
-		"Page":                  page,
-		"BaseURL":               "/feeds",
-		"QueryParams":           buildQueryParams(map[string]string{"category": category}),
+		"User":                user,
+		"Subscriptions":       subs,
+		"SubscriptionCount":   subCount,
+		"Categories":          categories,
+		"Category":            category,
+		"FeedRecommendations": feedRecs,
+		"FollowedPeople":      followedPeople,
+		"DiscoverPeople":      discoverPeople,
+		"DeadFeeds":           deadFeeds,
+		"Page":                page,
+		"BaseURL":             "/feeds",
+		"QueryParams":         buildQueryParams(map[string]string{"category": category}),
 	})
+}
+
+func (s *Server) storeFetchResult(ctx context.Context, feedURL, siteURL string, result *feed.ParseResult) {
+	if result == nil {
+		_ = s.dbs.Articles.MarkFeedFetched(ctx, feedURL)
+		return
+	}
+	faviconURL := result.Feed.FaviconURL
+	if faviconURL == "" {
+		faviconURL = feed.ResolveFavicon(ctx, feedURL, siteURL)
+	}
+	if len(result.Articles) > 0 {
+		if err := s.dbs.Articles.BatchUpsertArticles(ctx, result.Articles); err != nil {
+			s.logger.Error("failed to store articles", "error", err, "feed", feedURL)
+		}
+	}
+	_ = s.dbs.Articles.MarkFeedFetched(ctx, feedURL)
+	if faviconURL != "" {
+		_ = s.dbs.Articles.UpdateFeedFavicon(ctx, feedURL, faviconURL)
+	}
 }
 
 func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
@@ -113,18 +133,10 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var feedTitle string
-	var faviconURL string
+	var feedTitle, faviconURL string
 	if result != nil {
 		feedTitle = result.Feed.Title
 		faviconURL = result.Feed.FaviconURL
-		if faviconURL == "" {
-			go func() {
-				if f := feed.ResolveFavicon(context.Background(), feedURL, result.Feed.SiteURL); f != "" {
-					_ = s.dbs.Articles.UpdateFeedFavicon(context.Background(), feedURL, f)
-				}
-			}()
-		}
 	}
 
 	f := &db.Feed{
@@ -168,6 +180,8 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	go s.storeFetchResult(context.Background(), feedURL, result.Feed.SiteURL, result)
 
 	if err := s.engine.MarkImpressionActed(r.Context(), user.DID, "feed", feedURL); err != nil {
 		s.logger.Warn("failed to mark impression acted", "error", err)
@@ -272,7 +286,7 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 	var added int
 	client := s.pdsClientForUser(r)
 
-	var favGoroutines []struct{ feedURL, siteURL string }
+	var feedsToFetch []struct{ feedURL, siteURL string }
 	for _, fu := range feedURLs {
 		f := &db.Feed{
 			FeedURL:     fu.URL,
@@ -285,7 +299,7 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		favGoroutines = append(favGoroutines, struct{ feedURL, siteURL string }{fu.URL, fu.SiteURL})
+		feedsToFetch = append(feedsToFetch, struct{ feedURL, siteURL string }{fu.URL, fu.SiteURL})
 
 		var subURI, subCID string
 		if client != nil {
@@ -316,11 +330,15 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		g, ctx := errgroup.WithContext(context.Background())
 		g.SetLimit(5)
-		for _, fav := range favGoroutines {
+		for _, f := range feedsToFetch {
 			g.Go(func() error {
-				if f := feed.ResolveFavicon(ctx, fav.feedURL, fav.siteURL); f != "" {
-					_ = s.dbs.Articles.UpdateFeedFavicon(ctx, fav.feedURL, f)
+				result, err := s.fetcher.Fetch(ctx, f.feedURL)
+				if err != nil {
+					s.logger.Error("failed to fetch feed", "error", err, "feed", f.feedURL)
+					_ = s.dbs.Articles.MarkFeedFetchError(ctx, f.feedURL, err.Error())
+					return nil
 				}
+				s.storeFetchResult(ctx, f.feedURL, f.siteURL, result)
 				return nil
 			})
 		}
