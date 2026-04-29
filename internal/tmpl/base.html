@@ -310,6 +310,12 @@
     applyTheme();
     applyShape();
 
+    // reload page when page restored from bfcache.
+    // useful for reloading article read/unread status.
+    window.addEventListener('pageshow', function(e) {
+        if (e.persisted) location.reload();
+    });
+
     function closeAnnotate(el) {
         var form = el.closest('.annotate-form');
         form.classList.add('hidden');
