@@ -68,13 +68,32 @@ func (e *Engine) GetFeedRecommendations(ctx context.Context, userDID string, lim
 }
 
 // GetPeopleRecommendations returns similar users based on subscription overlap,
-// like co-occurrence, tag overlap, and follow relationships. Scores are min-max
-// normalized on the Jaccard field.
+// like co-occurrence, tag overlap, and follow relationships. Up to half the
+// limit come from the user's network (followed) and half from outside. When
+// outside-network candidates are scarce, in-network fills the remaining slots.
 func (e *Engine) GetPeopleRecommendations(ctx context.Context, userDID string, limit int) ([]*PersonRecommendation, error) {
-	recs, err := e.ComputePeopleRecommendationsOnDemand(ctx, userDID, limit)
+	recs, err := e.ComputePeopleRecommendationsOnDemand(ctx, userDID, limit*2)
 	if err != nil {
 		return nil, err
 	}
+
+	half := max(limit/2, 1)
+
+	var inNet, outNet []*PersonRecommendation
+	for _, r := range recs {
+		if r.IsFollowed {
+			inNet = append(inNet, r)
+		} else {
+			outNet = append(outNet, r)
+		}
+	}
+
+	outTake := min(half, len(outNet))
+	inTake := min(limit-outTake, len(inNet))
+	recs = recs[:0]
+	recs = append(recs, inNet[:inTake]...)
+	recs = append(recs, outNet[:outTake]...)
+
 	normalizePersonScores(recs)
 	return recs, nil
 }
