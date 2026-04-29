@@ -19,6 +19,7 @@ dependencies:
     - gnugrep
     - gawk
     - nodejs
+    - curl
 
 steps:
   - name: "Install node dependencies"
