@@ -9,7 +9,7 @@
     (function(){var p=localStorage.getItem('theme')||'system';var r=p==='system'?(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):p;document.documentElement.setAttribute('data-theme',r);var s=localStorage.getItem('shape');if(s)document.documentElement.setAttribute('data-shape',s)})();
     </script>
     <link rel="stylesheet" href="/static/output.css">
-    <script src="https://unpkg.com/htmx.org@2"></script>
+    <script src="/static/htmx.min.js"></script>
     <script>
     document.addEventListener('htmx:confirm', function(e) {
         if (!e.detail.question) return;

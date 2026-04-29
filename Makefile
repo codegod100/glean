@@ -22,16 +22,20 @@ lex-parse:
 	goat lex parse $(shell find lexicons -name '*.json' 2>/dev/null)
 
 .PHONY: dev
-dev: css
+dev: css htmx
 	@if [ -f .env ]; then set -a; . ./.env; set +a; fi && go run -tags fts5 .
 
 .PHONY: build
-build: css
+build: css htmx
 	go build -tags fts5 -o glean .
 
 .PHONY: css
 css:
 	npx tailwindcss -i ./static/input.css -o ./static/output.css --minify
+
+.PHONY: htmx
+htmx:
+	curl -sL 'https://unpkg.com/htmx.org@2' -o ./static/htmx.min.js
 
 .PHONY: css-watch
 css-watch:
@@ -48,7 +52,7 @@ test:
 
 .PHONY: clean
 clean:
-	rm -f glean glean.db static/output.css static/favicon.png static/apple-touch-icon.png
+	rm -f glean glean.db static/output.css static/htmx.min.js static/favicon.png static/apple-touch-icon.png
 
 .PHONY: docker-build
 docker-build:
