@@ -36,7 +36,11 @@ type Like struct {
 }
 
 func (s *ArticleStore) CreateAnnotation(ctx context.Context, a *Annotation) error {
-	return s.BatchCreateAnnotations(ctx, []*Annotation{a})
+	_, err := s.db.ExecContext(ctx, `
+		INSERT OR IGNORE INTO articles.annotations (uri, author_did, feed_url, article_url, quote, note, tags, rating, created_at, cid)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, a.URI, a.AuthorDID, a.FeedURL, a.ArticleURL, a.Quote, a.Note, a.Tags, a.Rating, a.CreatedAt, a.CID)
+	return err
 }
 
 func (s *ArticleStore) UpdateAnnotation(ctx context.Context, a *Annotation) error {
@@ -185,7 +189,85 @@ func (s *ArticleStore) CreateLike(ctx context.Context, l *Like) error {
 	if exists {
 		return ErrDuplicateLike
 	}
-	return s.BatchCreateLikes(ctx, []*Like{l})
+	_, err = s.db.ExecContext(ctx, `
+		INSERT OR IGNORE INTO articles.likes (uri, author_did, feed_url, article_url, created_at, cid)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, l.URI, l.AuthorDID, l.FeedURL, l.ArticleURL, l.CreatedAt, l.CID)
+	return err
+}
+
+func (s *ArticleStore) DeleteOrphanedLikes(ctx context.Context, userDID string, activeURIs map[string]bool) error {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT uri FROM articles.likes WHERE author_did = ? AND uri IS NOT NULL AND uri != ''`,
+		userDID)
+	if err != nil {
+		return err
+	}
+	var toDelete []string
+	for rows.Next() {
+		var uri string
+		if err := rows.Scan(&uri); err != nil {
+			rows.Close()
+			return err
+		}
+		if !activeURIs[uri] {
+			toDelete = append(toDelete, uri)
+		}
+	}
+	rows.Close()
+
+	if len(toDelete) == 0 {
+		return nil
+	}
+
+	ph := make([]string, len(toDelete))
+	args := make([]any, 0, len(toDelete)+1)
+	args = append(args, userDID)
+	for i, uri := range toDelete {
+		ph[i] = "?"
+		args = append(args, uri)
+	}
+	_, err = s.db.ExecContext(ctx,
+		`DELETE FROM articles.likes WHERE author_did = ? AND uri IN (`+strings.Join(ph, ",")+`)`,
+		args...)
+	return err
+}
+
+func (s *ArticleStore) DeleteOrphanedAnnotations(ctx context.Context, userDID string, activeURIs map[string]bool) error {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT uri FROM articles.annotations WHERE author_did = ? AND uri IS NOT NULL AND uri != ''`,
+		userDID)
+	if err != nil {
+		return err
+	}
+	var toDelete []string
+	for rows.Next() {
+		var uri string
+		if err := rows.Scan(&uri); err != nil {
+			rows.Close()
+			return err
+		}
+		if !activeURIs[uri] {
+			toDelete = append(toDelete, uri)
+		}
+	}
+	rows.Close()
+
+	if len(toDelete) == 0 {
+		return nil
+	}
+
+	ph := make([]string, len(toDelete))
+	args := make([]any, 0, len(toDelete)+1)
+	args = append(args, userDID)
+	for i, uri := range toDelete {
+		ph[i] = "?"
+		args = append(args, uri)
+	}
+	_, err = s.db.ExecContext(ctx,
+		`DELETE FROM articles.annotations WHERE author_did = ? AND uri IN (`+strings.Join(ph, ",")+`)`,
+		args...)
+	return err
 }
 
 func (s *ArticleStore) DeleteLike(ctx context.Context, uri string) error {

@@ -33,20 +33,14 @@ func NewSync(articles *db.ArticleStore, users *db.UserStore, client *Client, log
 func (s *Sync) Run(ctx context.Context, userDID string) error {
 	s.logger.Info("syncing from PDS", "did", userDID)
 
-	if err := s.syncCollection(ctx, userDID, CollectionSubscription, s.batchReconcileSubscriptions); err != nil {
+	if err := s.syncSubscriptions(ctx, userDID); err != nil {
 		s.logger.Error("sync subscriptions failed", "error", err, "did", userDID)
 	}
-	if err := s.syncCollection(ctx, userDID, CollectionSkyreaderSubscription, s.batchReconcileSkyreaderSubscriptions); err != nil {
-		s.logger.Error("sync skyreader subscriptions failed", "error", err, "did", userDID)
-	}
-	if err := s.syncCollection(ctx, userDID, CollectionLike, s.batchReconcileLikes); err != nil {
+	if err := s.syncLikes(ctx, userDID); err != nil {
 		s.logger.Error("sync likes failed", "error", err, "did", userDID)
 	}
-	if err := s.syncCollection(ctx, userDID, CollectionAnnotation, s.batchReconcileAnnotations); err != nil {
+	if err := s.syncAnnotations(ctx, userDID); err != nil {
 		s.logger.Error("sync annotations failed", "error", err, "did", userDID)
-	}
-	if err := s.syncCollection(ctx, userDID, CollectionMarginNote, s.batchReconcileMarginNotes); err != nil {
-		s.logger.Error("sync margin notes failed", "error", err, "did", userDID)
 	}
 	if err := s.syncFollows(ctx, userDID); err != nil {
 		s.logger.Error("sync follows failed", "error", err, "did", userDID)
@@ -55,13 +49,13 @@ func (s *Sync) Run(ctx context.Context, userDID string) error {
 	return nil
 }
 
-func (s *Sync) syncCollection(ctx context.Context, userDID, collection string, fn func(ctx context.Context, userDID string, records []Record) error) error {
+func (s *Sync) listRecords(ctx context.Context, userDID, collection string) ([]Record, error) {
 	var allRecords []Record
 	cursor := ""
 	for {
 		records, next, err := s.client.ListRecords(ctx, userDID, collection, 100, cursor)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		allRecords = append(allRecords, records...)
 		if next == "" || len(records) == 0 {
@@ -69,17 +63,24 @@ func (s *Sync) syncCollection(ctx context.Context, userDID, collection string, f
 		}
 		cursor = next
 	}
-	if len(allRecords) == 0 {
-		return nil
-	}
-	return fn(ctx, userDID, allRecords)
+	return allRecords, nil
 }
 
-func (s *Sync) batchReconcileSubscriptions(ctx context.Context, userDID string, records []Record) error {
+func (s *Sync) syncSubscriptions(ctx context.Context, userDID string) error {
+	gleanRecs, err := s.listRecords(ctx, userDID, CollectionSubscription)
+	if err != nil {
+		return err
+	}
+	skyRecs, err := s.listRecords(ctx, userDID, CollectionSkyreaderSubscription)
+	if err != nil {
+		return err
+	}
+
 	var feeds []*db.Feed
 	var subs []db.SubData
+	activeFeedURLs := make(map[string]bool)
 
-	for _, r := range records {
+	for _, r := range gleanRecs {
 		var rec SubscriptionRecord
 		if err := json.Unmarshal(r.Value, &rec); err != nil {
 			continue
@@ -87,6 +88,7 @@ func (s *Sync) batchReconcileSubscriptions(ctx context.Context, userDID string, 
 		if rec.FeedURL == "" {
 			continue
 		}
+		activeFeedURLs[rec.FeedURL] = true
 		feeds = append(feeds, &db.Feed{FeedURL: rec.FeedURL, Title: db.NullStr(rec.Title)})
 		subs = append(subs, db.SubData{
 			FeedURL:  rec.FeedURL,
@@ -97,19 +99,7 @@ func (s *Sync) batchReconcileSubscriptions(ctx context.Context, userDID string, 
 		})
 	}
 
-	if len(feeds) > 0 {
-		if err := s.articles.BatchUpsertFeeds(ctx, feeds); err != nil {
-			return fmt.Errorf("upsert feeds: %w", err)
-		}
-	}
-	return s.articles.BatchReconcileSubscriptions(ctx, userDID, subs)
-}
-
-func (s *Sync) batchReconcileSkyreaderSubscriptions(ctx context.Context, userDID string, records []Record) error {
-	var feeds []*db.Feed
-	var subs []db.SubData
-
-	for _, r := range records {
+	for _, r := range skyRecs {
 		var rec SkyreaderSubscriptionRecord
 		if err := json.Unmarshal(r.Value, &rec); err != nil {
 			continue
@@ -117,6 +107,7 @@ func (s *Sync) batchReconcileSkyreaderSubscriptions(ctx context.Context, userDID
 		if rec.FeedURL == "" {
 			continue
 		}
+		activeFeedURLs[rec.FeedURL] = true
 		feeds = append(feeds, &db.Feed{FeedURL: rec.FeedURL, Title: db.NullStr(rec.Title), SiteURL: db.NullStr(rec.SiteURL)})
 		subs = append(subs, db.SubData{
 			FeedURL: rec.FeedURL,
@@ -128,16 +119,23 @@ func (s *Sync) batchReconcileSkyreaderSubscriptions(ctx context.Context, userDID
 
 	if len(feeds) > 0 {
 		if err := s.articles.BatchUpsertFeeds(ctx, feeds); err != nil {
-			return fmt.Errorf("failed to upsert feeds: %w", err)
+			return fmt.Errorf("upsert feeds: %w", err)
 		}
 	}
-
-	return s.articles.BatchReconcileSubscriptions(ctx, userDID, subs)
+	if err := s.articles.BatchReconcileSubscriptions(ctx, userDID, subs); err != nil {
+		return err
+	}
+	return s.articles.DeleteOrphanedSubscriptions(ctx, userDID, activeFeedURLs)
 }
 
-func (s *Sync) batchReconcileLikes(ctx context.Context, userDID string, records []Record) error {
-	var likes []*db.Like
+func (s *Sync) syncLikes(ctx context.Context, userDID string) error {
+	records, err := s.listRecords(ctx, userDID, CollectionLike)
+	if err != nil {
+		return err
+	}
 
+	var likes []*db.Like
+	activeURIs := make(map[string]bool)
 	for _, r := range records {
 		var rec LikeRecord
 		if err := json.Unmarshal(r.Value, &rec); err != nil {
@@ -146,6 +144,7 @@ func (s *Sync) batchReconcileLikes(ctx context.Context, userDID string, records 
 		if rec.FeedURL == "" || rec.ArticleURL == "" {
 			continue
 		}
+		activeURIs[r.URI] = true
 		t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
 		likes = append(likes, &db.Like{
 			URI:        r.URI,
@@ -157,13 +156,26 @@ func (s *Sync) batchReconcileLikes(ctx context.Context, userDID string, records 
 		})
 	}
 
-	return s.articles.BatchCreateLikes(ctx, likes)
+	if err := s.articles.BatchCreateLikes(ctx, likes); err != nil {
+		return err
+	}
+	return s.articles.DeleteOrphanedLikes(ctx, userDID, activeURIs)
 }
 
-func (s *Sync) batchReconcileAnnotations(ctx context.Context, userDID string, records []Record) error {
-	var annotations []*db.Annotation
+func (s *Sync) syncAnnotations(ctx context.Context, userDID string) error {
+	annRecs, err := s.listRecords(ctx, userDID, CollectionAnnotation)
+	if err != nil {
+		return err
+	}
+	marginRecs, err := s.listRecords(ctx, userDID, CollectionMarginNote)
+	if err != nil {
+		return err
+	}
 
-	for _, r := range records {
+	var annotations []*db.Annotation
+	activeURIs := make(map[string]bool)
+
+	for _, r := range annRecs {
 		var rec AnnotationRecord
 		if err := json.Unmarshal(r.Value, &rec); err != nil {
 			continue
@@ -171,6 +183,7 @@ func (s *Sync) batchReconcileAnnotations(ctx context.Context, userDID string, re
 		if rec.FeedURL == "" || rec.ArticleURL == "" {
 			continue
 		}
+		activeURIs[r.URI] = true
 		t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
 		a := &db.Annotation{
 			URI:        r.URI,
@@ -189,13 +202,7 @@ func (s *Sync) batchReconcileAnnotations(ctx context.Context, userDID string, re
 		annotations = append(annotations, a)
 	}
 
-	return s.articles.BatchCreateAnnotations(ctx, annotations)
-}
-
-func (s *Sync) batchReconcileMarginNotes(ctx context.Context, userDID string, records []Record) error {
-	var annotations []*db.Annotation
-
-	for _, r := range records {
+	for _, r := range marginRecs {
 		var rec MarginNoteRecord
 		if err := json.Unmarshal(r.Value, &rec); err != nil {
 			continue
@@ -204,6 +211,7 @@ func (s *Sync) batchReconcileMarginNotes(ctx context.Context, userDID string, re
 		if articleURL == "" {
 			continue
 		}
+		activeURIs[r.URI] = true
 
 		feedURL := ""
 		if article, err := s.articles.GetArticleByURL(ctx, articleURL); err == nil {
@@ -224,41 +232,36 @@ func (s *Sync) batchReconcileMarginNotes(ctx context.Context, userDID string, re
 		})
 	}
 
-	return s.articles.BatchCreateAnnotations(ctx, annotations)
+	if err := s.articles.BatchCreateAnnotations(ctx, annotations); err != nil {
+		return err
+	}
+	return s.articles.DeleteOrphanedAnnotations(ctx, userDID, activeURIs)
 }
 
 func (s *Sync) syncFollows(ctx context.Context, userDID string) error {
 	activeFollows := make(map[string]db.Follow)
 
 	for _, collection := range []string{CollectionBskyFollow, CollectionTangledFollow} {
-		cursor := ""
-		for {
-			records, next, err := s.client.ListRecords(ctx, userDID, collection, 100, cursor)
-			if err != nil {
-				return err
+		records, err := s.listRecords(ctx, userDID, collection)
+		if err != nil {
+			return err
+		}
+
+		for _, r := range records {
+			var rec FollowRecord
+			if err := json.Unmarshal(r.Value, &rec); err != nil {
+				continue
+			}
+			if rec.Subject == "" {
+				continue
 			}
 
-			for _, r := range records {
-				var rec FollowRecord
-				if err := json.Unmarshal(r.Value, &rec); err != nil {
-					continue
-				}
-				if rec.Subject == "" {
-					continue
-				}
-
-				t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
-				activeFollows[rec.Subject] = db.Follow{
-					URI:        db.NullStr(r.URI),
-					CID:        db.NullStr(r.CID),
-					FollowedAt: db.NullTime(t),
-				}
+			t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
+			activeFollows[rec.Subject] = db.Follow{
+				URI:        db.NullStr(r.URI),
+				CID:        db.NullStr(r.CID),
+				FollowedAt: db.NullTime(t),
 			}
-
-			if next == "" || len(records) == 0 {
-				break
-			}
-			cursor = next
 		}
 	}
 

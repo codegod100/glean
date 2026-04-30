@@ -202,6 +202,8 @@ func (h *StreamDBHandler) handleMarginNote(ctx context.Context, event *Event) er
 		return h.articles.UpdateAnnotation(ctx, a)
 
 	case actionDelete:
+		// Margin notes are converted to annotations; their URI is tracked
+		// by sync so orphan cleanup handles deletion during backfill.
 	}
 	return nil
 }
@@ -252,6 +254,8 @@ func (h *StreamDBHandler) handleSkyreaderSubscription(ctx context.Context, event
 		return err
 
 	case actionDelete:
+		// Skyreader subscriptions are imported into glean subscriptions;
+		// sync's orphan cleanup handles deletion during backfill.
 	}
 	return nil
 }

@@ -292,3 +292,136 @@ func TestBatchCreateAnnotations_IgnoresDuplicates(t *testing.T) {
 	err = dbs.Articles.BatchCreateAnnotations(ctx, annotations)
 	assert.NilError(t, err)
 }
+
+func TestBatchReconcileSubscriptions_DeletesOrphaned(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+	userDID := seedSubscriptionData(t, ctx, dbs)
+
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://a.com/feed.xml", Title: NullStr("A")})
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://b.com/feed.xml", Title: NullStr("B")})
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://c.com/feed.xml", Title: NullStr("C")})
+
+	subs := []SubData{
+		{FeedURL: "https://a.com/feed.xml", Title: "A", URI: "at://uri-a", CID: "cid-a"},
+		{FeedURL: "https://b.com/feed.xml", Title: "B", URI: "at://uri-b", CID: "cid-b"},
+		{FeedURL: "https://c.com/feed.xml", Title: "C", URI: "at://uri-c", CID: "cid-c"},
+	}
+	err := dbs.Articles.BatchReconcileSubscriptions(ctx, userDID, subs)
+	assert.NilError(t, err)
+
+	err = dbs.Articles.DeleteOrphanedSubscriptions(ctx, userDID, map[string]bool{
+		"https://a.com/feed.xml": true,
+		"https://c.com/feed.xml": true,
+	})
+	assert.NilError(t, err)
+
+	list, err := dbs.Articles.ListSubscriptions(ctx, userDID, "", 10, 0)
+	assert.NilError(t, err)
+	assert.Equal(t, len(list), 2)
+
+	feedURLs := map[string]bool{}
+	for _, s := range list {
+		feedURLs[s.FeedURL] = true
+	}
+	assert.Assert(t, feedURLs["https://a.com/feed.xml"])
+	assert.Assert(t, feedURLs["https://c.com/feed.xml"])
+
+	f, err := dbs.Articles.GetFeed(ctx, "https://b.com/feed.xml")
+	assert.NilError(t, err)
+	assert.Equal(t, f.SubscriberCount, 0)
+}
+
+func TestBatchReconcileSubscriptions_PreservesLocalOnly(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+	userDID := seedSubscriptionData(t, ctx, dbs)
+
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://a.com/feed.xml"})
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://b.com/feed.xml"})
+
+	err := dbs.Articles.CreateSubscription(ctx, userDID, "https://a.com/feed.xml", "A", "", "at://uri-a", "cid")
+	assert.NilError(t, err)
+	err = dbs.Articles.CreateSubscription(ctx, userDID, "https://b.com/feed.xml", "B", "", "", "")
+	assert.NilError(t, err)
+
+	err = dbs.Articles.DeleteOrphanedSubscriptions(ctx, userDID, map[string]bool{
+		"https://a.com/feed.xml": true,
+	})
+	assert.NilError(t, err)
+
+	list, err := dbs.Articles.ListSubscriptions(ctx, userDID, "", 10, 0)
+	assert.NilError(t, err)
+	assert.Equal(t, len(list), 2)
+}
+
+func TestBatchReconcileSubscriptions_DeletesAllWhenEmpty(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+	userDID := seedSubscriptionData(t, ctx, dbs)
+
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://a.com/feed.xml"})
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://b.com/feed.xml"})
+
+	subs := []SubData{
+		{FeedURL: "https://a.com/feed.xml", URI: "at://uri-a", CID: "cid-a"},
+		{FeedURL: "https://b.com/feed.xml", URI: "at://uri-b", CID: "cid-b"},
+	}
+	err := dbs.Articles.BatchReconcileSubscriptions(ctx, userDID, subs)
+	assert.NilError(t, err)
+
+	err = dbs.Articles.DeleteOrphanedSubscriptions(ctx, userDID, map[string]bool{})
+	assert.NilError(t, err)
+
+	list, err := dbs.Articles.ListSubscriptions(ctx, userDID, "", 10, 0)
+	assert.NilError(t, err)
+	assert.Equal(t, len(list), 0)
+}
+
+func TestDeleteOrphanedLikes_RemovesOrphaned(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+
+	now := NullTime(time.Now())
+	likes := []*Like{
+		{URI: "at://like1", AuthorDID: "did:test:u1", FeedURL: "https://a.com/feed", ArticleURL: "https://a.com/1", CreatedAt: now, CID: NullStr("cid1")},
+		{URI: "at://like2", AuthorDID: "did:test:u1", FeedURL: "https://a.com/feed", ArticleURL: "https://a.com/2", CreatedAt: now, CID: NullStr("cid2")},
+	}
+	err := dbs.Articles.BatchCreateLikes(ctx, likes)
+	assert.NilError(t, err)
+
+	err = dbs.Articles.DeleteOrphanedLikes(ctx, "did:test:u1", map[string]bool{"at://like1": true})
+	assert.NilError(t, err)
+
+	exists, err := dbs.Articles.HasLiked(ctx, "did:test:u1", "https://a.com/feed", "https://a.com/1")
+	assert.NilError(t, err)
+	assert.Equal(t, exists, true)
+
+	exists, err = dbs.Articles.HasLiked(ctx, "did:test:u1", "https://a.com/feed", "https://a.com/2")
+	assert.NilError(t, err)
+	assert.Equal(t, exists, false)
+}
+
+func TestDeleteOrphanedAnnotations_RemovesOrphaned(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+
+	now := NullTime(time.Now())
+	annotations := []*Annotation{
+		{URI: "at://ann1", AuthorDID: "did:test:u1", FeedURL: "https://a.com/feed", ArticleURL: "https://a.com/1", Note: NullStr("Keep"), CreatedAt: now},
+		{URI: "at://ann2", AuthorDID: "did:test:u1", FeedURL: "https://a.com/feed", ArticleURL: "https://a.com/2", Note: NullStr("Remove"), CreatedAt: now},
+	}
+	err := dbs.Articles.BatchCreateAnnotations(ctx, annotations)
+	assert.NilError(t, err)
+
+	err = dbs.Articles.DeleteOrphanedAnnotations(ctx, "did:test:u1", map[string]bool{"at://ann1": true})
+	assert.NilError(t, err)
+
+	exists, err := dbs.Articles.AnnotationExists(ctx, "at://ann1")
+	assert.NilError(t, err)
+	assert.Equal(t, exists, true)
+
+	exists, err = dbs.Articles.AnnotationExists(ctx, "at://ann2")
+	assert.NilError(t, err)
+	assert.Equal(t, exists, false)
+}

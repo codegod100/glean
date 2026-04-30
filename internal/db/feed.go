@@ -119,10 +119,27 @@ func (s *ArticleStore) decrementSubscriberCount(ctx context.Context, feedURL str
 	return err
 }
 
+func (s *ArticleStore) incrementSubscriberCount(ctx context.Context, feedURL string) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE articles.feeds SET subscriber_count = subscriber_count + 1 WHERE feed_url = ?
+	`, feedURL)
+	return err
+}
+
 func (s *ArticleStore) CreateSubscription(ctx context.Context, userDID, feedURL, title, category, uri, cid string) error {
 	existing, err := s.GetSubscription(ctx, userDID, feedURL)
 	if err != nil || existing == nil {
-		return s.BatchReconcileSubscriptions(ctx, userDID, []SubData{{FeedURL: feedURL, Title: title, Category: category, URI: uri, CID: cid}})
+		result, err := s.db.ExecContext(ctx, `
+			INSERT OR IGNORE INTO articles.subscriptions (user_did, feed_url, title, category, uri, cid)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`, userDID, feedURL, nilIfEmpty(title), nilIfEmpty(category), nilIfEmpty(uri), nilIfEmpty(cid))
+		if err != nil {
+			return err
+		}
+		if n, _ := result.RowsAffected(); n > 0 {
+			return s.incrementSubscriberCount(ctx, feedURL)
+		}
+		return nil
 	}
 
 	unchanged := existing.FeedTitle == title && existing.Category.String == category && existing.CID.String == cid
@@ -462,6 +479,48 @@ func (s *ArticleStore) BatchReconcileSubscriptions(ctx context.Context, userDID 
 			}
 		}
 	}
+	return tx.Commit()
+}
+
+func (s *ArticleStore) DeleteOrphanedSubscriptions(ctx context.Context, userDID string, activeFeedURLs map[string]bool) error {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT feed_url FROM articles.subscriptions WHERE user_did = ? AND uri IS NOT NULL AND uri != ''`,
+		userDID)
+	if err != nil {
+		return err
+	}
+	var toDelete []string
+	for rows.Next() {
+		var feedURL string
+		if err := rows.Scan(&feedURL); err != nil {
+			rows.Close()
+			return err
+		}
+		if !activeFeedURLs[feedURL] {
+			toDelete = append(toDelete, feedURL)
+		}
+	}
+	rows.Close()
+
+	if len(toDelete) == 0 {
+		return nil
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	for _, feedURL := range toDelete {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM articles.subscriptions WHERE user_did = ? AND feed_url = ?`, userDID, feedURL); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE articles.feeds SET subscriber_count = MAX(subscriber_count - 1, 0) WHERE feed_url = ?`, feedURL); err != nil {
+			return err
+		}
+	}
+
 	return tx.Commit()
 }
 
