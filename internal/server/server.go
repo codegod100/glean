@@ -395,6 +395,10 @@ func (s *Server) syncUserInBackground(userDID string, client *atproto.Client) {
 	}()
 }
 
+// PeriodicSync runs a full PDS sync for all users on a fixed interval.
+// Jetstream handles real-time create/update/delete events, but gaps can
+// appear after Jetstream downtime or rare missed events. This catches up by
+// reconciling each user's PDS records against the local index.
 func (s *Server) PeriodicSync(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
