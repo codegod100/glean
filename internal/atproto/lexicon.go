@@ -15,6 +15,8 @@ const (
 	CollectionSkyreaderSubscription = "app.skyreader.feed.subscription"
 	CollectionBskyFollow            = "app.bsky.graph.follow"
 	CollectionTangledFollow         = "sh.tangled.graph.follow"
+	CollectionStandardPublication   = "site.standard.publication"
+	CollectionStandardDocument      = "site.standard.document"
 )
 
 type SubscriptionRecord struct {

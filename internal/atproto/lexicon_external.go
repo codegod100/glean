@@ -89,3 +89,30 @@ func (r MarginNoteRecord) ToAnnotation() (articleURL, quote, note string, tags [
 	tags = r.Tags
 	return
 }
+
+type StandardPublicationRecord struct {
+	BasicTheme   json.RawMessage `json:"basicTheme,omitempty"`
+	Name         string          `json:"name"`
+	URL          string          `json:"url"`
+	Description  string          `json:"description"`
+	Icon         json.RawMessage `json:"icon,omitempty"`
+	Labels       json.RawMessage `json:"labels,omitempty"`
+	Preferences  json.RawMessage `json:"preferences,omitempty"`
+}
+
+type StandardDocumentRecord struct {
+	Title        string          `json:"title"`
+	Site         string          `json:"site"`
+	Path         string          `json:"path"`
+	Description  string          `json:"description"`
+	TextContent  string          `json:"textContent"`
+	PublishedAt  string          `json:"publishedAt"`
+	UpdatedAt    string          `json:"updatedAt"`
+	BskyPostRef  json.RawMessage `json:"bskyPostRef,omitempty"`
+	Content      json.RawMessage `json:"content,omitempty"`
+	Contributors json.RawMessage `json:"contributors,omitempty"`
+	CoverImage   json.RawMessage `json:"coverImage,omitempty"`
+	Labels       json.RawMessage `json:"labels,omitempty"`
+	Links        json.RawMessage `json:"links,omitempty"`
+	Tags         []string        `json:"tags,omitempty"`
+}

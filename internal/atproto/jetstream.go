@@ -100,6 +100,8 @@ func NewJetstreamConsumer(jetstreamURL string, handler EventHandler, logger *slo
 			CollectionBskyFollow,
 			CollectionTangledFollow,
 			CollectionMarginNote,
+			CollectionStandardPublication,
+			CollectionStandardDocument,
 		},
 	}
 

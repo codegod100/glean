@@ -54,7 +54,8 @@ func main() {
 	callbackURL := envOr("GLEAN_OAUTH_REDIRECT_URL", "")
 
 	storeAdapter := db.NewFeedAdapter(dbs.Articles)
-	scheduler := feed.NewScheduler(storeAdapter, logger, *fetchInterval, 30*time.Minute)
+	siteFetcher := atproto.NewStandardSiteFetcher(logger)
+	scheduler := feed.NewScheduler(storeAdapter, siteFetcher, logger, *fetchInterval, 30*time.Minute)
 
 	var embedder cluster.Embedder
 	if embedURL := envOr("GLEAN_EMBED_BASE_URL", ""); embedURL != "" {
@@ -75,7 +76,8 @@ func main() {
 
 	engine := cluster.NewEngine(dbs.SQLDB(), embedder, logger)
 
-	srv := server.New(dbs, clientID, callbackURL, *addr, scheduler, engine, logger, []byte(sessionKey))
+	fetcher := feed.NewFetcher(siteFetcher)
+	srv := server.New(dbs, clientID, callbackURL, *addr, scheduler, fetcher, engine, logger, []byte(sessionKey))
 
 	cron := cluster.NewCron(engine, *clusterInterval, logger)
 

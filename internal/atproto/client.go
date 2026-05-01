@@ -100,6 +100,27 @@ func (c *Client) ListRecords(ctx context.Context, did, collection string, limit 
 	return records, result.Cursor, nil
 }
 
+func (c *Client) GetRecord(ctx context.Context, did, collection, rkey string) (json.RawMessage, error) {
+	nsid, err := syntax.ParseNSID("com.atproto.repo.getRecord")
+	if err != nil {
+		return nil, fmt.Errorf("parsing NSID: %w", err)
+	}
+
+	params := map[string]any{
+		"repo":       did,
+		"collection": collection,
+		"rkey":       rkey,
+	}
+
+	var result struct {
+		Value json.RawMessage `json:"value"`
+	}
+	if err := c.api.Get(ctx, nsid, params, &result); err != nil {
+		return nil, err
+	}
+	return result.Value, nil
+}
+
 func (c *Client) GetProfile(ctx context.Context, did string) (displayName, avatarURL string, err error) {
 	nsid, err := syntax.ParseNSID("app.bsky.actor.getProfile")
 	if err != nil {

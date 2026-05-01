@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -123,8 +124,16 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !atproto.IsATProtoFeedURL(feedURL) {
+		u, err := url.Parse(feedURL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			http.Error(w, "invalid feed URL", http.StatusBadRequest)
+			return
+		}
+	}
+
 	result, err := s.fetcher.Fetch(r.Context(), feedURL)
-	if err != nil {
+	if err != nil && !atproto.IsATProtoFeedURL(feedURL) {
 		result, feedURL, err = s.discoverFeed(r.Context(), feedURL)
 	}
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"pkg.rbrt.fr/glean/internal/db"
+	"pkg.rbrt.fr/glean/internal/feed"
 )
 
 const (
@@ -52,6 +53,8 @@ func (h *StreamDBHandler) Handle(ctx context.Context, event *Event) error {
 		return h.handleMarginNote(ctx, event)
 	case CollectionBskyFollow, CollectionTangledFollow:
 		return h.handleFollow(ctx, event)
+	case CollectionStandardDocument:
+		return h.handleStandardDocument(ctx, event)
 	}
 	return nil
 }
@@ -266,4 +269,56 @@ func (h *StreamDBHandler) resolveFeedURL(ctx context.Context, articleURL string)
 		return ""
 	}
 	return article.FeedURL
+}
+
+func (h *StreamDBHandler) handleStandardDocument(ctx context.Context, event *Event) error {
+	switch event.Type {
+	case actionCreate, actionUpdate:
+		var doc StandardDocumentRecord
+		if err := json.Unmarshal(event.Value, &doc); err != nil {
+			return err
+		}
+		if doc.Title == "" || doc.Site == "" {
+			return nil
+		}
+
+		publicationURI := doc.Site
+		if !IsATProtoFeedURL(publicationURI) {
+			return nil
+		}
+
+		parsed, ok := ParseRecordURI(publicationURI)
+		if !ok || parsed.Collection != CollectionStandardPublication {
+			return nil
+		}
+
+		published := parseRFC3339(doc.PublishedAt)
+		updated := parseRFC3339(doc.UpdatedAt)
+
+		_ = h.articles.UpsertFeed(ctx, &db.Feed{
+			FeedURL:  publicationURI,
+			FeedType: sql.NullString{String: "atproto", Valid: true},
+		})
+
+		var articleURL string
+		if f, err := h.articles.GetFeed(ctx, publicationURI); err == nil && f.SiteURL.Valid {
+			articleURL = f.SiteURL.String + doc.Path
+		}
+
+		articles := []feed.Article{{
+			FeedURL:   publicationURI,
+			GUID:      event.URI,
+			Title:     doc.Title,
+			URL:       articleURL,
+			Content:   doc.TextContent,
+			Summary:   doc.Description,
+			Published: published,
+			Updated:   updated,
+		}}
+		return h.articles.BatchUpsertArticles(ctx, articles)
+
+	case actionDelete:
+		return h.articles.DeleteArticleByGUID(ctx, event.URI)
+	}
+	return nil
 }

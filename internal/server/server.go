@@ -73,7 +73,7 @@ type Server struct {
 	sessionKey  []byte
 }
 
-func New(dbs *db.Store, clientID, callbackURL, addr string, scheduler *feed.Scheduler, engine *cluster.Engine, logger *slog.Logger, sessionKey []byte) *Server {
+func New(dbs *db.Store, clientID, callbackURL, addr string, scheduler *feed.Scheduler, fetcher *feed.Fetcher, engine *cluster.Engine, logger *slog.Logger, sessionKey []byte) *Server {
 	oauthStore := db.NewOAuthStore(dbs)
 
 	var config oauth.ClientConfig
@@ -91,11 +91,11 @@ func New(dbs *db.Store, clientID, callbackURL, addr string, scheduler *feed.Sche
 
 	s := &Server{
 		dbs:         dbs,
-		router:      chi.NewRouter(),
+		router:      chi.NewMux(),
 		logger:      logger,
 		oauth:       oauthClient,
 		oauthStore:  oauthStore,
-		fetcher:     feed.NewFetcher(),
+		fetcher:     fetcher,
 		scheduler:   scheduler,
 		engine:      engine,
 		scraper:     scraper.New(logger),

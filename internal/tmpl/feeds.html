@@ -16,7 +16,7 @@
 function gleanRefreshStart(){document.getElementById('refresh-indicator').style.display='inline';document.getElementById('refresh-btn').disabled=true}
 function gleanRefreshPoll(){setTimeout(function(){htmx.ajax('GET','/feeds/list',{target:'#feed-list',swap:'innerHTML'});document.getElementById('refresh-indicator').style.display='none';document.getElementById('refresh-btn').disabled=false},5000)}
 </script>
-<p class="text-sm text-spot-secondary mb-6">Manage your RSS and Atom subscriptions.</p>
+<p class="text-sm text-spot-secondary mb-6">Manage your RSS, Atom, and AT Protocol subscriptions.</p>
 
 {{template "dead-feeds.html" (dict "DeadFeeds" .DeadFeeds "CSRFToken" .CSRFToken)}}
 
@@ -67,7 +67,7 @@ function gleanRefreshPoll(){setTimeout(function(){htmx.ajax('GET','/feeds/list',
                   hx-on::after-request="if(event.detail.successful)this.reset();else document.getElementById('add-feed-error').textContent=event.detail.xhr.responseText"
                   class="space-y-3">
                 {{csrfInput .CSRFToken}}
-                <input type="url" name="feed_url" placeholder="https://example.com/feed.xml"
+                <input type="text" name="feed_url" placeholder="https://example.com/feed.xml or at://did:plc:.../site.standard.publication/..."
                        class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder"
                        required>
                 <input type="text" name="category" placeholder="Category (optional)"

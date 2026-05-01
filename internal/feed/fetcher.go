@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,11 +19,16 @@ const (
 	baseRetryDelay = 1 * time.Second
 )
 
-type Fetcher struct {
-	httpClient *http.Client
+type ATProtoFetcher interface {
+	FetchFeed(ctx context.Context, feedURL string) (*ParseResult, error)
 }
 
-func NewFetcher() *Fetcher {
+type Fetcher struct {
+	httpClient     *http.Client
+	atprotoFetcher ATProtoFetcher
+}
+
+func NewFetcher(atprotoFetcher ATProtoFetcher) *Fetcher {
 	return &Fetcher{
 		httpClient: &http.Client{
 			Timeout:   10 * time.Second,
@@ -34,10 +40,15 @@ func NewFetcher() *Fetcher {
 				return nil
 			},
 		},
+		atprotoFetcher: atprotoFetcher,
 	}
 }
 
 func (f *Fetcher) Fetch(ctx context.Context, feedURL string) (*ParseResult, error) {
+	if strings.HasPrefix(feedURL, "at://") {
+		return f.atprotoFetcher.FetchFeed(ctx, feedURL)
+	}
+
 	var lastResp *http.Response
 	var lastErr error
 
@@ -122,9 +133,9 @@ type Scheduler struct {
 	inFlight      sync.Map
 }
 
-func NewScheduler(store FeedStore, logger *slog.Logger, tickInterval, staleInterval time.Duration) *Scheduler {
+func NewScheduler(store FeedStore, atprotoFetcher ATProtoFetcher, logger *slog.Logger, tickInterval, staleInterval time.Duration) *Scheduler {
 	return &Scheduler{
-		fetcher:       NewFetcher(),
+		fetcher:       NewFetcher(atprotoFetcher),
 		store:         store,
 		logger:        logger,
 		tickInterval:  tickInterval,

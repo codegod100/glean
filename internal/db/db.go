@@ -262,7 +262,7 @@ var articlesSchema = []string{
 		title TEXT,
 		site_url TEXT,
 		description TEXT,
-		feed_type TEXT CHECK(feed_type IN ('rss', 'atom', 'json')),
+		feed_type TEXT CHECK(feed_type IN ('rss', 'atom', 'json', 'atproto')),
 		last_fetched_at DATETIME,
 		last_error TEXT,
 		subscriber_count INTEGER NOT NULL DEFAULT 0,

@@ -398,6 +398,11 @@ func (s *ArticleStore) GetArticleByURL(ctx context.Context, url string) (*Articl
 	return a, nil
 }
 
+func (s *ArticleStore) DeleteArticleByGUID(ctx context.Context, guid string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM articles.articles WHERE guid = ?`, guid)
+	return err
+}
+
 func (s *ArticleStore) CountNewArticles(ctx context.Context, userDID string, since time.Time) (int, error) {
 	var count int
 	err := s.db.QueryRowContext(ctx, `
