@@ -73,17 +73,19 @@ func (e *Engine) ComputeFeedSimilarity(ctx context.Context) error {
 
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO _feed_sim_staging (feed_a, feed_b, jaccard)
-			SELECT
-				s1.feed_url,
-				s2.feed_url,
-				SUM(EXP(-0.023 * CAST(julianday('now') - julianday(MIN(s1.added_at, s2.added_at)) AS REAL)))
-				/ (f1.subscriber_count + f2.subscriber_count - CAST(COUNT(*) AS REAL))
-			FROM articles.subscriptions s1
-			JOIN articles.subscriptions s2 ON s1.user_did = s2.user_did AND s1.feed_url < s2.feed_url
-			JOIN articles.feeds f1 ON f1.feed_url = s1.feed_url
-			JOIN articles.feeds f2 ON f2.feed_url = s2.feed_url
-			WHERE s1.added_at IS NOT NULL AND s2.added_at IS NOT NULL
-			GROUP BY s1.feed_url, s2.feed_url
+			SELECT feed_a, feed_b, jaccard FROM (
+				SELECT
+					s1.feed_url AS feed_a,
+					s2.feed_url AS feed_b,
+					SUM(EXP(-0.023 * CAST(julianday('now') - julianday(MIN(s1.added_at, s2.added_at)) AS REAL)))
+					/ NULLIF(f1.subscriber_count + f2.subscriber_count - CAST(COUNT(*) AS REAL), 0) AS jaccard
+				FROM articles.subscriptions s1
+				JOIN articles.subscriptions s2 ON s1.user_did = s2.user_did AND s1.feed_url < s2.feed_url
+				JOIN articles.feeds f1 ON f1.feed_url = s1.feed_url
+				JOIN articles.feeds f2 ON f2.feed_url = s2.feed_url
+				WHERE s1.added_at IS NOT NULL AND s2.added_at IS NOT NULL
+				GROUP BY s1.feed_url, s2.feed_url
+			) WHERE jaccard IS NOT NULL
 		`)
 		if err != nil {
 			return err
