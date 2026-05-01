@@ -80,6 +80,30 @@ func (f *Fetcher) Fetch(ctx context.Context, feedURL string) (*ParseResult, erro
 	return nil, lastErr
 }
 
+func (f *Fetcher) FetchOrDiscover(ctx context.Context, feedURL string) (*ParseResult, string, error) {
+	result, err := f.Fetch(ctx, feedURL)
+	if err != nil && !strings.HasPrefix(feedURL, "at://") {
+		return f.discover(ctx, feedURL)
+	}
+	return result, feedURL, err
+}
+
+func (f *Fetcher) discover(ctx context.Context, feedURL string) (*ParseResult, string, error) {
+	discovered, err := Discover(ctx, feedURL)
+	if err != nil || len(discovered.FeedURLs) == 0 {
+		return nil, feedURL, fmt.Errorf("no feeds found at %s", feedURL)
+	}
+
+	for _, candidate := range discovered.FeedURLs {
+		result, fetchErr := f.Fetch(ctx, candidate)
+		if fetchErr == nil && result != nil {
+			return result, candidate, nil
+		}
+	}
+
+	return nil, feedURL, fmt.Errorf("no feeds found at %s", feedURL)
+}
+
 func (f *Fetcher) executeRequest(ctx context.Context, feedURL string) (*ParseResult, *http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, feedURL, nil)
 	if err != nil {

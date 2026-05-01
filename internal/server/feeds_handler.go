@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"time"
@@ -132,10 +131,7 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	result, err := s.fetcher.Fetch(r.Context(), feedURL)
-	if err != nil && !atproto.IsATProtoFeedURL(feedURL) {
-		result, feedURL, err = s.discoverFeed(r.Context(), feedURL)
-	}
+	result, feedURL, err := s.fetcher.FetchOrDiscover(r.Context(), feedURL)
 	if err != nil {
 		s.logger.Error("failed to fetch feed", "error", err, "url", feedURL)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -471,22 +467,6 @@ func (s *Server) handleRetryFeed(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "dead-feeds.html", map[string]any{
 		"DeadFeeds": deadFeeds,
 	})
-}
-
-func (s *Server) discoverFeed(ctx context.Context, feedURL string) (*feed.ParseResult, string, error) {
-	discovered, err := feed.Discover(ctx, feedURL)
-	if err != nil || len(discovered.FeedURLs) == 0 {
-		return nil, feedURL, fmt.Errorf("no feeds found at %s", feedURL)
-	}
-
-	for _, candidate := range discovered.FeedURLs {
-		result, fetchErr := s.fetcher.Fetch(ctx, candidate)
-		if fetchErr == nil && result != nil {
-			return result, candidate, nil
-		}
-	}
-
-	return nil, feedURL, fmt.Errorf("no feeds found at %s", feedURL)
 }
 
 func nullString(s string) sql.NullString {
