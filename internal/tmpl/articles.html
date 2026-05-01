@@ -10,7 +10,7 @@
             <div class="flex items-center gap-3">
                 {{template "favicon" dict "src" .Feed.FaviconURL.String "size" "w-8 h-8"}}
                 <div>
-                    <h1 class="text-2xl font-bold text-spot-text">{{if .Feed.Title.Valid}}{{.Feed.Title.String}}{{else}}{{.Feed.FeedURL}}{{end}}</h1>
+                    <h1 class="text-2xl font-bold text-spot-text">{{if .Feed.SiteURL.Valid}}<a href="{{.Feed.SiteURL.String}}" target="_blank" rel="noopener noreferrer" class="hover:text-spot-green transition">{{end}}{{if .Feed.Title.Valid}}{{.Feed.Title.String}}{{else}}{{.Feed.FeedURL}}{{end}}{{if .Feed.SiteURL.Valid}}</a>{{end}}</h1>
                     {{if .Feed.SiteURL.Valid}}<a href="{{.Feed.SiteURL.String}}" target="_blank" rel="noopener noreferrer" class="text-xs text-spot-secondary hover:text-spot-green transition">{{.Feed.SiteURL.String}}</a>{{end}}
                 </div>
             </div>
