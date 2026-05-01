@@ -482,6 +482,33 @@ func (s *ArticleStore) BatchReconcileSubscriptions(ctx context.Context, userDID 
 	return tx.Commit()
 }
 
+func (s *ArticleStore) ListSubscriptionsWithoutURI(ctx context.Context, userDID string) ([]SubData, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT feed_url, COALESCE(title, ''), COALESCE(category, '') FROM articles.subscriptions WHERE user_did = ? AND (uri IS NULL OR uri = '')`,
+		userDID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var subs []SubData
+	for rows.Next() {
+		var sub SubData
+		if err := rows.Scan(&sub.FeedURL, &sub.Title, &sub.Category); err != nil {
+			return nil, err
+		}
+		subs = append(subs, sub)
+	}
+	return subs, rows.Err()
+}
+
+func (s *ArticleStore) UpdateSubscriptionURI(ctx context.Context, userDID, feedURL, uri, cid string) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE articles.subscriptions SET uri = ?, cid = ? WHERE user_did = ? AND feed_url = ?`,
+		nilIfEmpty(uri), nilIfEmpty(cid), userDID, feedURL)
+	return err
+}
+
 func (s *ArticleStore) DeleteOrphanedSubscriptions(ctx context.Context, userDID string, activeFeedURLs map[string]bool) error {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT feed_url FROM articles.subscriptions WHERE user_did = ? AND uri IS NOT NULL AND uri != ''`,

@@ -125,7 +125,10 @@ func (s *Sync) syncSubscriptions(ctx context.Context, userDID string) error {
 	if err := s.articles.BatchReconcileSubscriptions(ctx, userDID, subs); err != nil {
 		return err
 	}
-	return s.articles.DeleteOrphanedSubscriptions(ctx, userDID, activeFeedURLs)
+	if err := s.articles.DeleteOrphanedSubscriptions(ctx, userDID, activeFeedURLs); err != nil {
+		return err
+	}
+	return s.backfillMissingPDSRecords(ctx, userDID)
 }
 
 func (s *Sync) syncLikes(ctx context.Context, userDID string) error {
@@ -274,4 +277,34 @@ func (s *Sync) syncFollows(ctx context.Context, userDID string) error {
 	}
 
 	return s.users.SyncFollows(ctx, userDID, activeFollows)
+}
+
+func (s *Sync) backfillMissingPDSRecords(ctx context.Context, userDID string) error {
+	subs, err := s.articles.ListSubscriptionsWithoutURI(ctx, userDID)
+	if err != nil {
+		return fmt.Errorf("list subscriptions without URI: %w", err)
+	}
+	if len(subs) == 0 {
+		return nil
+	}
+
+	for _, sub := range subs {
+		record := SubscriptionRecord{
+			CreatedAt: time.Now().Format(time.RFC3339),
+			FeedURL:   sub.FeedURL,
+			Title:     sub.Title,
+			Category:  sub.Category,
+		}
+		uri, cid, err := s.client.CreateRecord(ctx, userDID, CollectionSubscription, record)
+		if err != nil {
+			s.logger.Error("failed to backfill PDS record", "error", err, "url", sub.FeedURL)
+			continue
+		}
+		if err := s.articles.UpdateSubscriptionURI(ctx, userDID, sub.FeedURL, uri, cid); err != nil {
+			s.logger.Error("failed to backfill subscription URI", "error", err, "url", sub.FeedURL)
+			continue
+		}
+		s.logger.Info("backfilled PDS record", "url", sub.FeedURL, "uri", uri)
+	}
+	return nil
 }

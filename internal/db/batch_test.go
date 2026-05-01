@@ -378,6 +378,92 @@ func TestBatchReconcileSubscriptions_DeletesAllWhenEmpty(t *testing.T) {
 	assert.Equal(t, len(list), 0)
 }
 
+func TestListSubscriptionsWithoutURI_ReturnsOnlyLocal(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+	userDID := seedSubscriptionData(t, ctx, dbs)
+
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://a.com/feed.xml"})
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://b.com/feed.xml"})
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://c.com/feed.xml"})
+
+	assert.NilError(t, dbs.Articles.CreateSubscription(ctx, userDID, "https://a.com/feed.xml", "A", "cat", "", ""))
+	assert.NilError(t, dbs.Articles.CreateSubscription(ctx, userDID, "https://b.com/feed.xml", "B", "", "at://uri-b", "cid"))
+	assert.NilError(t, dbs.Articles.CreateSubscription(ctx, userDID, "https://c.com/feed.xml", "C", "other", "", ""))
+
+	subs, err := dbs.Articles.ListSubscriptionsWithoutURI(ctx, userDID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(subs), 2)
+
+	urls := map[string]bool{}
+	for _, s := range subs {
+		urls[s.FeedURL] = true
+	}
+	assert.Assert(t, urls["https://a.com/feed.xml"])
+	assert.Assert(t, urls["https://c.com/feed.xml"])
+
+	var aSub, cSub SubData
+	for _, s := range subs {
+		if s.FeedURL == "https://a.com/feed.xml" {
+			aSub = s
+		}
+		if s.FeedURL == "https://c.com/feed.xml" {
+			cSub = s
+		}
+	}
+	assert.Equal(t, aSub.Title, "A")
+	assert.Equal(t, aSub.Category, "cat")
+	assert.Equal(t, cSub.Title, "C")
+	assert.Equal(t, cSub.Category, "other")
+}
+
+func TestListSubscriptionsWithoutURI_EmptyWhenAllHaveURI(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+	userDID := seedSubscriptionData(t, ctx, dbs)
+
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://a.com/feed.xml"})
+	assert.NilError(t, dbs.Articles.CreateSubscription(ctx, userDID, "https://a.com/feed.xml", "A", "", "at://uri", "cid"))
+
+	subs, err := dbs.Articles.ListSubscriptionsWithoutURI(ctx, userDID)
+	assert.NilError(t, err)
+	assert.Equal(t, len(subs), 0)
+}
+
+func TestUpdateSubscriptionURI_UpdatesSubscription(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+	userDID := seedSubscriptionData(t, ctx, dbs)
+
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://a.com/feed.xml"})
+	assert.NilError(t, dbs.Articles.CreateSubscription(ctx, userDID, "https://a.com/feed.xml", "A", "cat", "", ""))
+
+	assert.NilError(t, dbs.Articles.UpdateSubscriptionURI(ctx, userDID, "https://a.com/feed.xml", "at://new-uri", "new-cid"))
+
+	s, err := dbs.Articles.GetSubscription(ctx, userDID, "https://a.com/feed.xml")
+	assert.NilError(t, err)
+	assert.Equal(t, s.URI.String, "at://new-uri")
+	assert.Equal(t, s.CID.String, "new-cid")
+	assert.Equal(t, s.FeedTitle, "A")
+	assert.Equal(t, s.Category.String, "cat")
+}
+
+func TestUpdateSubscriptionURI_NoOverwriteIfExists(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+	userDID := seedSubscriptionData(t, ctx, dbs)
+
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://a.com/feed.xml"})
+	assert.NilError(t, dbs.Articles.CreateSubscription(ctx, userDID, "https://a.com/feed.xml", "A", "", "at://original", "cid1"))
+
+	assert.NilError(t, dbs.Articles.UpdateSubscriptionURI(ctx, userDID, "https://a.com/feed.xml", "at://new-uri", "cid2"))
+
+	s, err := dbs.Articles.GetSubscription(ctx, userDID, "https://a.com/feed.xml")
+	assert.NilError(t, err)
+	assert.Equal(t, s.URI.String, "at://new-uri")
+	assert.Equal(t, s.CID.String, "cid2")
+}
+
 func TestDeleteOrphanedLikes_RemovesOrphaned(t *testing.T) {
 	ctx := context.Background()
 	dbs := setupTestDB(t)
