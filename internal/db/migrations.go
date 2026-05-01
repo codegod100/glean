@@ -105,7 +105,8 @@ func migrateFeedTypeATProto(db *DB) error {
 			error_count INTEGER NOT NULL DEFAULT 0,
 			favicon_url TEXT
 		)`,
-		`INSERT INTO articles.feeds_new SELECT * FROM articles.feeds`,
+		`INSERT INTO articles.feeds_new (feed_url, title, site_url, description, feed_type, last_fetched_at, last_error, subscriber_count, consecutive_empty_fetches, error_count, favicon_url)
+		 SELECT feed_url, title, site_url, description, feed_type, last_fetched_at, last_error, subscriber_count, consecutive_empty_fetches, error_count, favicon_url FROM articles.feeds`,
 		`DROP TABLE articles.feeds`,
 		`ALTER TABLE articles.feeds_new RENAME TO feeds`,
 	} {
@@ -119,9 +120,10 @@ func migrateFeedTypeATProto(db *DB) error {
 
 func migrateAddPersonTargetType(db *DB) error {
 	for _, m := range []struct {
-		table  string
-		create string
-		index  string
+		table   string
+		create  string
+		columns string
+		index   string
 	}{
 		{
 			table: "dismissed_recommendations",
@@ -133,7 +135,8 @@ func migrateAddPersonTargetType(db *DB) error {
 				dismissed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				PRIMARY KEY (user_did, target_type, target_id)
 			)`,
-			index: "idx_dismissed_user_type",
+			columns: "user_did, target_type, target_id, reason, dismissed_at",
+			index:   "idx_dismissed_user_type",
 		},
 		{
 			table: "recommendation_impressions",
@@ -147,7 +150,8 @@ func migrateAddPersonTargetType(db *DB) error {
 				acted          BOOLEAN NOT NULL DEFAULT 0,
 				PRIMARY KEY (user_did, target_type, target_id)
 			)`,
-			index: "idx_impressions_user_unacted",
+			columns: "user_did, target_type, target_id, first_shown_at, last_shown_at, shown_count, acted",
+			index:   "idx_impressions_user_unacted",
 		},
 	} {
 		var schema string
@@ -160,7 +164,7 @@ func migrateAddPersonTargetType(db *DB) error {
 
 		for _, stmt := range []string{
 			m.create,
-			fmt.Sprintf("INSERT INTO %s_new SELECT * FROM %s", m.table, m.table),
+			fmt.Sprintf("INSERT INTO %s_new (%s) SELECT %s FROM %s", m.table, m.columns, m.columns, m.table),
 			fmt.Sprintf("DROP TABLE %s", m.table),
 			fmt.Sprintf("ALTER TABLE %s_new RENAME TO %s", m.table, m.table),
 			fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s(user_did, target_type)", m.index, m.table),
