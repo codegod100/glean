@@ -103,6 +103,11 @@ func Open(basePath string) (*Store, error) {
 		return nil, err
 	}
 
+	if err := runMigrations(d); err != nil {
+		d.Close()
+		return nil, err
+	}
+
 	if err := initArticlesSchema(d); err != nil {
 		d.Close()
 		return nil, err

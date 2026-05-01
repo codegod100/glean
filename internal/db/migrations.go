@@ -1,0 +1,179 @@
+package db
+
+import (
+	"database/sql"
+	"fmt"
+	"strings"
+)
+
+func init() {
+	if len(migrations) != SchemaVersion {
+		panic(fmt.Sprintf("SchemaVersion (%d) does not match number of migrations (%d)", SchemaVersion, len(migrations)))
+	}
+}
+
+// SchemaVersion must be incremented each time a migration is added to the migrations slice (used so that fresh dbs skip running migrations).
+const SchemaVersion = 2
+
+type migration struct {
+	id   int
+	name string
+	run  func(db *DB) error
+}
+
+var migrations = []migration{
+	{
+		id:   1,
+		name: "add_person_target_type",
+		run:  migrateAddPersonTargetType,
+	},
+	{
+		id:   2,
+		name: "feed_type_atproto",
+		run:  migrateFeedTypeATProto,
+	},
+}
+
+func runMigrations(db *DB) error {
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+		id   INTEGER PRIMARY KEY,
+		name TEXT NOT NULL,
+		run_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		return fmt.Errorf("create schema_migrations table: %w", err)
+	}
+
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
+		return fmt.Errorf("count migrations: %w", err)
+	}
+	if count == 0 {
+		for _, m := range migrations {
+			if _, err := db.Exec("INSERT INTO schema_migrations (id, name) VALUES (?, ?)", m.id, m.name); err != nil {
+				return fmt.Errorf("record migration %d: %w", m.id, err)
+			}
+		}
+		return nil
+	}
+
+	for _, m := range migrations {
+		var id int
+		err := db.QueryRow("SELECT id FROM schema_migrations WHERE id = ?", m.id).Scan(&id)
+		if err == nil {
+			continue
+		}
+		if err != sql.ErrNoRows {
+			return fmt.Errorf("check migration %d: %w", m.id, err)
+		}
+
+		if err := m.run(db); err != nil {
+			return fmt.Errorf("migration %d (%s): %w", m.id, m.name, err)
+		}
+
+		if _, err := db.Exec("INSERT INTO schema_migrations (id, name) VALUES (?, ?)", m.id, m.name); err != nil {
+			return fmt.Errorf("record migration %d: %w", m.id, err)
+		}
+	}
+
+	return nil
+}
+
+func migrateFeedTypeATProto(db *DB) error {
+	var checkClause string
+	err := db.QueryRow("SELECT sql FROM articles.sqlite_master WHERE type='table' AND name='feeds'").Scan(&checkClause)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		return fmt.Errorf("read feeds schema: %w", err)
+	}
+	if strings.Contains(checkClause, "'atproto'") {
+		return nil
+	}
+
+	for _, stmt := range []string{
+		`CREATE TABLE articles.feeds_new (
+			feed_url TEXT PRIMARY KEY,
+			title TEXT,
+			site_url TEXT,
+			description TEXT,
+			feed_type TEXT CHECK(feed_type IN ('rss', 'atom', 'json', 'atproto')),
+			last_fetched_at DATETIME,
+			last_error TEXT,
+			subscriber_count INTEGER NOT NULL DEFAULT 0,
+			consecutive_empty_fetches INTEGER NOT NULL DEFAULT 0,
+			error_count INTEGER NOT NULL DEFAULT 0,
+			favicon_url TEXT
+		)`,
+		`INSERT INTO articles.feeds_new SELECT * FROM articles.feeds`,
+		`DROP TABLE articles.feeds`,
+		`ALTER TABLE articles.feeds_new RENAME TO feeds`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("migrate feed_type atproto: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func migrateAddPersonTargetType(db *DB) error {
+	for _, m := range []struct {
+		table  string
+		create string
+		index  string
+	}{
+		{
+			table: "dismissed_recommendations",
+			create: `CREATE TABLE dismissed_recommendations_new (
+				user_did     TEXT NOT NULL,
+				target_type  TEXT NOT NULL CHECK(target_type IN ('feed', 'article', 'person')),
+				target_id    TEXT NOT NULL,
+				reason       TEXT,
+				dismissed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY (user_did, target_type, target_id)
+			)`,
+			index: "idx_dismissed_user_type",
+		},
+		{
+			table: "recommendation_impressions",
+			create: `CREATE TABLE recommendation_impressions_new (
+				user_did       TEXT NOT NULL,
+				target_type    TEXT NOT NULL CHECK(target_type IN ('feed', 'article', 'person')),
+				target_id      TEXT NOT NULL,
+				first_shown_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				last_shown_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				shown_count    INTEGER NOT NULL DEFAULT 1,
+				acted          BOOLEAN NOT NULL DEFAULT 0,
+				PRIMARY KEY (user_did, target_type, target_id)
+			)`,
+			index: "idx_impressions_user_unacted",
+		},
+	} {
+		var schema string
+		_ = db.QueryRow("SELECT sql FROM sqlite_master WHERE type='table' AND name=?", m.table).Scan(&schema)
+		if strings.Contains(schema, "'person'") {
+			continue
+		}
+
+		db.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s_new", m.table))
+
+		for _, stmt := range []string{
+			m.create,
+			fmt.Sprintf("INSERT INTO %s_new SELECT * FROM %s", m.table, m.table),
+			fmt.Sprintf("DROP TABLE %s", m.table),
+			fmt.Sprintf("ALTER TABLE %s_new RENAME TO %s", m.table, m.table),
+			fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s(user_did, target_type)", m.index, m.table),
+		} {
+			if _, err := db.Exec(stmt); err != nil {
+				return fmt.Errorf("migrating %s: %w", m.table, err)
+			}
+		}
+	}
+
+	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_impressions_last_shown ON recommendation_impressions(last_shown_at)"); err != nil {
+		return err
+	}
+
+	return nil
+}
