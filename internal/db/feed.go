@@ -381,10 +381,10 @@ func (s *ArticleStore) BatchUpsertFeeds(ctx context.Context, feeds []*Feed) erro
 		INSERT INTO articles.feeds (feed_url, title, site_url, description, feed_type)
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(feed_url) DO UPDATE SET
-			title = excluded.title,
-			site_url = excluded.site_url,
-			description = excluded.description,
-			feed_type = excluded.feed_type
+			title = COALESCE(NULLIF(excluded.title, ''), articles.feeds.title),
+			site_url = COALESCE(NULLIF(excluded.site_url, ''), articles.feeds.site_url),
+			description = COALESCE(NULLIF(excluded.description, ''), articles.feeds.description),
+			feed_type = COALESCE(NULLIF(excluded.feed_type, ''), articles.feeds.feed_type)
 	`)
 	if err != nil {
 		return err
