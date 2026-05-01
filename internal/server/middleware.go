@@ -1,23 +1,41 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/bluesky-social/indigo/atproto/syntax"
 )
 
 func (s *Server) sessionMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := s.getUserFromSession(r)
 		if user != nil {
+			data := s.getSessionData(r)
+			if data != nil && data.SessionID != "" && !s.isOAuthSessionValid(r.Context(), data) {
+				s.clearUserSession(w)
+				next.ServeHTTP(w, r)
+				return
+			}
 			ctx := contextWithUser(r.Context(), user)
 			r = r.WithContext(ctx)
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) isOAuthSessionValid(ctx context.Context, data *sessionData) bool {
+	did, err := syntax.ParseDID(data.DID)
+	if err != nil {
+		return false
+	}
+	_, err = s.oauthStore.GetSession(ctx, did, data.SessionID)
+	return err == nil
 }
 
 func (s *Server) requireAuth(next http.Handler) http.Handler {
