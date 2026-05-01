@@ -400,6 +400,8 @@ func (s *Server) syncUserInBackground(userDID string, client *atproto.Client) {
 // appear after Jetstream downtime or rare missed events. This catches up by
 // reconciling each user's PDS records against the local index.
 func (s *Server) PeriodicSync(ctx context.Context, interval time.Duration) {
+	s.runSyncAll(ctx)
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
