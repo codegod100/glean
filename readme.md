@@ -57,7 +57,7 @@ Then open `http://localhost:8080`.
 | `GLEAN_ADDR`                 | `:8080`                    | Listen address                                             |
 | `GLEAN_DB`                   | `glean.db`                 | SQLite base path (`_users`, `_articles`, `_recs` suffixes) |
 | `GLEAN_JETSTREAM`            | `wss://jetstream.glean.at` | Jetstream WebSocket URL                                    |
-| `GLEAN_SYNC_INTERVAL`        | `24h`                      | PDS sync interval (Go duration: `24h`, `12h`, etc.)        |
+| `GLEAN_SYNC_INTERVAL`        | `8h`                       | PDS sync interval (Go duration: `24h`, `12h`, etc.)        |
 | `GLEAN_CLUSTER_INTERVAL`     | `1h`                       | Cluster recomputation interval (Go duration)               |
 | `GLEAN_FETCH_INTERVAL`       | `15m`                      | Feed fetch scheduler tick interval (Go duration)           |
 | `GLEAN_COLLECTION_DIR_URL`   | _(empty)_                  | Collection directory URL for startup backfill              |
