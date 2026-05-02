@@ -17,6 +17,17 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "login.html", map[string]any{})
 }
 
+func (s *Server) handleAuthRegister(w http.ResponseWriter, r *http.Request) {
+	// hardcoded to Eurosky PDS for sign-up because it is a good public one.
+	authURL, err := s.oauth.StartAuthFlow(r.Context(), "https://eurosky.social")
+	if err != nil {
+		s.logger.Error("failed to start register OAuth flow", "error", err)
+		s.renderError(w, r, http.StatusInternalServerError, "Registration failed", "Could not connect to Eurosky. Please try again.")
+		return
+	}
+	http.Redirect(w, r, authURL, http.StatusSeeOther)
+}
+
 func (s *Server) handleAuthResolve(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimPrefix(r.URL.Query().Get("q"), "@")
 	if q == "" {

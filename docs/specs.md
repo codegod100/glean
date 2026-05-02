@@ -916,6 +916,12 @@ The server renders HTML fragments that htmx swaps into the page. No JSON API nee
 | `/library/{id}/delete`         | POST   | Delete an annotation                                                |
 | `/stats`                       | GET    | Application metrics and performance data (Prometheus, public)       |
 | `/profile/{did}`               | GET    | Public profile: their feeds, likes, annotations                     |
+| `/auth/login`                  | GET    | Login page                                                          |
+| `/auth/register`               | GET    | Register with Eurosky (OAuth flow with hardcoded PDS)               |
+| `/auth/resolve`                | GET    | Resolve handle to DID                                               |
+| `/auth/start`                  | POST   | Start OAuth authorization flow                                      |
+| `/auth/callback`               | GET    | OAuth callback                                                      |
+| `/terms`                       | GET    | Terms of service                                                    |
 
 ### 8.2 htmx Patterns
 
@@ -982,7 +988,7 @@ glean/
 │   │   └── cron.go                # Background recomputation scheduler
 │   ├── server/
 │   │   ├── server.go              # HTTP server, router setup
-│   │   ├── auth_handler.go        # OAuth login/callback
+│   │   ├── auth_handler.go        # OAuth login/callback/register
 │   │   ├── feeds_handler.go       # Feed management handlers
 │   │   ├── articles_handler.go    # Article reading handlers
 │   │   ├── annotations_handler.go # Annotation handlers
@@ -991,6 +997,7 @@ glean/
 │   │   ├── stats_handler.go       # Stats handler (Prometheus metrics display)
 │   │   ├── index_handler.go       # Landing page handler
 │   │   ├── profile_handler.go     # Public profile handler
+│   │   ├── terms_handler.go       # Terms of service handler
 │   │   ├── pagination.go          # Pagination helpers
 │   │   ├── middleware.go          # Auth, logging, CSRF middleware
 │   │   └── session.go             # Session management
@@ -1010,6 +1017,7 @@ glean/
 │       ├── profile.html           # User profile
 │       ├── error.html             # Error page
 │       ├── 404.html               # Not found page
+│       ├── terms.html             # Terms of service
 │       └── partials/              # Reusable template fragments
 ├── static/
 │   ├── input.css                  # Tailwind input
