@@ -1,12 +1,12 @@
 {{define "404.html"}}
-<div class="max-w-md mx-auto mt-20">
-    <div class="bg-spot-surface rounded-xl shadow-spot-heavy p-8">
-        <div class="flex justify-center mb-6">
-            <span class="w-14 h-14">{{template "logo-icon"}}</span>
+<div class="flex items-center justify-center min-h-screen px-4 py-12">
+    <div class="max-w-sm w-full">
+        <div class="flex justify-center mb-8">
+            <a href="/" class="w-16 h-16 block">{{template "logo-icon"}}</a>
         </div>
-        <h1 class="text-2xl font-bold text-spot-text mb-2 text-center">Page not found</h1>
-        <p class="text-spot-secondary text-sm mb-6 text-center">This page doesn't exist, but your feeds do.</p>
-        <a href="/dashboard" class="w-full flex items-center justify-center gap-2 bg-spot-green text-white rounded-pill px-4 py-3 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">
+        <h1 class="text-2xl font-bold text-spot-text mb-1 text-center">Page not found</h1>
+        <p class="text-spot-secondary text-sm mb-8 text-center">This page doesn't exist, but your feeds do.</p>
+        <a href="/dashboard" class="w-full flex items-center justify-center gap-2 bg-spot-green text-white rounded-pill px-4 py-3.5 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">
             Back to Dashboard
         </a>
     </div>

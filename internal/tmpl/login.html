@@ -1,44 +1,47 @@
 {{define "login.html"}}
-<div class="max-w-md mx-auto mt-20">
-    <div class="bg-spot-surface rounded-xl shadow-spot-heavy p-8">
-        <div class="flex justify-center mb-6">
-            <a href="/" class="w-14 h-14 block">{{template "logo-icon"}}</a>
+<style>
+.login-divider { display: flex; align-items: center; gap: 0.75rem; }
+.login-divider::before, .login-divider::after { content: ''; flex: 1; height: 1px; background: var(--spot-divider); }
+</style>
+
+<div class="flex items-center justify-center min-h-screen px-4 py-12">
+    <div class="max-w-sm w-full">
+        <div class="flex justify-center mb-8">
+            <a href="/" class="w-16 h-16 block">{{template "logo-icon"}}</a>
         </div>
-        <h1 class="text-2xl font-bold text-spot-text mb-2 text-center">Sign in to Glean</h1>
-        <p class="text-spot-secondary text-sm mb-6 text-center">Enter your handle.</p>
+
+        <h1 class="text-2xl font-bold text-spot-text mb-1 text-center">Welcome to Glean</h1>
+        <p class="text-spot-secondary text-sm mb-8 text-center">The social RSS reader built on AT Protocol.</p>
 
         <form action="/auth/start" method="POST" id="login-form">
             {{csrfInput .CSRFToken}}
-            <div class="relative mb-5">
+            <div class="relative mb-4">
+                <label for="handle-input" class="block text-xs text-spot-secondary mb-1.5">Login with your Atmosphere account</label>
                 <input type="text" name="handle" placeholder="you.bsky.social" id="handle-input"
-                       class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder"
+                       class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder"
                        required autocomplete="off">
                 <div id="handle-suggestions" class="absolute left-0 right-0 top-full mt-1 bg-spot-surface border border-spot-divider rounded-xl shadow-spot-heavy z-50 overflow-hidden hidden"></div>
             </div>
+
+            <button type="submit"
+                    class="w-full flex items-center justify-center bg-spot-green text-white rounded-pill px-4 py-3.5 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">
+                Login
+            </button>
         </form>
 
-        <div class="space-y-3">
-            <button type="submit" form="login-form"
-                    class="w-full flex items-center justify-center gap-3 bg-[#0284FF] text-white rounded-pill px-4 py-3 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">
-                <span class="w-5 h-5">{{template "icon-bluesky"}}</span>
-                Sign in with Bluesky
-            </button>
-
-            <button type="submit" form="login-form"
-                    class="w-full flex items-center justify-center gap-3 border border-spot-outline text-spot-text rounded-pill px-4 py-3 text-sm font-bold uppercase tracking-button hover:bg-spot-hover-50 transition">
-                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">{{template "icon-globe"}}</svg>
-                Sign in with Atmosphere
-            </button>
+        <div class="login-divider text-xs text-spot-muted uppercase tracking-wide mt-8 mb-6">
+            <span>New here?</span>
         </div>
 
-        <div class="mt-6 pt-6 border-t border-spot-divider text-center">
-            <p class="text-xs text-spot-secondary mb-3">No account yet?</p>
-            <a href="https://portal.eurosky.tech/create-account" target="_blank" rel="noopener noreferrer"
-               class="inline-flex items-center justify-center gap-2 w-full border border-spot-outline text-spot-text rounded-pill px-4 py-2.5 text-sm font-bold uppercase tracking-button hover:bg-spot-hover-50 transition">
-                <span class="text-base">&#127466;&#127482;</span>
-                Create an account on Eurosky
-            </a>
-        </div>
+        <a href="https://portal.eurosky.tech/create-account" target="_blank" rel="noopener noreferrer"
+           class="w-full flex items-center justify-center gap-3 border border-spot-outline rounded-pill px-4 py-3.5 text-sm font-bold uppercase tracking-button hover:bg-spot-hover-50 transition">
+            <svg class="h-5 w-auto" fill="currentColor" viewBox="77.86 113.9 129.15 129.15" xmlns="http://www.w3.org/2000/svg"><path d="M148.846 144.562C148.846 159.75 161.158 172.062 176.346 172.062H207.012V185.865H176.346C161.158 185.865 148.846 198.177 148.846 213.365V243.045H136.029V213.365C136.029 198.177 123.717 185.865 108.529 185.865H77.8633V172.062H108.529C123.717 172.062 136.029 159.75 136.029 144.562V113.896H148.846V144.562Z"/></svg>
+            Register with Eurosky
+        </a>
+
+        <p class="text-[11px] text-spot-muted text-center leading-relaxed mt-8">
+            By continuing, you agree to the <a href="/terms" class="underline hover:text-spot-secondary transition">Terms of Service</a>.
+        </p>
     </div>
 </div>
 <script>
