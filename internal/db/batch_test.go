@@ -107,6 +107,7 @@ func TestBatchReconcileSubscriptions_CreatesNew(t *testing.T) {
 	}
 	err := dbs.Articles.BatchReconcileSubscriptions(ctx, userDID, subs)
 	assert.NilError(t, err)
+	assert.NilError(t, dbs.Articles.RecountSubscriberCounts(ctx))
 
 	subs2, err := dbs.Articles.ListSubscriptions(ctx, userDID, "", 10, 0)
 	assert.NilError(t, err)
@@ -132,6 +133,7 @@ func TestBatchReconcileSubscriptions_BackfillsURI(t *testing.T) {
 	}
 	err = dbs.Articles.BatchReconcileSubscriptions(ctx, userDID, subs)
 	assert.NilError(t, err)
+	assert.NilError(t, dbs.Articles.RecountSubscriberCounts(ctx))
 
 	s, err := dbs.Articles.GetSubscription(ctx, userDID, "https://a.com/feed.xml")
 	assert.NilError(t, err)
@@ -176,6 +178,7 @@ func TestBatchReconcileSubscriptions_UpdatesCategoryAndTitle(t *testing.T) {
 	}
 	err = dbs.Articles.BatchReconcileSubscriptions(ctx, userDID, subs)
 	assert.NilError(t, err)
+	assert.NilError(t, dbs.Articles.RecountSubscriberCounts(ctx))
 
 	s, err := dbs.Articles.GetSubscription(ctx, userDID, "https://a.com/feed.xml")
 	assert.NilError(t, err)
@@ -315,6 +318,7 @@ func TestBatchReconcileSubscriptions_DeletesOrphaned(t *testing.T) {
 		"https://c.com/feed.xml": true,
 	})
 	assert.NilError(t, err)
+	assert.NilError(t, dbs.Articles.RecountSubscriberCounts(ctx))
 
 	list, err := dbs.Articles.ListSubscriptions(ctx, userDID, "", 10, 0)
 	assert.NilError(t, err)
@@ -486,6 +490,48 @@ func TestDeleteOrphanedLikes_RemovesOrphaned(t *testing.T) {
 	exists, err = dbs.Articles.HasLiked(ctx, "did:test:u1", "https://a.com/feed", "https://a.com/2")
 	assert.NilError(t, err)
 	assert.Equal(t, exists, false)
+}
+
+func TestDeleteSubscription_NoDecrementWhenNotFound(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+	userDID := seedSubscriptionData(t, ctx, dbs)
+
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://a.com/feed.xml"})
+	assert.NilError(t, dbs.Articles.CreateSubscription(ctx, userDID, "https://a.com/feed.xml", "A", "", "at://uri", "cid"))
+
+	assert.NilError(t, dbs.Articles.DeleteSubscription(ctx, userDID, "https://a.com/feed.xml"))
+
+	assert.NilError(t, dbs.Articles.DeleteSubscription(ctx, userDID, "https://a.com/feed.xml"))
+}
+
+func TestRecountSubscriberCounts(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+	user1 := seedSubscriptionData(t, ctx, dbs)
+
+	_, err := dbs.SQLDB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, "did:test:u2")
+	assert.NilError(t, err)
+
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://a.com/feed.xml"})
+	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://b.com/feed.xml"})
+
+	assert.NilError(t, dbs.Articles.CreateSubscription(ctx, user1, "https://a.com/feed.xml", "A", "", "", ""))
+	assert.NilError(t, dbs.Articles.CreateSubscription(ctx, user1, "https://b.com/feed.xml", "B", "", "", ""))
+	assert.NilError(t, dbs.Articles.CreateSubscription(ctx, "did:test:u2", "https://a.com/feed.xml", "A", "", "", ""))
+
+	_, err = dbs.SQLDB().ExecContext(ctx, `UPDATE articles.feeds SET subscriber_count = 99 WHERE feed_url = 'https://a.com/feed.xml'`)
+	assert.NilError(t, err)
+
+	assert.NilError(t, dbs.Articles.RecountSubscriberCounts(ctx))
+
+	f, err := dbs.Articles.GetFeed(ctx, "https://a.com/feed.xml")
+	assert.NilError(t, err)
+	assert.Equal(t, f.SubscriberCount, 2)
+
+	f, err = dbs.Articles.GetFeed(ctx, "https://b.com/feed.xml")
+	assert.NilError(t, err)
+	assert.Equal(t, f.SubscriberCount, 1)
 }
 
 func TestDeleteOrphanedAnnotations_RemovesOrphaned(t *testing.T) {

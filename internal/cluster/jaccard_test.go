@@ -455,12 +455,7 @@ func TestColdStartRecommendations(t *testing.T) {
 	engine := newTestEngine(dbs)
 	assert.NilError(t, engine.ComputeFollowDistances(ctx))
 
-	_, err := dbs.SQLDB().ExecContext(ctx, `UPDATE articles.feeds SET subscriber_count = 2 WHERE feed_url = 'https://a.com/feed'`)
-	assert.NilError(t, err)
-	_, err = dbs.SQLDB().ExecContext(ctx, `UPDATE articles.feeds SET subscriber_count = 2 WHERE feed_url = 'https://b.com/feed'`)
-	assert.NilError(t, err)
-
-	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, "did:test:newuser")
+	_, err := dbs.SQLDB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, "did:test:newuser")
 	assert.NilError(t, err)
 
 	recs, err := engine.ColdStartRecommendations(ctx, "did:test:newuser", 10)

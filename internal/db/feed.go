@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strings"
 	"time"
 
 	"pkg.rbrt.fr/glean/internal/feed"
@@ -112,34 +111,14 @@ func (s *ArticleStore) MarkFeedFetchError(ctx context.Context, feedURL, lastErro
 	return err
 }
 
-func (s *ArticleStore) decrementSubscriberCount(ctx context.Context, feedURL string) error {
-	_, err := s.db.ExecContext(ctx, `
-		UPDATE articles.feeds SET subscriber_count = MAX(subscriber_count - 1, 0) WHERE feed_url = ?
-	`, feedURL)
-	return err
-}
-
-func (s *ArticleStore) incrementSubscriberCount(ctx context.Context, feedURL string) error {
-	_, err := s.db.ExecContext(ctx, `
-		UPDATE articles.feeds SET subscriber_count = subscriber_count + 1 WHERE feed_url = ?
-	`, feedURL)
-	return err
-}
-
 func (s *ArticleStore) CreateSubscription(ctx context.Context, userDID, feedURL, title, category, uri, cid string) error {
 	existing, err := s.GetSubscription(ctx, userDID, feedURL)
 	if err != nil || existing == nil {
-		result, err := s.db.ExecContext(ctx, `
+		_, err := s.db.ExecContext(ctx, `
 			INSERT OR IGNORE INTO articles.subscriptions (user_did, feed_url, title, category, uri, cid)
 			VALUES (?, ?, ?, ?, ?, ?)
 		`, userDID, feedURL, nilIfEmpty(title), nilIfEmpty(category), nilIfEmpty(uri), nilIfEmpty(cid))
-		if err != nil {
-			return err
-		}
-		if n, _ := result.RowsAffected(); n > 0 {
-			return s.incrementSubscriberCount(ctx, feedURL)
-		}
-		return nil
+		return err
 	}
 
 	unchanged := existing.FeedTitle == title && existing.Category.String == category && existing.CID.String == cid
@@ -170,56 +149,12 @@ func (s *ArticleStore) DeleteSubscription(ctx context.Context, userDID, feedURL 
 	_, err := s.db.ExecContext(ctx, `
 		DELETE FROM articles.subscriptions WHERE user_did = ? AND feed_url = ?
 	`, userDID, feedURL)
-	if err != nil {
-		return err
-	}
-	return s.decrementSubscriberCount(ctx, feedURL)
+	return err
 }
 
 func (s *ArticleStore) DeleteAllSubscriptions(ctx context.Context, userDID string) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	rows, err := tx.QueryContext(ctx, `SELECT feed_url FROM articles.subscriptions WHERE user_did = ?`, userDID)
-	if err != nil {
-		return err
-	}
-	var feedURLs []string
-	for rows.Next() {
-		var u string
-		if err := rows.Scan(&u); err != nil {
-			rows.Close()
-			return err
-		}
-		feedURLs = append(feedURLs, u)
-	}
-	rows.Close()
-
-	_, err = tx.ExecContext(ctx, `DELETE FROM articles.subscriptions WHERE user_did = ?`, userDID)
-	if err != nil {
-		return err
-	}
-
-	if len(feedURLs) > 0 {
-		ph := make([]string, len(feedURLs))
-		args := make([]any, len(feedURLs))
-		for i, u := range feedURLs {
-			ph[i] = "?"
-			args[i] = u
-		}
-		_, err = tx.ExecContext(ctx, `
-			UPDATE articles.feeds SET subscriber_count = MAX(subscriber_count - 1, 0)
-			WHERE feed_url IN (`+strings.Join(ph, ",")+`)
-		`, args...)
-		if err != nil {
-			return err
-		}
-	}
-
-	return tx.Commit()
+	_, err := s.db.ExecContext(ctx, `DELETE FROM articles.subscriptions WHERE user_did = ?`, userDID)
+	return err
 }
 
 func (s *ArticleStore) GetSubscriptionByURI(ctx context.Context, userDID, uri string) (*Subscription, error) {
@@ -291,6 +226,15 @@ func (s *ArticleStore) GetSubscriptionCount(ctx context.Context, userDID string)
 		SELECT COUNT(*) FROM articles.subscriptions WHERE user_did = ?
 	`, userDID).Scan(&count)
 	return count, err
+}
+
+func (s *ArticleStore) RecountSubscriberCounts(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE articles.feeds SET subscriber_count = (
+			SELECT COUNT(*) FROM articles.subscriptions sub WHERE sub.feed_url = articles.feeds.feed_url
+		)
+	`)
+	return err
 }
 
 func (s *ArticleStore) GetCategories(ctx context.Context, userDID string) ([]string, error) {
@@ -449,12 +393,6 @@ func (s *ArticleStore) BatchReconcileSubscriptions(ctx context.Context, userDID 
 	}
 	defer updateStmt.Close()
 
-	incrStmt, err := tx.PrepareContext(ctx, `UPDATE articles.feeds SET subscriber_count = subscriber_count + 1 WHERE feed_url = ?`)
-	if err != nil {
-		return err
-	}
-	defer incrStmt.Close()
-
 	for _, sub := range subs {
 		if existingURI, ok := existing[sub.FeedURL]; ok {
 			if existingURI == "" && sub.URI != "" {
@@ -468,15 +406,8 @@ func (s *ArticleStore) BatchReconcileSubscriptions(ctx context.Context, userDID 
 			}
 			continue
 		}
-		result, err := insertStmt.ExecContext(ctx, userDID, sub.FeedURL, nilIfEmpty(sub.Title), sub.Category, nilIfEmpty(sub.URI), nilIfEmpty(sub.CID))
-		if err != nil {
+		if _, err := insertStmt.ExecContext(ctx, userDID, sub.FeedURL, nilIfEmpty(sub.Title), sub.Category, nilIfEmpty(sub.URI), nilIfEmpty(sub.CID)); err != nil {
 			return err
-		}
-		n, _ := result.RowsAffected()
-		if n > 0 {
-			if _, err := incrStmt.ExecContext(ctx, sub.FeedURL); err != nil {
-				return err
-			}
 		}
 	}
 	return tx.Commit()
@@ -541,9 +472,6 @@ func (s *ArticleStore) DeleteOrphanedSubscriptions(ctx context.Context, userDID 
 
 	for _, feedURL := range toDelete {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM articles.subscriptions WHERE user_did = ? AND feed_url = ?`, userDID, feedURL); err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `UPDATE articles.feeds SET subscriber_count = MAX(subscriber_count - 1, 0) WHERE feed_url = ?`, feedURL); err != nil {
 			return err
 		}
 	}
