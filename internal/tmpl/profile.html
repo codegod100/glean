@@ -9,14 +9,14 @@
                 </h1>
                 <p class="flex items-center gap-1.5 text-spot-secondary">@{{.ProfileUser.Handle}}<a href="https://bsky.app/profile/{{.ProfileUser.Handle}}" target="_blank" rel="noopener" class="text-spot-secondary hover:text-spot-green transition"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">{{template "icon-bluesky"}}</svg></a></p>
                 <div class="flex gap-4 mt-3">
-                    <div>
+                    <a href="/feeds" class="group">
                         <span class="text-lg font-bold text-spot-text">{{.SubscriptionCount}}</span>
-                        <span class="text-sm text-spot-secondary ml-1">feeds</span>
-                    </div>
-                    <div class="border-l border-spot-divider pl-4">
+                        <span class="text-sm text-spot-secondary ml-1 group-hover:text-spot-text transition">feeds</span>
+                    </a>
+                    <a href="/library" class="border-l border-spot-divider pl-4 group">
                         <span class="text-lg font-bold text-spot-text">{{.AnnotationCount}}</span>
-                        <span class="text-sm text-spot-secondary ml-1">annotations</span>
-                    </div>
+                        <span class="text-sm text-spot-secondary ml-1 group-hover:text-spot-text transition">annotations</span>
+                    </a>
                 </div>
             </div>
         </div>

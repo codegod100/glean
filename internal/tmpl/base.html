@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <title>Glean</title>
     <script>
     (function(){var p=localStorage.getItem('theme')||'system';var r=p==='system'?(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):p;document.documentElement.setAttribute('data-theme',r);var s=localStorage.getItem('shape');if(s)document.documentElement.setAttribute('data-shape',s)})();
@@ -133,10 +133,6 @@
             <a href="/trending" class="flex flex-col items-center gap-0.5 {{activeClass .ActivePath "/trending"}} text-[10px] px-2 py-1">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
                 Trending
-            </a>
-            <a href="/feeds" class="flex flex-col items-center gap-0.5 {{activeClass .ActivePath "/feeds"}} text-[10px] px-2 py-1">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7m-7-1a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
-                Feeds
             </a>
         </div>
     </nav>
