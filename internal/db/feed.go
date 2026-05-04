@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"pkg.rbrt.fr/glean/internal/feed"
@@ -497,4 +498,93 @@ func (s *ArticleStore) ListUnsubscribedFeeds(ctx context.Context, userDID string
 		feeds = append(feeds, f)
 	}
 	return feeds, rows.Err()
+}
+
+type FeedListByDID struct {
+	DID               string
+	SubscriptionCount int
+	Subscriptions     []SubData
+}
+
+func (s *ArticleStore) ListFeedListsByDIDs(ctx context.Context, dids []string, limit, offset int) ([]*FeedListByDID, error) {
+	placeholders := make([]string, len(dids))
+	args := make([]any, len(dids))
+	for i, d := range dids {
+		placeholders[i] = "?"
+		args[i] = d
+	}
+
+	query := `
+		SELECT u.did, COUNT(s.id) as subscription_count
+		FROM users u
+		LEFT JOIN articles.subscriptions s ON u.did = s.user_did
+		WHERE u.did IN (` + strings.Join(placeholders, ",") + `)
+		GROUP BY u.did ORDER BY u.did ASC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	type userRow struct {
+		did      string
+		subCount int
+	}
+	var users []userRow
+	for rows.Next() {
+		var did string
+		var subCount int
+		if err := rows.Scan(&did, &subCount); err != nil {
+			return nil, err
+		}
+		users = append(users, userRow{did: did, subCount: subCount})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	subsByDID := make(map[string][]SubData)
+	if len(users) > 0 {
+		ph := make([]string, len(users))
+		subArgs := make([]any, len(users))
+		for i, u := range users {
+			ph[i] = "?"
+			subArgs[i] = u.did
+		}
+		subRows, err := s.db.QueryContext(ctx, `
+			SELECT s.user_did, s.feed_url, COALESCE(s.title, f.title), COALESCE(s.category, '')
+			FROM articles.subscriptions s
+			JOIN articles.feeds f ON s.feed_url = f.feed_url
+			WHERE s.user_did IN (`+strings.Join(ph, ",")+`)
+			ORDER BY s.user_did, s.added_at DESC
+		`, subArgs...)
+		if err != nil {
+			return nil, err
+		}
+		for subRows.Next() {
+			var did, feedURL, title, cat string
+			if err := subRows.Scan(&did, &feedURL, &title, &cat); err != nil {
+				_ = subRows.Close()
+				return nil, err
+			}
+			subsByDID[did] = append(subsByDID[did], SubData{
+				FeedURL:  feedURL,
+				Title:    title,
+				Category: cat,
+			})
+		}
+		_ = subRows.Close()
+	}
+
+	var result []*FeedListByDID
+	for _, u := range users {
+		result = append(result, &FeedListByDID{
+			DID:               u.did,
+			SubscriptionCount: u.subCount,
+			Subscriptions:     subsByDID[u.did],
+		})
+	}
+	return result, nil
 }

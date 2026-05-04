@@ -211,7 +211,7 @@ func (s *Server) setupRoutes() {
 	s.router.Post("/auth/logout", s.handleAuthLogout)
 	s.router.Get("/oauth/client-metadata", s.handleOAuthClientMetadata)
 
-	xrpc := atproto.NewXRPCHandler(s.dbs.SQLDB(), s.engine)
+	xrpc := atproto.NewXRPCHandler(s.dbs, s.engine)
 	s.router.Get("/xrpc/at.glean.listSubscriptions", xrpc.ListSubscriptions)
 	s.router.Get("/xrpc/at.glean.listAnnotations", xrpc.ListAnnotations)
 	s.router.Get("/xrpc/at.glean.listLikes", xrpc.ListLikes)
