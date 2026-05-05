@@ -2,21 +2,22 @@
 <article data-article-url="{{.URL}}" class="bg-spot-surface rounded-xl px-5 py-4 hover:bg-spot-hover-50 transition shadow-spot relative">
     <div class="flex items-start justify-between gap-4">
         <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2">
-                {{if not .IsRead}}<span class="w-2 h-2 rounded-full bg-spot-green shrink-0"></span>{{end}}
-                <a href="/articles/{{.ArticleID}}" class="font-bold text-spot-text hover:text-spot-green transition text-lg leading-tight">{{.Title}}</a>
+            <div class="flex items-start gap-2.5">
+                {{if not .IsRead}}<span class="w-2.5 h-2.5 rounded-full bg-spot-green shrink-0 mt-1.5"></span>{{end}}
+                <a href="/articles/{{.ArticleID}}" class="font-semibold text-spot-text hover:text-spot-green transition text-[17px] leading-snug">{{.Title}}</a>
             </div>
-            <div class="text-sm text-spot-secondary mt-1 flex items-center gap-2">
-                {{if .FaviconURL}}{{template "favicon" dict "src" .FaviconURL "size" "w-4 h-4"}}{{end}}
-                {{if .Author}}<span>{{.Author}}</span>{{end}}
-                {{if .Published.Valid}}<span>{{.Published.Time.Format "Jan 2"}}</span>{{end}}
-                <span class="text-spot-muted"><a href="/articles?feed={{.FeedURL}}" class="hover:text-spot-green transition">{{if .FeedTitle}}{{.FeedTitle}}{{else}}{{.FeedURL}}{{end}}</a></span>
+            <div class="text-xs text-spot-secondary mt-2 flex items-center gap-1.5 flex-wrap pl-5">
+                {{if .FaviconURL}}{{template "favicon" dict "src" .FaviconURL "size" "w-3.5 h-3.5"}}{{end}}
+                <a href="/articles?feed={{.FeedURL}}" class="hover:text-spot-text transition font-medium">{{if .FeedTitle}}{{.FeedTitle}}{{else}}{{.FeedURL}}{{end}}</a>
+                {{if .Author}}<span class="text-spot-muted">&middot;</span><span>{{.Author}}</span>{{end}}
+                {{if .Published.Valid}}<span class="text-spot-muted">&middot;</span><span>{{.Published.Time.Format "Jan 2"}}</span>{{end}}
             </div>
-            {{if .Summary}}<p class="text-sm text-spot-secondary mt-2 line-clamp-2">{{plainText .Summary}}</p>{{end}}
+            {{if .Summary}}<p class="text-sm text-spot-secondary mt-2.5 line-clamp-2 leading-relaxed pl-5">{{plainText .Summary}}</p>{{end}}
         </div>
         <div class="shrink-0 pt-1">
             <button hx-post="/recs/dismiss-article" hx-target="closest article" hx-swap="delete" hx-include="#dismiss-{{.ArticleID}}"
-                    class="text-[10px] text-spot-secondary hover:text-spot-text uppercase tracking-button transition flex items-center gap-1">
+                    class="text-[10px] text-spot-muted hover:text-spot-text uppercase tracking-button transition flex items-center gap-1"
+                    title="Not interested">
                 <input type="hidden" name="article_url" value="{{.URL}}" id="dismiss-{{.ArticleID}}">
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                 Dismiss

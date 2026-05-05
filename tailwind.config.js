@@ -30,14 +30,13 @@ module.exports = {
         }
       },
       borderRadius: {
-        DEFAULT: 'var(--radius-sm)',
-        pill: 'var(--radius-pill)',
-        'pill-lg': 'var(--radius-pill)',
-        sm: 'var(--radius-sm)',
-        md: 'var(--radius-md)',
-        lg: 'var(--radius-md)',
-        xl: 'var(--radius-lg)',
-        full: 'var(--radius-full)',
+        DEFAULT: '6px',
+        sm: '6px',
+        md: '8px',
+        lg: '10px',
+        xl: '12px',
+        pill: '9999px',
+        full: '50%',
       },
       boxShadow: {
         'spot': 'var(--spot-shadow)',

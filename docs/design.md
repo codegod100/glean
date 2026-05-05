@@ -91,11 +91,23 @@ All buttons use full-pill radius (`rounded-pill` = `9999px`).
 bg-spot-green text-white rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition
 ```
 
+Used for CTAs: "Add", "Subscribe", "Annotate", "Save", "Sign in", "Get started", "Login".
+
 **Primary Outlined:**
 
 ```
 border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:border-spot-text transition
 ```
+
+Used for secondary actions: "Refresh feeds", "Mark all read", "Import OPML", "Export OPML", "Fetch full content", "See what's trending", dialog Cancel/Close.
+
+**Toolbar Micro:**
+
+```
+text-spot-text bg-spot-hover text-[10px] uppercase tracking-button px-2.5 py-1 rounded-pill transition
+```
+
+Used in-card and in-toolbar for small actions: Like, Read, Original, Share. Default text is `text-spot-text` (never grey). Semantic hover colors override the default on certain buttons: Like → red, Read → green, Share → blue, Original stays `text-spot-text`.
 
 ### Cards
 

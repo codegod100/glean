@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <title>Glean</title>
     <script>
-    (function(){var p=localStorage.getItem('theme')||'system';var r=p==='system'?(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):p;document.documentElement.setAttribute('data-theme',r);var s=localStorage.getItem('shape');if(s)document.documentElement.setAttribute('data-shape',s)})();
+    (function(){var p=localStorage.getItem('theme')||'system';var r=p==='system'?(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):p;document.documentElement.setAttribute('data-theme',r)})();
     </script>
     <link rel="stylesheet" href="/static/output.css">
     <script src="/static/htmx.min.js"></script>
@@ -46,7 +46,7 @@
     <dialog id="confirm-dialog" class="bg-spot-surface rounded-xl p-6 max-w-sm shadow-spot-elevated border border-spot-divider backdrop:bg-black/50" onclick="if(event.target===this)this.close()">
         <p id="confirm-dialog-msg" class="text-spot-text text-sm mb-6"></p>
         <div class="flex justify-end gap-3">
-            <button onclick="document.getElementById('confirm-dialog').close(false)" class="text-sm text-spot-secondary hover:text-spot-text px-4 py-2 rounded-pill border border-spot-outline transition">Cancel</button>
+            <button onclick="document.getElementById('confirm-dialog').close(false)" class="text-sm text-spot-text px-4 py-2 rounded-pill border border-spot-outline hover:border-spot-text transition">Cancel</button>
             <button id="confirm-dialog-ok" class="text-sm text-white bg-spot-red hover:brightness-110 px-4 py-2 rounded-pill font-bold uppercase tracking-button transition">Confirm</button>
         </div>
     </dialog>
@@ -69,7 +69,7 @@
                 <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">m</kbd><span class="text-spot-secondary">Toggle read</span>
             </div>
         </div>
-        <button onclick="document.getElementById('shortcuts-dialog').close()" class="mt-4 w-full text-sm text-spot-secondary hover:text-spot-text px-4 py-2 rounded-pill border border-spot-outline transition">Close</button>
+        <button onclick="document.getElementById('shortcuts-dialog').close()" class="mt-4 w-full text-sm text-spot-text px-4 py-2 rounded-pill border border-spot-outline hover:border-spot-text transition">Close</button>
     </dialog>
     {{if or .User (or (eq .ActivePath "/trending") (eq .ActivePath "/stats"))}}
     <aside class="hidden lg:flex flex-col w-60 bg-spot-bg h-screen fixed left-0 top-0 px-3 py-4 z-20">
@@ -120,7 +120,7 @@
         </div>
     </aside>
 
-    <nav class="lg:hidden fixed bottom-0 left-0 right-0 bg-spot-surface border-t border-spot-divider z-30 px-2 py-2">
+    <nav id="mobile-nav" class="lg:hidden fixed bottom-0 left-0 right-0 bg-spot-surface/80 backdrop-blur-xl border-t border-spot-divider z-30 px-2 py-2">
         <div class="flex items-center justify-around">
             <a href="/dashboard" class="flex flex-col items-center gap-0.5 {{activeClass .ActivePath "/dashboard"}} text-[10px] px-2 py-1">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1"/></svg>
@@ -133,6 +133,14 @@
             <a href="/trending" class="flex flex-col items-center gap-0.5 {{activeClass .ActivePath "/trending"}} text-[10px] px-2 py-1">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
                 Trending
+            </a>
+            <a href="/feeds" class="flex flex-col items-center gap-0.5 {{activeClass .ActivePath "/feeds"}} text-[10px] px-2 py-1">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7m-7-1a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
+                Feeds
+            </a>
+            <a href="/library" class="flex flex-col items-center gap-0.5 {{activeClass .ActivePath "/library"}} text-[10px] px-2 py-1">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>
+                Library
             </a>
         </div>
     </nav>
@@ -196,14 +204,10 @@
                                     <span class="theme-text-light hidden">Light</span>
                                     <span class="theme-text-system hidden">System</span>
                                 </button>
-                                <button onclick="toggleShape()" class="text-xs text-spot-secondary hover:text-spot-text hover:underline inline-flex gap-1.5 items-center transition text-left">
-                                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h16v16H4z"/></svg>
-                                    <span class="shape-text">Squared</span>
-                                </button>
-                                <button onclick="document.getElementById('shortcuts-dialog').showModal()" class="text-xs text-spot-secondary hover:text-spot-text hover:underline inline-flex gap-1.5 items-center transition text-left">
-                                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6.75 7.5 3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0 0 21 18V6a2.25 2.25 0 0 0-2.25-2.25H5.25A2.25 2.25 0 0 0 3 6v12a2.25 2.25 0 0 0 2.25 2.25Z"/></svg>
-                                    Shortcuts
-                                </button>
+                                 <button onclick="document.getElementById('shortcuts-dialog').showModal()" class="text-xs text-spot-secondary hover:text-spot-text hover:underline inline-flex gap-1.5 items-center transition text-left">
+                                     <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6.75 7.5 3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0 0 21 18V6a2.25 2.25 0 0 0-2.25-2.25H5.25A2.25 2.25 0 0 0 3 6v12a2.25 2.25 0 0 0 2.25 2.25Z"/></svg>
+                                     Shortcuts
+                                 </button>
                             </div>
                         </div>
                             <div class="text-right">
@@ -228,19 +232,15 @@
                         </div>
                         <div class="border-t border-spot-divider pt-4">
                             <div class="flex flex-wrap items-center gap-3">
-                                <button onclick="toggleTheme()" class="text-xs text-spot-secondary hover:text-spot-text inline-flex gap-1.5 items-center transition">
-                                    <svg class="w-3.5 h-3.5 theme-icon-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
-                                    <svg class="w-3.5 h-3.5 theme-icon-light hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
-                                    <svg class="w-3.5 h-3.5 theme-icon-system hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25A2.25 2.25 0 0 1 5.25 3h13.5A2.25 2.25 0 0 1 21 5.25Z"/></svg>
-                                    <span class="theme-text-dark">Dark</span>
-                                    <span class="theme-text-light hidden">Light</span>
-                                    <span class="theme-text-system hidden">System</span>
-                                </button>
-                                <button onclick="toggleShape()" class="text-xs text-spot-secondary hover:text-spot-text inline-flex gap-1.5 items-center transition">
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h16v16H4z"/></svg>
-                                    <span class="shape-text">Squared</span>
-                                </button>
-                            </div>
+                                 <button onclick="toggleTheme()" class="text-xs text-spot-secondary hover:text-spot-text inline-flex gap-1.5 items-center transition">
+                                     <svg class="w-3.5 h-3.5 theme-icon-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+                                     <svg class="w-3.5 h-3.5 theme-icon-light hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                                     <svg class="w-3.5 h-3.5 theme-icon-system hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25A2.25 2.25 0 0 1 5.25 3h13.5A2.25 2.25 0 0 1 21 5.25Z"/></svg>
+                                     <span class="theme-text-dark">Dark</span>
+                                     <span class="theme-text-light hidden">Light</span>
+                                     <span class="theme-text-system hidden">System</span>
+                                 </button>
+                             </div>
                             <div class="border-t border-spot-divider mt-4 pt-3">
                                 <span class="text-xs text-spot-secondary">&copy; {{now.Format "2006"}} <a href="https://bsky.app/profile/julien.rbrt.fr" class="hover:text-spot-text transition">julien.rbrt.fr</a> &middot; Made in Europe &#127466;&#127482; &middot; <a href="/terms" class="hover:text-spot-text transition">Terms</a></span>
                             </div>
@@ -276,35 +276,11 @@
         applyTheme();
     }
 
-    function applyShape() {
-        var shapePref = localStorage.getItem('shape') || 'rounded';
-        if (shapePref === 'squared') {
-            document.documentElement.setAttribute('data-shape', 'squared');
-        } else {
-            document.documentElement.removeAttribute('data-shape');
-        }
-        document.querySelectorAll('.shape-text').forEach(function(el) {
-            el.textContent = shapePref === 'squared' ? 'Rounded' : 'Squared';
-        });
-    }
-
-    function toggleShape() {
-        var current = localStorage.getItem('shape') || 'rounded';
-        var next = current === 'squared' ? 'rounded' : 'squared';
-        if (next === 'rounded') {
-            localStorage.removeItem('shape');
-        } else {
-            localStorage.setItem('shape', next);
-        }
-        applyShape();
-    }
-
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
         if (themePref === 'system') applyTheme();
     });
 
     applyTheme();
-    applyShape();
 
     // reload page when page restored from bfcache.
     // useful for reloading article read/unread status.
