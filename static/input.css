@@ -96,13 +96,7 @@ body {
   color: var(--spot-text);
 }
 
-#mobile-nav a.bg-spot-hover {
-  background: transparent !important;
-  color: #00754A !important;
-}
-#mobile-nav a {
-  transition: color 0.15s ease;
-}
+
 
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: var(--spot-bg); }
