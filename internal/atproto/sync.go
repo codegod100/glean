@@ -36,12 +36,6 @@ func (s *Sync) Run(ctx context.Context, userDID string) error {
 	if err := s.syncSubscriptions(ctx, userDID); err != nil {
 		s.logger.Error("sync subscriptions failed", "error", err, "did", userDID)
 	}
-	// Recompute subscriber_count from subscriptions table rather than
-	// maintaining it incrementally (done here to avoid drift from race conditions
-	// between stream handler events and sync operations).
-	if err := s.articles.RecountSubscriberCounts(ctx); err != nil {
-		s.logger.Error("recount subscriber counts failed", "error", err, "did", userDID)
-	}
 	if err := s.syncLikes(ctx, userDID); err != nil {
 		s.logger.Error("sync likes failed", "error", err, "did", userDID)
 	}

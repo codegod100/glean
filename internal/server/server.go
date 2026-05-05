@@ -520,6 +520,11 @@ func (s *Server) runSyncAll(ctx context.Context) {
 
 		metrics.SyncRuns.Inc()
 	}
+
+	// Recompute subscriber_count once after all users are synced.
+	if err := s.dbs.Articles.RecountSubscriberCounts(ctx); err != nil {
+		s.logger.Error("recount subscriber counts failed", "error", err)
+	}
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
