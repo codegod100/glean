@@ -186,7 +186,7 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go s.storeFetchResult(context.Background(), feedURL, result.Feed.SiteURL, result)
+	go s.storeFetchResult(context.WithoutCancel(r.Context()), feedURL, result.Feed.SiteURL, result)
 
 	if err := s.engine.MarkImpressionActed(r.Context(), user.DID, "feed", feedURL); err != nil {
 		s.logger.Warn("failed to mark impression acted", "error", err)
@@ -335,7 +335,7 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	go func() {
-		g, ctx := errgroup.WithContext(context.Background())
+		g, ctx := errgroup.WithContext(context.WithoutCancel(r.Context()))
 		g.SetLimit(5)
 		for _, f := range feedsToFetch {
 			g.Go(func() error {
