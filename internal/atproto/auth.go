@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bluesky-social/indigo/atproto/identity"
@@ -128,12 +129,37 @@ var profileCache sync.Map
 
 const profileCacheTTL = 4 * time.Hour
 
+// maxProfileCacheSize caps the in-memory profile cache to prevent unbounded
+// growth. When exceeded, the oldest entries are evicted.
+const maxProfileCacheSize = 50_000
+
+var profileCacheSize atomic.Int64
+
+func pruneProfileCache() {
+	if profileCacheSize.Load() < maxProfileCacheSize {
+		return
+	}
+	var toDelete []string
+	count := 0
+	profileCache.Range(func(key, value any) bool {
+		toDelete = append(toDelete, key.(string))
+		count++
+		return count < maxProfileCacheSize/5
+	})
+	for _, k := range toDelete {
+		profileCache.Delete(k)
+	}
+	profileCacheSize.Store(int64(len(toDelete)))
+}
+
 func ResolveProfile(ctx context.Context, did string) Profile {
 	if cached, ok := profileCache.Load(did); ok {
 		entry := cached.(*profileEntry)
 		if time.Since(entry.fetched) < profileCacheTTL {
 			return entry.profile
 		}
+		profileCache.Delete(did)
+		profileCacheSize.Add(-1)
 	}
 
 	ident, err := ResolveIdentity(ctx, did)
@@ -157,6 +183,10 @@ func ResolveProfile(ctx context.Context, did string) Profile {
 	p.DisplayName = actor.DisplayName
 	p.AvatarURL = actor.Avatar
 
+	if profileCacheSize.Load() >= maxProfileCacheSize {
+		pruneProfileCache()
+	}
 	profileCache.Store(did, &profileEntry{profile: p, fetched: time.Now()})
+	profileCacheSize.Add(1)
 	return p
 }
