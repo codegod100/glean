@@ -3,20 +3,17 @@ package cluster
 import (
 	"context"
 	"fmt"
-	"iter"
 )
 
 const maxFollowDepth = 3
 
-func chunk[T any](s []T, size int) iter.Seq[[]T] {
-	return func(yield func([]T) bool) {
-		for i := 0; i < len(s); i += size {
-			end := min(i+size, len(s))
-			if !yield(s[i:end]) {
-				return
-			}
-		}
+func chunk[T any](s []T, size int) [][]T {
+	var chunks [][]T
+	for i := 0; i < len(s); i += size {
+		end := min(i+size, len(s))
+		chunks = append(chunks, s[i:end])
 	}
+	return chunks
 }
 
 type followDistance struct {
@@ -30,49 +27,60 @@ func (e *Engine) ComputeFollowDistancesData(ctx context.Context, sources []strin
 		return nil, nil
 	}
 
-	rows, err := e.db.QueryContext(ctx, `SELECT user_did, target_did FROM main.follows WHERE user_did != target_did`)
-	if err != nil {
-		return nil, err
+	type pair struct {
+		src, dst string
 	}
-	defer rows.Close()
+	distances := make(map[pair]int)
 
-	adj := make(map[string][]string)
-	for rows.Next() {
-		var src, dst string
-		if err := rows.Scan(&src, &dst); err != nil {
-			return nil, err
+	for _, src := range sources {
+		frontier := []string{src}
+		reachable := map[string]int{src: 0}
+
+		for depth := 0; depth < maxFollowDepth && len(frontier) > 0; depth++ {
+			var nextLevel []string
+			for _, batch := range chunk(frontier, 500) {
+				ph := make([]string, len(batch))
+				args := make([]any, len(batch))
+				for i, did := range batch {
+					ph[i] = "?"
+					args[i] = did
+				}
+
+				rows, err := e.db.QueryContext(ctx,
+					fmt.Sprintf(`SELECT target_did FROM main.follows WHERE user_did IN (%s) AND user_did != target_did`, joinPh(ph)),
+					args...,
+				)
+				if err != nil {
+					return nil, err
+				}
+
+				for rows.Next() {
+					var dst string
+					if err := rows.Scan(&dst); err != nil {
+						rows.Close()
+						return nil, err
+					}
+					if _, ok := reachable[dst]; !ok {
+						reachable[dst] = depth + 1
+						nextLevel = append(nextLevel, dst)
+					}
+				}
+				rows.Close()
+			}
+			frontier = nextLevel
 		}
-		adj[src] = append(adj[src], dst)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+
+		for other, d := range reachable {
+			if d > 0 {
+				distances[pair{src, other}] = d
+			}
+		}
 	}
 
 	var result []followDistance
-	for _, src := range sources {
-		dist := map[string]int{src: 0}
-		queue := []string{src}
-		for len(queue) > 0 {
-			cur := queue[0]
-			queue = queue[1:]
-			d := dist[cur]
-			if d >= maxFollowDepth {
-				continue
-			}
-			for _, next := range adj[cur] {
-				if _, ok := dist[next]; !ok {
-					dist[next] = d + 1
-					queue = append(queue, next)
-				}
-			}
-		}
-		for other, d := range dist {
-			if d > 0 {
-				result = append(result, followDistance{userA: src, userB: other, distance: d})
-			}
-		}
+	for k, d := range distances {
+		result = append(result, followDistance{userA: k.src, userB: k.dst, distance: d})
 	}
-
 	return result, nil
 }
 
@@ -138,7 +146,7 @@ func (e *Engine) ComputeFollowDistances(ctx context.Context) error {
 	defer func() { _ = tx.Rollback() }()
 
 	const sqliteMaxVars = 500
-	for chunk := range chunk(dirtyUsers, sqliteMaxVars) {
+	for _, chunk := range chunk(dirtyUsers, sqliteMaxVars) {
 		ph := make([]string, len(chunk))
 		args := make([]any, len(chunk))
 		for i, did := range chunk {
@@ -165,7 +173,7 @@ func (e *Engine) ComputeFollowDistances(ctx context.Context) error {
 		}
 	}
 
-	for chunk := range chunk(dirtyUsers, sqliteMaxVars) {
+	for _, chunk := range chunk(dirtyUsers, sqliteMaxVars) {
 		ph := make([]string, len(chunk))
 		args := make([]any, len(chunk))
 		for i, did := range chunk {

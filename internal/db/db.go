@@ -340,6 +340,7 @@ var articlesSchema = []string{
 	`CREATE INDEX IF NOT EXISTS articles.idx_subscriptions_feed ON subscriptions(feed_url)`,
 	`CREATE INDEX IF NOT EXISTS articles.idx_subscriptions_feed_user ON subscriptions(feed_url, user_did)`,
 	`CREATE INDEX IF NOT EXISTS articles.idx_subscriptions_user ON subscriptions(user_did)`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_subscriptions_user_feed ON subscriptions(user_did, feed_url)`,
 	`CREATE INDEX IF NOT EXISTS articles.idx_subscriptions_uri ON subscriptions(uri)`,
 	`CREATE INDEX IF NOT EXISTS articles.idx_likes_author_feed ON likes(author_did, feed_url, created_at)`,
 	`CREATE INDEX IF NOT EXISTS articles.idx_articles_feed ON articles(feed_url)`,
