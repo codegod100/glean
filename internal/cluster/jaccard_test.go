@@ -679,7 +679,7 @@ func seedArticleRecData(t *testing.T, ctx context.Context, dbs *db.Store) {
 	}
 
 	likes := []struct{ uri, author, feed, article string }{
-		{"at://alice/like/1", "did:test:alice", "https://tech.com/feed", "https://tech.com/go"},
+		{"at://bob/like/1", "did:test:bob", "https://tech.com/feed", "https://tech.com/go"},
 		{"at://bob/like/2", "did:test:bob", "https://dev.com/feed", "https://dev.com/rust"},
 		{"at://bob/like/3", "did:test:bob", "https://dev.com/feed", "https://dev.com/cook"},
 		{"at://bob/like/4", "did:test:bob", "https://dev.com/feed", "https://dev.com/python"},

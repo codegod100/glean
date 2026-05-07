@@ -6,17 +6,52 @@ type Language struct {
 }
 
 var knownLanguages = []Language{
+	{"ar", "Arabic"},
+	{"bn", "Bengali"},
+	{"bg", "Bulgarian"},
+	{"ca", "Catalan"},
+	{"zh", "Chinese"},
+	{"cs", "Czech"},
+	{"da", "Danish"},
+	{"nl", "Dutch"},
 	{"en", "English"},
+	{"fi", "Finnish"},
 	{"fr", "French"},
 	{"de", "German"},
-	{"es", "Spanish"},
-	{"pt", "Portuguese"},
+	{"el", "Greek"},
+	{"he", "Hebrew"},
+	{"hi", "Hindi"},
+	{"hu", "Hungarian"},
+	{"id", "Indonesian"},
 	{"it", "Italian"},
-	{"ru", "Russian"},
 	{"ja", "Japanese"},
-	{"zh", "Chinese"},
 	{"ko", "Korean"},
-	{"ar", "Arabic"},
+	{"ms", "Malay"},
+	{"nb", "Norwegian"},
+	{"fa", "Persian"},
+	{"pl", "Polish"},
+	{"pt", "Portuguese"},
+	{"ro", "Romanian"},
+	{"ru", "Russian"},
+	{"sk", "Slovak"},
+	{"sl", "Slovenian"},
+	{"es", "Spanish"},
+	{"sv", "Swedish"},
+	{"ta", "Tamil"},
+	{"th", "Thai"},
+	{"tr", "Turkish"},
+	{"uk", "Ukrainian"},
+	{"ur", "Urdu"},
+	{"vi", "Vietnamese"},
+}
+
+func IsKnown(code string) bool {
+	for _, l := range knownLanguages {
+		if l.Code == code {
+			return true
+		}
+	}
+	return false
 }
 
 func KnownLanguages() []Language {

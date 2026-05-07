@@ -18,3 +18,12 @@ func TestKnownLanguages(t *testing.T) {
 	}
 	assert.Assert(t, found)
 }
+
+func TestIsKnown(t *testing.T) {
+	assert.Assert(t, IsKnown("en"))
+	assert.Assert(t, IsKnown("ja"))
+	assert.Assert(t, IsKnown("zh"))
+	assert.Assert(t, !IsKnown("xx"))
+	assert.Assert(t, !IsKnown("bamboo-based plastic"))
+	assert.Assert(t, !IsKnown(""))
+}

@@ -445,7 +445,7 @@ func (e *Engine) DetectArticleLanguages(ctx context.Context) error {
 		updated := 0
 		for j, lang := range langs {
 			if lang == "" {
-				lang = "en"
+				continue
 			}
 			res, err := stmt.ExecContext(ctx, lang, sub[j].id)
 			if err != nil {

@@ -7,6 +7,8 @@ import (
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
+
+	"pkg.rbrt.fr/glean/internal/langdetect"
 )
 
 type LLMClient struct {
@@ -59,9 +61,6 @@ func (c *LLMClient) DetectLanguages(ctx context.Context, texts []string) ([]stri
 	content := resp.Choices[0].Message.Content
 	lines := strings.Split(strings.TrimSpace(content), "\n")
 	result := make([]string, len(texts))
-	for i := range result {
-		result[i] = "en"
-	}
 	for i, line := range lines {
 		if i >= len(result) {
 			break
@@ -69,7 +68,7 @@ func (c *LLMClient) DetectLanguages(ctx context.Context, texts []string) ([]stri
 		code := strings.TrimSpace(line)
 		code = strings.TrimPrefix(code, fmt.Sprintf("%d.", i+1))
 		code = strings.TrimSpace(code)
-		if code != "" {
+		if langdetect.IsKnown(code) {
 			result[i] = code
 		}
 	}
