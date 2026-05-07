@@ -50,20 +50,7 @@ func (s *Sync) Run(ctx context.Context, userDID string) error {
 }
 
 func (s *Sync) listRecords(ctx context.Context, userDID, collection string) ([]Record, error) {
-	var allRecords []Record
-	cursor := ""
-	for {
-		records, next, err := s.client.ListRecords(ctx, userDID, collection, 100, cursor)
-		if err != nil {
-			return nil, err
-		}
-		allRecords = append(allRecords, records...)
-		if next == "" || len(records) == 0 {
-			break
-		}
-		cursor = next
-	}
-	return allRecords, nil
+	return listAllRecords(ctx, s.client, userDID, collection)
 }
 
 func (s *Sync) syncSubscriptions(ctx context.Context, userDID string) error {
@@ -148,7 +135,7 @@ func (s *Sync) syncLikes(ctx context.Context, userDID string) error {
 			continue
 		}
 		activeURIs[r.URI] = true
-		t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
+		t := parseRFC3339(rec.CreatedAt)
 		likes = append(likes, &db.Like{
 			URI:        r.URI,
 			AuthorDID:  userDID,
@@ -187,7 +174,7 @@ func (s *Sync) syncAnnotations(ctx context.Context, userDID string) error {
 			continue
 		}
 		activeURIs[r.URI] = true
-		t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
+		t := parseRFC3339(rec.CreatedAt)
 		a := &db.Annotation{
 			URI:        r.URI,
 			AuthorDID:  userDID,
@@ -221,7 +208,7 @@ func (s *Sync) syncAnnotations(ctx context.Context, userDID string) error {
 			feedURL = article.FeedURL
 		}
 
-		t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
+		t := parseRFC3339(rec.CreatedAt)
 		annotations = append(annotations, &db.Annotation{
 			URI:        r.URI,
 			AuthorDID:  userDID,
@@ -259,7 +246,7 @@ func (s *Sync) syncFollows(ctx context.Context, userDID string) error {
 				continue
 			}
 
-			t, _ := time.Parse(time.RFC3339, rec.CreatedAt)
+			t := parseRFC3339(rec.CreatedAt)
 			activeFollows[rec.Subject] = db.Follow{
 				URI:        db.NullStr(r.URI),
 				CID:        db.NullStr(r.CID),

@@ -45,13 +45,17 @@ var knownLanguages = []Language{
 	{"vi", "Vietnamese"},
 }
 
-func IsKnown(code string) bool {
+var knownSet map[string]bool
+
+func init() {
+	knownSet = make(map[string]bool, len(knownLanguages))
 	for _, l := range knownLanguages {
-		if l.Code == code {
-			return true
-		}
+		knownSet[l.Code] = true
 	}
-	return false
+}
+
+func IsKnown(code string) bool {
+	return knownSet[code]
 }
 
 func KnownLanguages() []Language {

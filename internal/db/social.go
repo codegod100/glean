@@ -9,7 +9,7 @@ import (
 
 var ErrDuplicateLike = errors.New("already liked this article")
 
-func buildLangFilter(languages []string, prefix string) (string, []any) {
+func BuildLangFilter(languages []string, prefix string) (string, []any) {
 	if len(languages) == 0 {
 		return "", nil
 	}
@@ -381,7 +381,7 @@ type TrendingItem struct {
 }
 
 func (s *ArticleStore) ListTrendingArticlesForUser(ctx context.Context, userDID, since string, languages []string, limit, offset int) ([]*TrendingItem, error) {
-	langFilter, langArgs := buildLangFilter(languages, "ar.")
+	langFilter, langArgs := BuildLangFilter(languages, "ar.")
 
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT ar.id, ar.title, COALESCE(ar.url, ''), COALESCE(ar.author, ''),

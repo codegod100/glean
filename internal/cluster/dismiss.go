@@ -11,31 +11,27 @@ type Impression struct {
 	TargetID   string
 }
 
-func (e *Engine) DismissFeed(ctx context.Context, userDID, feedURL, reason string) error {
+// Dismiss records that the user dismissed a recommendation. targetType is one
+// of "feed", "article", "person".
+func (e *Engine) Dismiss(ctx context.Context, userDID, targetType, targetID, reason string) error {
 	_, err := e.db.ExecContext(ctx, `
 		INSERT INTO main.dismissed_recommendations (user_did, target_type, target_id, reason)
-		VALUES (?, 'feed', ?, ?)
+		VALUES (?, ?, ?, ?)
 		ON CONFLICT(user_did, target_type, target_id) DO UPDATE SET reason = excluded.reason, dismissed_at = CURRENT_TIMESTAMP
-	`, userDID, feedURL, reason)
+	`, userDID, targetType, targetID, reason)
 	return err
+}
+
+func (e *Engine) DismissFeed(ctx context.Context, userDID, feedURL, reason string) error {
+	return e.Dismiss(ctx, userDID, "feed", feedURL, reason)
 }
 
 func (e *Engine) DismissArticle(ctx context.Context, userDID, articleURL, reason string) error {
-	_, err := e.db.ExecContext(ctx, `
-		INSERT INTO main.dismissed_recommendations (user_did, target_type, target_id, reason)
-		VALUES (?, 'article', ?, ?)
-		ON CONFLICT(user_did, target_type, target_id) DO UPDATE SET reason = excluded.reason, dismissed_at = CURRENT_TIMESTAMP
-	`, userDID, articleURL, reason)
-	return err
+	return e.Dismiss(ctx, userDID, "article", articleURL, reason)
 }
 
 func (e *Engine) DismissPerson(ctx context.Context, userDID, targetDID, reason string) error {
-	_, err := e.db.ExecContext(ctx, `
-		INSERT INTO main.dismissed_recommendations (user_did, target_type, target_id, reason)
-		VALUES (?, 'person', ?, ?)
-		ON CONFLICT(user_did, target_type, target_id) DO UPDATE SET reason = excluded.reason, dismissed_at = CURRENT_TIMESTAMP
-	`, userDID, targetDID, reason)
-	return err
+	return e.Dismiss(ctx, userDID, "person", targetDID, reason)
 }
 
 func (e *Engine) RecordImpressions(ctx context.Context, userDID string, impressions []Impression) error {

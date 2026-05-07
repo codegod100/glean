@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"net/http"
 	"net/url"
@@ -200,11 +199,11 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 
 	f := &db.Feed{
 		FeedURL:     feedURL,
-		Title:       nullString(feedTitle),
-		SiteURL:     nullString(result.Feed.SiteURL),
-		Description: nullString(result.Feed.Description),
-		FeedType:    nullString(result.Feed.Type),
-		FaviconURL:  nullString(faviconURL),
+		Title:       db.NullStr(feedTitle),
+		SiteURL:     db.NullStr(result.Feed.SiteURL),
+		Description: db.NullStr(result.Feed.Description),
+		FeedType:    db.NullStr(result.Feed.Type),
+		FaviconURL:  db.NullStr(faviconURL),
 	}
 	if err := s.dbs.Articles.UpsertFeed(r.Context(), f); err != nil {
 		s.logger.Error("failed to upsert feed", "error", err)
@@ -351,9 +350,9 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 	for _, fu := range feedURLs {
 		f := &db.Feed{
 			FeedURL:     fu.URL,
-			Title:       nullString(fu.Title),
-			SiteURL:     nullString(fu.SiteURL),
-			Description: nullString(fu.Description),
+		Title:       db.NullStr(fu.Title),
+		SiteURL:     db.NullStr(fu.SiteURL),
+		Description: db.NullStr(fu.Description),
 		}
 		if upsertErr := s.dbs.Articles.UpsertFeed(r.Context(), f); upsertErr != nil {
 			s.logger.Error("failed to upsert feed", "error", upsertErr)
@@ -523,8 +522,4 @@ func (s *Server) handleRetryFeed(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "dead-feeds.html", map[string]any{
 		"DeadFeeds": deadFeeds,
 	})
-}
-
-func nullString(s string) sql.NullString {
-	return sql.NullString{String: s, Valid: s != ""}
 }

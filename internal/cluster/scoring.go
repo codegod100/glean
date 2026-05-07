@@ -4,7 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
+
+	"pkg.rbrt.fr/glean/internal/db"
 )
 
 type FeedRecommendation struct {
@@ -234,83 +235,48 @@ func (e *Engine) ComputeFeedRecommendationsOnDemand(ctx context.Context, userDID
 	return results, rows.Err()
 }
 
-func buildLangFilter(languages []string, prefix string) (string, []any) {
-	if len(languages) == 0 {
-		return "", nil
+func normalizeScores[T any](items []T, getScore func(T) float64, setScore func(T, float64)) {
+	if len(items) < 2 {
+		return
 	}
-	ph := make([]string, len(languages))
-	args := make([]any, len(languages))
-	for i, l := range languages {
-		ph[i] = "?"
-		args[i] = l
+	smin, smax := getScore(items[0]), getScore(items[0])
+	for i := range items[1:] {
+		s := getScore(items[i+1])
+		if s < smin {
+			smin = s
+		}
+		if s > smax {
+			smax = s
+		}
 	}
-	return "AND (" + prefix + "language IN (" + strings.Join(ph, ",") + ") OR " + prefix + "language = '')", args
+	if smax == smin {
+		return
+	}
+	span := smax - smin
+	for i := range items {
+		setScore(items[i], (getScore(items[i])-smin)/span)
+	}
 }
 
 func normalizeFeedScores(recs []*FeedRecommendation) {
-	if len(recs) < 2 {
-		return
-	}
-	min, max := recs[0].Score, recs[0].Score
-	for _, r := range recs[1:] {
-		if r.Score < min {
-			min = r.Score
-		}
-		if r.Score > max {
-			max = r.Score
-		}
-	}
-	if max == min {
-		return
-	}
-	span := max - min
-	for _, r := range recs {
-		r.Score = (r.Score - min) / span
-	}
+	normalizeScores(recs,
+		func(r *FeedRecommendation) float64 { return r.Score },
+		func(r *FeedRecommendation, v float64) { r.Score = v },
+	)
 }
 
 func normalizeArticleScores(recs []*ArticleRecommendation) {
-	if len(recs) < 2 {
-		return
-	}
-	min, max := recs[0].Score, recs[0].Score
-	for _, r := range recs[1:] {
-		if r.Score < min {
-			min = r.Score
-		}
-		if r.Score > max {
-			max = r.Score
-		}
-	}
-	if max == min {
-		return
-	}
-	span := max - min
-	for _, r := range recs {
-		r.Score = (r.Score - min) / span
-	}
+	normalizeScores(recs,
+		func(r *ArticleRecommendation) float64 { return r.Score },
+		func(r *ArticleRecommendation, v float64) { r.Score = v },
+	)
 }
 
 func normalizePersonScores(recs []*PersonRecommendation) {
-	if len(recs) < 2 {
-		return
-	}
-	min, max := recs[0].Jaccard, recs[0].Jaccard
-	for _, r := range recs[1:] {
-		if r.Jaccard < min {
-			min = r.Jaccard
-		}
-		if r.Jaccard > max {
-			max = r.Jaccard
-		}
-	}
-	if max == min {
-		return
-	}
-	span := max - min
-	for _, r := range recs {
-		r.Jaccard = (r.Jaccard - min) / span
-	}
+	normalizeScores(recs,
+		func(r *PersonRecommendation) float64 { return r.Jaccard },
+		func(r *PersonRecommendation, v float64) { r.Jaccard = v },
+	)
 }
 
 func (e *Engine) coldStartFromEmbeddings(ctx context.Context, userDID string, limit int) ([]*FeedRecommendation, error) {
@@ -422,7 +388,7 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 		}
 	}
 
-	langFilter, langArgs := buildLangFilter(languages, "a.")
+	langFilter, langArgs := db.BuildLangFilter(languages, "a.")
 
 	query := fmt.Sprintf(`
 		WITH similar_users AS (
