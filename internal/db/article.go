@@ -115,15 +115,11 @@ func (s *ArticleStore) ListArticles(ctx context.Context, userDID, feedURL string
 			SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 				a.published, a.updated, a.fetched_at,
 				COALESCE(r.is_read, 0),
-				COALESCE(lc.cnt, 0),
-				COALESCE(ul.liked, 0)
+				(SELECT COUNT(*) FROM articles.likes l2 WHERE l2.feed_url = a.feed_url AND l2.article_url = a.url),
+				COALESCE((SELECT 1 FROM articles.likes l3 WHERE l3.feed_url = a.feed_url AND l3.article_url = a.url AND l3.author_did = ?), 0)
 			FROM articles.articles a
 			LEFT JOIN articles.feeds f ON a.feed_url = f.feed_url
 			LEFT JOIN articles.read_state r ON r.user_did = ? AND r.article_id = a.id
-			LEFT JOIN (SELECT feed_url, article_url, COUNT(*) as cnt FROM articles.likes GROUP BY feed_url, article_url) lc
-				ON lc.feed_url = a.feed_url AND lc.article_url = a.url
-			LEFT JOIN (SELECT feed_url, article_url, 1 as liked FROM articles.likes WHERE author_did = ?) ul
-				ON ul.feed_url = a.feed_url AND ul.article_url = a.url
 			WHERE a.feed_url = ?
 		`
 		args = []any{userDID, userDID, feedURL}
@@ -132,16 +128,12 @@ func (s *ArticleStore) ListArticles(ctx context.Context, userDID, feedURL string
 			SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 				a.published, a.updated, a.fetched_at,
 				COALESCE(r.is_read, 0),
-				COALESCE(lc.cnt, 0),
-				COALESCE(ul.liked, 0)
+				(SELECT COUNT(*) FROM articles.likes l2 WHERE l2.feed_url = a.feed_url AND l2.article_url = a.url),
+				COALESCE((SELECT 1 FROM articles.likes l3 WHERE l3.feed_url = a.feed_url AND l3.article_url = a.url AND l3.author_did = ?), 0)
 			FROM articles.articles a
 			JOIN articles.subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
 			LEFT JOIN articles.feeds f ON a.feed_url = f.feed_url
 			LEFT JOIN articles.read_state r ON r.user_did = ? AND r.article_id = a.id
-			LEFT JOIN (SELECT feed_url, article_url, COUNT(*) as cnt FROM articles.likes GROUP BY feed_url, article_url) lc
-				ON lc.feed_url = a.feed_url AND lc.article_url = a.url
-			LEFT JOIN (SELECT feed_url, article_url, 1 as liked FROM articles.likes WHERE author_did = ?) ul
-				ON ul.feed_url = a.feed_url AND ul.article_url = a.url
 			WHERE 1=1
 		`
 		args = []any{userDID, userDID, userDID}
@@ -179,15 +171,11 @@ func (s *ArticleStore) ListUnreadArticles(ctx context.Context, userDID, feedURL 
 			SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 				a.published, a.updated, a.fetched_at,
 				COALESCE(r.is_read, 0),
-				COALESCE(lc.cnt, 0),
-				COALESCE(ul.liked, 0)
+				(SELECT COUNT(*) FROM articles.likes l2 WHERE l2.feed_url = a.feed_url AND l2.article_url = a.url),
+				COALESCE((SELECT 1 FROM articles.likes l3 WHERE l3.feed_url = a.feed_url AND l3.article_url = a.url AND l3.author_did = ?), 0)
 			FROM articles.articles a
 			LEFT JOIN articles.feeds f ON a.feed_url = f.feed_url
 			LEFT JOIN articles.read_state r ON r.user_did = ? AND r.article_id = a.id
-			LEFT JOIN (SELECT feed_url, article_url, COUNT(*) as cnt FROM articles.likes GROUP BY feed_url, article_url) lc
-				ON lc.feed_url = a.feed_url AND lc.article_url = a.url
-			LEFT JOIN (SELECT feed_url, article_url, 1 as liked FROM articles.likes WHERE author_did = ?) ul
-				ON ul.feed_url = a.feed_url AND ul.article_url = a.url
 			WHERE a.feed_url = ? AND (r.is_read = 0 OR r.is_read IS NULL)
 		`
 		args = []any{userDID, userDID, feedURL}
@@ -196,16 +184,12 @@ func (s *ArticleStore) ListUnreadArticles(ctx context.Context, userDID, feedURL 
 			SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 				a.published, a.updated, a.fetched_at,
 				COALESCE(r.is_read, 0),
-				COALESCE(lc.cnt, 0),
-				COALESCE(ul.liked, 0)
+				(SELECT COUNT(*) FROM articles.likes l2 WHERE l2.feed_url = a.feed_url AND l2.article_url = a.url),
+				COALESCE((SELECT 1 FROM articles.likes l3 WHERE l3.feed_url = a.feed_url AND l3.article_url = a.url AND l3.author_did = ?), 0)
 			FROM articles.articles a
 			JOIN articles.subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
 			LEFT JOIN articles.feeds f ON a.feed_url = f.feed_url
 			LEFT JOIN articles.read_state r ON r.user_did = ? AND r.article_id = a.id
-			LEFT JOIN (SELECT feed_url, article_url, COUNT(*) as cnt FROM articles.likes GROUP BY feed_url, article_url) lc
-				ON lc.feed_url = a.feed_url AND lc.article_url = a.url
-			LEFT JOIN (SELECT feed_url, article_url, 1 as liked FROM articles.likes WHERE author_did = ?) ul
-				ON ul.feed_url = a.feed_url AND ul.article_url = a.url
 			WHERE (r.is_read = 0 OR r.is_read IS NULL)
 		`
 		args = []any{userDID, userDID, userDID}
@@ -243,15 +227,11 @@ func (s *ArticleStore) ListReadArticles(ctx context.Context, userDID, feedURL st
 			SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 				a.published, a.updated, a.fetched_at,
 				COALESCE(r.is_read, 0),
-				COALESCE(lc.cnt, 0),
-				COALESCE(ul.liked, 0)
+				(SELECT COUNT(*) FROM articles.likes l2 WHERE l2.feed_url = a.feed_url AND l2.article_url = a.url),
+				COALESCE((SELECT 1 FROM articles.likes l3 WHERE l3.feed_url = a.feed_url AND l3.article_url = a.url AND l3.author_did = ?), 0)
 			FROM articles.articles a
 			LEFT JOIN articles.feeds f ON a.feed_url = f.feed_url
 			JOIN articles.read_state r ON r.user_did = ? AND r.article_id = a.id
-			LEFT JOIN (SELECT feed_url, article_url, COUNT(*) as cnt FROM articles.likes GROUP BY feed_url, article_url) lc
-				ON lc.feed_url = a.feed_url AND lc.article_url = a.url
-			LEFT JOIN (SELECT feed_url, article_url, 1 as liked FROM articles.likes WHERE author_did = ?) ul
-				ON ul.feed_url = a.feed_url AND ul.article_url = a.url
 			WHERE r.is_read = 1 AND a.feed_url = ?
 		`
 		args = []any{userDID, userDID, feedURL}
@@ -260,16 +240,12 @@ func (s *ArticleStore) ListReadArticles(ctx context.Context, userDID, feedURL st
 			SELECT a.id, a.feed_url, COALESCE(f.title, ''), f.favicon_url, a.guid, a.title, a.url, a.author, a.summary, a.content,
 				a.published, a.updated, a.fetched_at,
 				COALESCE(r.is_read, 0),
-				COALESCE(lc.cnt, 0),
-				COALESCE(ul.liked, 0)
+				(SELECT COUNT(*) FROM articles.likes l2 WHERE l2.feed_url = a.feed_url AND l2.article_url = a.url),
+				COALESCE((SELECT 1 FROM articles.likes l3 WHERE l3.feed_url = a.feed_url AND l3.article_url = a.url AND l3.author_did = ?), 0)
 			FROM articles.articles a
 			JOIN articles.subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
 			LEFT JOIN articles.feeds f ON a.feed_url = f.feed_url
 			JOIN articles.read_state r ON r.user_did = ? AND r.article_id = a.id
-			LEFT JOIN (SELECT feed_url, article_url, COUNT(*) as cnt FROM articles.likes GROUP BY feed_url, article_url) lc
-				ON lc.feed_url = a.feed_url AND lc.article_url = a.url
-			LEFT JOIN (SELECT feed_url, article_url, 1 as liked FROM articles.likes WHERE author_did = ?) ul
-				ON ul.feed_url = a.feed_url AND ul.article_url = a.url
 			WHERE r.is_read = 1
 		`
 		args = []any{userDID, userDID, userDID}

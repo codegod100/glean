@@ -370,6 +370,9 @@ var articlesSchema = []string{
 	`CREATE INDEX IF NOT EXISTS articles.idx_likes_author ON likes(author_did)`,
 	`CREATE INDEX IF NOT EXISTS articles.idx_likes_created_at ON likes(created_at DESC)`,
 	`CREATE INDEX IF NOT EXISTS articles.idx_articles_language ON articles(language)`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_likes_article_created ON likes(feed_url, article_url, created_at)`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_annotations_feed_article_created ON annotations(feed_url, article_url, created_at)`,
+	`CREATE INDEX IF NOT EXISTS articles.idx_likes_created_author ON likes(created_at, author_did)`,
 
 	`CREATE VIRTUAL TABLE IF NOT EXISTS articles.articles_fts USING fts5(title, summary, content, author, content=articles, content_rowid=id)`,
 	`CREATE TRIGGER IF NOT EXISTS articles.articles_ai AFTER INSERT ON articles BEGIN
