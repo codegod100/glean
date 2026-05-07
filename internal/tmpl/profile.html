@@ -22,6 +22,39 @@
         </div>
     </div>
 
+    {{if eq .ProfileUser.DID .CurrentUserDID}}
+    <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide mb-3">Settings</h2>
+    <div class="bg-spot-surface rounded-xl p-5 mb-6">
+        <form id="lang-form" hx-post="/settings/languages" hx-swap="none" hx-on::after-request="location.reload()">
+            <p class="text-sm font-semibold text-spot-text mb-1">Recommendation languages</p>
+            <p class="text-xs text-spot-secondary mb-4">Filter article recommendations to specific languages. Leave empty to show all.</p>
+            <div class="flex flex-wrap gap-2 mb-4">
+                {{range .AvailableLanguages}}
+                <label class="lang-pill cursor-pointer text-sm px-4 py-1.5 rounded-pill font-bold transition {{if containsString $.UserLanguages .Code}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
+                    <input type="checkbox" name="languages" value="{{.Code}}" {{if containsString $.UserLanguages .Code}}checked{{end}} class="hidden">
+                    {{.Name}}
+                </label>
+                {{end}}
+            </div>
+            <button type="submit" class="bg-spot-green text-white rounded-pill px-5 py-1.5 text-xs font-bold uppercase tracking-button hover:brightness-110 transition">Save</button>
+        </form>
+    </div>
+    <script>
+    document.querySelectorAll('#lang-form .lang-pill input[type=checkbox]').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+            var pill = this.closest('.lang-pill');
+            if (this.checked) {
+                pill.classList.remove('bg-spot-hover', 'text-spot-secondary', 'hover:text-spot-text');
+                pill.classList.add('bg-spot-active-pill-bg', 'text-spot-active-pill-text');
+            } else {
+                pill.classList.remove('bg-spot-active-pill-bg', 'text-spot-active-pill-text');
+                pill.classList.add('bg-spot-hover', 'text-spot-secondary', 'hover:text-spot-text');
+            }
+        });
+    });
+    </script>
+    {{end}}
+
     <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide mb-3">Feeds</h2>
     <div class="bg-spot-surface rounded-xl divide-y divide-spot-divider mb-6">
         {{range .Subscriptions}}

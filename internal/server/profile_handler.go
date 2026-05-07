@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"pkg.rbrt.fr/glean/internal/atproto"
+	"pkg.rbrt.fr/glean/internal/langdetect"
 )
 
 func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
@@ -56,13 +57,17 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 
 	user := currentUser(r)
 
+	userLangs, _ := s.dbs.Users.GetLanguages(ctx, user.DID)
+
 	s.render(w, r, "profile.html", map[string]any{
-		"User":              user,
-		"CurrentUserDID":    user.DID,
-		"ProfileUser":       profileUser,
-		"Subscriptions":     subs,
-		"Annotations":       annotations,
-		"SubscriptionCount": subCount,
-		"AnnotationCount":   len(annotations),
+		"User":               user,
+		"CurrentUserDID":     user.DID,
+		"ProfileUser":        profileUser,
+		"Subscriptions":      subs,
+		"Annotations":        annotations,
+		"SubscriptionCount":  subCount,
+		"AnnotationCount":    len(annotations),
+		"UserLanguages":      userLangs,
+		"AvailableLanguages": langdetect.KnownLanguages(),
 	})
 }

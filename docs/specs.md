@@ -352,6 +352,7 @@ CREATE TABLE articles (
     published   DATETIME,
     updated     DATETIME,
     fetched_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    language    TEXT NOT NULL DEFAULT '',
     UNIQUE(feed_url, guid)
 );
 
@@ -360,6 +361,8 @@ CREATE INDEX idx_articles_published ON articles(published DESC);
 ```
 
 Content is stored as raw HTML from the feed's `<content:encoded>`, `<summary>`, or JSON Feed `content_html`. `full_content` stores scraped article content fetched from the original URL. The server renders it in a sanitized view (strip `<script>`, `<iframe>`, etc.).
+
+The `language` column stores the ISO 639-1 code detected by the LLM (e.g. `en`, `fr`, `ja`). It defaults to empty (`''`) and is populated by the cron job when `GLEAN_LLM_BASE_URL` is configured.
 
 ### 4.5 Read State
 
@@ -463,7 +466,8 @@ CREATE TABLE users (
     did            TEXT PRIMARY KEY,
     indexed_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    follows_dirty  BOOLEAN NOT NULL DEFAULT 1
+    follows_dirty  BOOLEAN NOT NULL DEFAULT 1,
+    languages      TEXT
 );
 ```
 
@@ -526,11 +530,13 @@ CREATE TABLE articles (
     published   DATETIME,
     updated     DATETIME,
     fetched_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    language    TEXT NOT NULL DEFAULT '',
     UNIQUE(feed_url, guid)
 );
 
 CREATE INDEX idx_articles_feed ON articles(feed_url);
 CREATE INDEX idx_articles_published ON articles(published DESC);
+CREATE INDEX idx_articles_language ON articles(language);
 ```
 
 ### 6.5 Read State (`<base>_articles`)
@@ -708,6 +714,8 @@ score = like_signal * w_like
 
 Content signal uses embedding vectors: the user's liked article embeddings are averaged into a single interest vector, then a KNN query against the `article_embeddings` vec0 table finds semantically similar articles. This requires an embedder to be configured; without it, the content signal is 0.
 
+**Language filtering**: Users can set preferred languages on their profile (stored in the `user_settings` table as a JSON array of ISO 639-1 codes). When set, article recommendations are filtered to only include articles whose `language` column matches one of the selected codes **or** whose `language` is empty (not yet classified). This ensures users with language preferences still see all recommendations when the LLM hasn't run or hasn't classified certain articles yet. If no languages are set (empty/nil), all articles are shown regardless of language.
+
 ### 7.5 User Feedback (Dismiss)
 
 Users can dismiss recommendations they don't want to see again:
@@ -763,9 +771,10 @@ A background goroutine runs on a configurable schedule (`GLEAN_CLUSTER_INTERVAL`
 2. **Compute feed similarity**: Batch-update `feed_similarity` table (Jaccard over subscriber sets + embedding cosine similarity)
 3. **Compute user similarity**: Batch-update `user_similarity` table (subscription Jaccard + time-decayed likes + tags + follow boost)
 4. **Compute article embeddings**: Embed new articles (`title + summary + content`, excluding `full_content` to stay within embedding model token limits) via embedding API into `article_embeddings` vec0 table (skipped if no embedder configured)
-5. **Compute follow distances**: Incremental BFS for dirty users (1-hop through 3-hop from `follows` table)
-6. **Compute signal profiles**: Per-user category/tag/like summaries
-7. **Auto-dismiss stale**: Dismiss items shown >=5 times over >5 days without action
+5. **Detect article languages**: Batch-classify article languages via LLM, updating the `language` column (skipped if no LLM configured)
+6. **Compute follow distances**: Incremental BFS for dirty users (1-hop through 3-hop from `follows` table)
+7. **Compute signal profiles**: Per-user category/tag/like summaries
+8. **Auto-dismiss stale**: Dismiss items shown >=5 times over >5 days without action
 
 Jetstream ingestion and record indexing happen in a separate persistent goroutine (the Jetstream consumer), not in the cron.
 
@@ -856,6 +865,14 @@ When `GLEAN_EMBED_BASE_URL` is configured, article text and feed descriptions ar
 
 The embedder uses the official `github.com/openai/openai-go` SDK with `option.WithBaseURL()`, so any OpenAI-compatible `/v1/embeddings` endpoint works (OpenAI, Gemini, Ollama, local inference servers).
 
+### 7.14 LLM Client (optional)
+
+When `GLEAN_LLM_BASE_URL` is configured, an LLM client is available for text classification tasks. It uses the same `github.com/openai/openai-go` SDK pointed at any OpenAI-compatible `/v1/chat/completions` endpoint.
+
+**Language detection**: The cron job calls `DetectLanguages` in batches of up to 100 articles per request. For each article, the title and summary (truncated to 500 characters) are sent with a prompt asking for ISO 639-1 codes. Results are written to `articles.language`. Articles that are already classified (non-empty `language`) are skipped. An empty response from the LLM defaults to English (`en`).
+
+Without an LLM, all articles remain at the default empty language value and language-based filtering is unavailable.
+
 vec0 tables are created dynamically at startup with the configured dimension (`GLEAN_EMBED_DIMENSION`, default 1536):
 
 ```sql
@@ -916,6 +933,7 @@ The server renders HTML fragments that htmx swaps into the page. No JSON API nee
 | `/library/{id}/delete`         | POST   | Delete an annotation                                                |
 | `/stats`                       | GET    | Application metrics and performance data (Prometheus, public)       |
 | `/profile/{did}`               | GET    | Public profile: their feeds, likes, annotations                     |
+| `/settings/languages`          | POST   | Save preferred recommendation languages (htmx, requires auth)       |
 | `/auth/login`                  | GET    | Login page                                                          |
 | `/auth/register`               | GET    | Register with Eurosky (OAuth flow with hardcoded PDS)               |
 | `/auth/resolve`                | GET    | Resolve handle to DID                                               |
@@ -979,7 +997,8 @@ glean/
 │   ├── cluster/
 │   │   ├── jaccard.go             # Jaccard similarity computation
 │   │   ├── embed.go               # Embedder interface + OpenAI-compatible implementation
-│   │   ├── article.go             # Article + feed embedding computation, vec0 KNN content boost
+│   │   ├── llm.go                 # LLM client for language detection and text tasks
+│   │   ├── article.go             # Article + feed embedding computation, vec0 KNN content boost, language detection
 │   │   ├── scoring.go             # Feed + people + article recommendation queries (on-demand)
 │   │   ├── social.go              # Incremental follow-distance computation (1-3 hop, dirty-flag)
 │   │   ├── dismiss.go             # Dismiss + impression tracking
@@ -997,6 +1016,7 @@ glean/
 │   │   ├── stats_handler.go       # Stats handler (Prometheus metrics display)
 │   │   ├── index_handler.go       # Landing page handler
 │   │   ├── profile_handler.go     # Public profile handler
+│   │   ├── settings_handler.go    # User settings (language preferences)
 │   │   ├── terms_handler.go       # Terms of service handler
 │   │   ├── pagination.go          # Pagination helpers
 │   │   ├── middleware.go          # Auth, logging, CSRF middleware
@@ -1077,13 +1097,14 @@ Cron (every 10m) ──► Cluster Engine
                            ├─► Compute feed similarity
                            ├─► Compute user similarity
                            ├─► Compute article embeddings (if embedder configured)
+                           ├─► Detect article languages (if LLM configured)
                            ├─► Compute follow distances
                            ├─► Compute signal profiles
                            └─► Auto-dismiss stale recommendations
 
 Browser ──GET /dashboard──► Server
                                 │
-                                ├─► Compute recommendations on-demand
+                                ├─► Compute recommendations on-demand (filtered by user's language preferences)
                                 ├─► Fetch feed metadata
                                 └─◄ Render recommendation cards (htmx)
 ```

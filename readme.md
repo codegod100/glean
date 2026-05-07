@@ -69,6 +69,9 @@ Then open `http://localhost:8080`.
 | `GLEAN_EMBED_API_KEY`        | _(empty)_                  | API key for the embeddings endpoint                        |
 | `GLEAN_EMBED_MODEL`          | `text-embedding-3-small`   | Embedding model name                                       |
 | `GLEAN_EMBED_DIMENSION`      | `1536`                     | Embedding vector dimension                                 |
+| `GLEAN_LLM_BASE_URL`         | _(empty)_                  | LLM API base URL for language detection (see below)        |
+| `GLEAN_LLM_API_KEY`          | _(empty)_                  | API key for the LLM endpoint                               |
+| `GLEAN_LLM_MODEL`            | `gpt-4o-mini`              | LLM model name                                             |
 
 For production:
 

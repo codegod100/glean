@@ -44,6 +44,9 @@ func (c *Cron) Run(ctx context.Context) error {
 			if err := c.engine.ComputeArticleEmbeddings(ctx); err != nil {
 				c.engine.logger.Error("article embeddings failed", "error", err)
 			}
+			if err := c.engine.DetectArticleLanguages(ctx); err != nil {
+				c.engine.logger.Error("language detection failed", "error", err)
+			}
 			if err := c.engine.ComputeSignalProfiles(ctx); err != nil {
 				c.engine.logger.Error("signal profiles failed", "error", err)
 			}

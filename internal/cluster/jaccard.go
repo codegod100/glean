@@ -37,12 +37,17 @@ type Engine struct {
 	mu       sync.Mutex
 	config   Config
 	embedder Embedder
+	llm      *LLMClient
 }
 
-// NewEngine creates a new recommendation engine. Pass nil for embedder to
-// disable content-based signals (no embedding computation, no KNN queries).
-func NewEngine(db *sql.DB, embedder Embedder, logger *slog.Logger) *Engine {
-	return &Engine{db: db, logger: logger, config: DefaultConfig(), embedder: embedder}
+func NewEngine(db *sql.DB, embedder Embedder, llm *LLMClient, logger *slog.Logger) *Engine {
+	return &Engine{
+		db:       db,
+		logger:   logger,
+		config:   DefaultConfig(),
+		embedder: embedder,
+		llm:      llm,
+	}
 }
 
 // ComputeFeedSimilarity recomputes the feed_similarity table: time-decayed

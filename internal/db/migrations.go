@@ -13,7 +13,7 @@ func init() {
 }
 
 // SchemaVersion must be incremented each time a migration is added to the migrations slice (used so that fresh dbs skip running migrations).
-const SchemaVersion = 2
+const SchemaVersion = 3
 
 type migration struct {
 	id   int
@@ -31,6 +31,11 @@ var migrations = []migration{
 		id:   2,
 		name: "feed_type_atproto",
 		run:  migrateFeedTypeATProto,
+	},
+	{
+		id:   3,
+		name: "article_language_user_languages",
+		run:  migrateArticleLanguageUserLanguages,
 	},
 }
 
@@ -177,6 +182,33 @@ func migrateAddPersonTargetType(db *DB) error {
 
 	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_impressions_last_shown ON recommendation_impressions(last_shown_at)"); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func migrateArticleLanguageUserLanguages(db *DB) error {
+	var colCount int
+	err := db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('articles.articles') WHERE name='language'").Scan(&colCount)
+	if err != nil {
+		return fmt.Errorf("check articles.language column: %w", err)
+	}
+	if colCount == 0 {
+		if _, err := db.Exec("ALTER TABLE articles.articles ADD COLUMN language TEXT NOT NULL DEFAULT ''"); err != nil {
+			return fmt.Errorf("add articles.language: %w", err)
+		}
+		if _, err := db.Exec("CREATE INDEX IF NOT EXISTS articles.idx_articles_language ON articles(language)"); err != nil {
+			return fmt.Errorf("create articles.language index: %w", err)
+		}
+	}
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS user_settings (
+		did TEXT PRIMARY KEY,
+		languages TEXT,
+		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+	if err != nil {
+		return fmt.Errorf("create user_settings: %w", err)
 	}
 
 	return nil

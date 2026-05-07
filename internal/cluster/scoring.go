@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 )
 
 type FeedRecommendation struct {
@@ -102,8 +103,8 @@ func (e *Engine) GetPeopleRecommendations(ctx context.Context, userDID string, l
 // signals (liked by similar users, followed users' feeds), content similarity
 // (embedding KNN against user's liked articles), and recency. Scores are
 // min-max normalized.
-func (e *Engine) GetArticleRecommendations(ctx context.Context, userDID string, limit int) ([]*ArticleRecommendation, error) {
-	recs, err := e.ComputeArticleRecommendationsOnDemand(ctx, userDID, limit)
+func (e *Engine) GetArticleRecommendations(ctx context.Context, userDID string, languages []string, limit int) ([]*ArticleRecommendation, error) {
+	recs, err := e.ComputeArticleRecommendationsOnDemand(ctx, userDID, languages, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -389,7 +390,7 @@ func (e *Engine) coldStartFromEmbeddings(ctx context.Context, userDID string, li
 	return results, nil
 }
 
-func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, userDID string, limit int) ([]*ArticleRecommendation, error) {
+func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, userDID string, languages []string, limit int) ([]*ArticleRecommendation, error) {
 	w := e.GetWeights(ctx, userDID)
 
 	conn, err := e.db.Conn(ctx)
@@ -408,7 +409,18 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 		}
 	}
 
-	rows, err := conn.QueryContext(ctx, `
+	langFilter := ""
+	langArgs := []any{}
+	if len(languages) > 0 {
+		ph := make([]string, len(languages))
+		for i, l := range languages {
+			ph[i] = "?"
+			langArgs = append(langArgs, l)
+		}
+		langFilter = " AND (a.language IN (" + strings.Join(ph, ",") + ") OR a.language = '')"
+	}
+
+	query := fmt.Sprintf(`
 		WITH similar_users AS (
 			SELECT user_b AS peer, jaccard FROM recs.user_similarity WHERE user_a = ? AND jaccard > 0.15
 			UNION ALL
@@ -453,11 +465,17 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 		LEFT JOIN social_likes sl ON sl.feed_url = la.feed_url AND sl.article_url = la.article_url
 		LEFT JOIN _content_boost cb ON cb.article_id = a.id
 		LEFT JOIN articles.read_state rs ON rs.article_id = a.id AND rs.user_did = ?
-		WHERE COALESCE(rs.is_read, 0) = 0
+		WHERE COALESCE(rs.is_read, 0) = 0%s
 		ORDER BY score DESC, (CASE WHEN a.published > 'now' THEN 1 ELSE 0 END), a.published DESC
 		LIMIT ?
-	`, userDID, userDID, userDID, userDID, userDID, userDID,
-		w.WLike, w.WSocial, w.WContent, userDID, limit)
+	`, langFilter)
+
+	args := []any{userDID, userDID, userDID, userDID, userDID, userDID,
+		w.WLike, w.WSocial, w.WContent, userDID}
+	args = append(args, langArgs...)
+	args = append(args, limit)
+
+	rows, err := conn.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

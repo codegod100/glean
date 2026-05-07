@@ -364,6 +364,112 @@ func (e *Engine) ComputeFeedEmbeddings(ctx context.Context) error {
 	return nil
 }
 
+// DetectArticleLanguages detects the language of articles that still have the
+// default language ('en') using the embedding model. It processes articles in
+// batches alongside the embedding computation to reuse the same API client.
+func (e *Engine) DetectArticleLanguages(ctx context.Context) error {
+	if e.llm == nil {
+		e.logger.Debug("language detection skipped, no LLM client")
+		return nil
+	}
+
+	conn, err := e.db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	rows, err := conn.QueryContext(ctx, `
+		SELECT id, COALESCE(title, '') || ' ' || COALESCE(summary, '')
+		FROM articles.articles
+		WHERE language = ''
+		ORDER BY id DESC
+		LIMIT 5000
+	`)
+	if err != nil {
+		return err
+	}
+
+	type article struct {
+		id   int64
+		text string
+	}
+	var batch []article
+	for rows.Next() {
+		var a article
+		if err := rows.Scan(&a.id, &a.text); err != nil {
+			rows.Close()
+			return err
+		}
+		if strings.TrimSpace(a.text) == "" {
+			continue
+		}
+		if len(a.text) > 500 {
+			a.text = a.text[:500]
+		}
+		batch = append(batch, a)
+	}
+	rows.Close()
+
+	if len(batch) == 0 {
+		e.logger.Info("article languages up to date")
+		return nil
+	}
+
+	for i := 0; i < len(batch); i += embedBatchSize {
+		end := min(i+embedBatchSize, len(batch))
+		sub := batch[i:end]
+
+		texts := make([]string, len(sub))
+		for j, a := range sub {
+			texts[j] = a.text
+		}
+
+		langs, err := e.llm.DetectLanguages(ctx, texts)
+		if err != nil {
+			return fmt.Errorf("detect languages batch %d: %w", i/embedBatchSize, err)
+		}
+
+		tx, err := conn.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback() }()
+
+		stmt, err := tx.PrepareContext(ctx, `UPDATE articles.articles SET language = ? WHERE id = ? AND language = ''`)
+		if err != nil {
+			return err
+		}
+		defer stmt.Close()
+
+		updated := 0
+		for j, lang := range langs {
+			if lang == "" {
+				lang = "en"
+			}
+			res, err := stmt.ExecContext(ctx, lang, sub[j].id)
+			if err != nil {
+				return fmt.Errorf("update language: %w", err)
+			}
+			n, _ := res.RowsAffected()
+			updated += int(n)
+		}
+
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+
+		e.logger.Info("article languages detected",
+			slog.Int("batch", i/embedBatchSize),
+			slog.Int("count", len(sub)),
+			slog.Int("updated", updated),
+		)
+	}
+
+	e.logger.Info("article languages computed", slog.Int("total", len(batch)))
+	return nil
+}
+
 func (e *Engine) ensureContentBoostTable(ctx context.Context, conn *sql.Conn) error {
 	_, err := conn.ExecContext(ctx, `CREATE TEMP TABLE IF NOT EXISTS _content_boost (article_id INT PRIMARY KEY, score REAL)`)
 	if err != nil {

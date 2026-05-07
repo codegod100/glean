@@ -203,6 +203,11 @@ func (s *Server) setupRoutes() {
 		r.Post("/dismiss-person", s.handleDismissPersonRecommendation)
 	})
 
+	s.router.Route("/settings", func(r chi.Router) {
+		r.Use(s.requireAuth)
+		r.Post("/languages", s.handleUpdateLanguages)
+	})
+
 	s.router.Get("/auth/login", s.handleAuthLogin)
 	s.router.Get("/auth/register", s.handleAuthRegister)
 	s.router.Get("/auth/resolve", s.handleAuthResolve)
@@ -353,6 +358,13 @@ func (s *Server) loadTemplates() {
 			}
 			u.RawQuery = q.Encode()
 			return u.String()
+		},
+		"containsString": func(slice any, s string) bool {
+			sl, ok := slice.([]string)
+			if !ok {
+				return false
+			}
+			return slices.Contains(sl, s)
 		},
 	}
 

@@ -74,7 +74,16 @@ func main() {
 		}
 	}
 
-	engine := cluster.NewEngine(dbs.SQLDB(), embedder, logger)
+	var llm *cluster.LLMClient
+	if llmURL := envOr("GLEAN_LLM_BASE_URL", ""); llmURL != "" {
+		llm = cluster.NewLLMClient(cluster.LLMClientConfig{
+			BaseURL: llmURL,
+			APIKey:  envOr("GLEAN_LLM_API_KEY", ""),
+			Model:   envOr("GLEAN_LLM_MODEL", "gpt-4o-mini"),
+		})
+	}
+
+	engine := cluster.NewEngine(dbs.SQLDB(), embedder, llm, logger)
 
 	fetcher := feed.NewFetcher(siteFetcher)
 	srv := server.New(dbs, clientID, callbackURL, *addr, scheduler, fetcher, engine, logger, []byte(sessionKey))

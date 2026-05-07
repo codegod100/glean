@@ -63,8 +63,8 @@ func (s *ArticleStore) BatchUpsertArticles(ctx context.Context, articles []feed.
 	defer tx.Rollback()
 
 	stmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO articles.articles (feed_url, guid, title, url, author, summary, content, published, updated)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO articles.articles (feed_url, guid, title, url, author, summary, content, published, updated, language)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '')
 		ON CONFLICT(feed_url, guid) DO NOTHING
 	`)
 	if err != nil {

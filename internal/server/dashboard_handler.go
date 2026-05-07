@@ -36,7 +36,12 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		articles = articles[:page.PageSize]
 	}
 
-	articleRecs, err := s.engine.GetArticleRecommendations(ctx, user.DID, 5)
+	userLangs, err := s.dbs.Users.GetLanguages(ctx, user.DID)
+	if err != nil {
+		s.logger.Warn("failed to get user languages", "error", err, "did", user.DID)
+	}
+
+	articleRecs, err := s.engine.GetArticleRecommendations(ctx, user.DID, userLangs, 5)
 	if err != nil {
 		s.logger.Warn("failed to get article recommendations", "error", err, "did", user.DID)
 	}

@@ -94,7 +94,7 @@ func seedFollowData(t *testing.T, ctx context.Context, dbs *db.Store) {
 }
 
 func newTestEngine(dbs *db.Store) *Engine {
-	return NewEngine(dbs.SQLDB(), NewMockEmbedder(8), slog.Default())
+	return NewEngine(dbs.SQLDB(), NewMockEmbedder(8), nil, slog.Default())
 }
 
 func TestComputeFeedSimilarity(t *testing.T) {
@@ -638,60 +638,153 @@ func TestComputeArticleEmbeddings(t *testing.T) {
 	assert.Equal(t, count, 3, "expected 3 article embeddings")
 }
 
-func TestArticleRecommendationsWithContentBoost(t *testing.T) {
+func seedArticleRecData(t *testing.T, ctx context.Context, dbs *db.Store) {
+	t.Helper()
+
+	for _, did := range []string{"did:test:alice", "did:test:bob"} {
+		_, err := dbs.SQLDB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, did)
+		assert.NilError(t, err)
+	}
+
+	for _, f := range []struct{ url, title string }{
+		{"https://tech.com/feed", "Tech Feed"},
+		{"https://dev.com/feed", "Dev Feed"},
+		{"https://shared.com/feed", "Shared Feed"},
+	} {
+		_, err := dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.feeds (feed_url, title, site_url, feed_type, subscriber_count) VALUES (?, ?, ?, 'rss', 2)`, f.url, f.title, f.url)
+		assert.NilError(t, err)
+	}
+
+	subs := []struct{ user, feed string }{
+		{"did:test:alice", "https://tech.com/feed"},
+		{"did:test:alice", "https://shared.com/feed"},
+		{"did:test:bob", "https://dev.com/feed"},
+		{"did:test:bob", "https://shared.com/feed"},
+	}
+	for _, s := range subs {
+		_, err := dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.subscriptions (user_did, feed_url) VALUES (?, ?)`, s.user, s.feed)
+		assert.NilError(t, err)
+	}
+
+	articles := []struct{ feed, guid, title, summary, url, lang string }{
+		{"https://tech.com/feed", "1", "golang programming tutorial", "learn go programming", "https://tech.com/go", "en"},
+		{"https://dev.com/feed", "2", "rust programming tutorial", "learn rust programming", "https://dev.com/rust", "fr"},
+		{"https://dev.com/feed", "3", "cooking dinner recipes", "easy dinner recipes", "https://dev.com/cook", ""},
+		{"https://dev.com/feed", "4", "python data science", "python for data analysis", "https://dev.com/python", "de"},
+	}
+	for _, a := range articles {
+		_, err := dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.articles (feed_url, guid, title, summary, url, published, language) VALUES (?, ?, ?, ?, ?, datetime('now'), ?)`,
+			a.feed, a.guid, a.title, a.summary, a.url, a.lang)
+		assert.NilError(t, err)
+	}
+
+	likes := []struct{ uri, author, feed, article string }{
+		{"at://alice/like/1", "did:test:alice", "https://tech.com/feed", "https://tech.com/go"},
+		{"at://bob/like/2", "did:test:bob", "https://dev.com/feed", "https://dev.com/rust"},
+		{"at://bob/like/3", "did:test:bob", "https://dev.com/feed", "https://dev.com/cook"},
+		{"at://bob/like/4", "did:test:bob", "https://dev.com/feed", "https://dev.com/python"},
+	}
+	for _, l := range likes {
+		_, err := dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.likes (uri, author_did, feed_url, article_url, created_at) VALUES (?, ?, ?, ?, datetime('now'))`,
+			l.uri, l.author, l.feed, l.article)
+		assert.NilError(t, err)
+	}
+}
+
+func TestArticleRecommendations_LanguageFilter_ShowsUnclassified(t *testing.T) {
 	ctx := context.Background()
 	dbs := setupClusterTestDB(t)
-
-	_, err := dbs.SQLDB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, "did:test:alice")
-	assert.NilError(t, err)
-	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, "did:test:bob")
-	assert.NilError(t, err)
-
-	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.feeds (feed_url, title, site_url, feed_type, subscriber_count) VALUES (?, ?, ?, 'rss', 2)`,
-		"https://tech.com/feed", "Tech Feed", "https://tech.com")
-	assert.NilError(t, err)
-	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.feeds (feed_url, title, site_url, feed_type, subscriber_count) VALUES (?, ?, ?, 'rss', 2)`,
-		"https://dev.com/feed", "Dev Feed", "https://dev.com")
-	assert.NilError(t, err)
-	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.feeds (feed_url, title, site_url, feed_type, subscriber_count) VALUES (?, ?, ?, 'rss', 2)`,
-		"https://shared.com/feed", "Shared Feed", "https://shared.com")
-	assert.NilError(t, err)
-
-	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.subscriptions (user_did, feed_url) VALUES (?, ?)`, "did:test:alice", "https://tech.com/feed")
-	assert.NilError(t, err)
-	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.subscriptions (user_did, feed_url) VALUES (?, ?)`, "did:test:alice", "https://shared.com/feed")
-	assert.NilError(t, err)
-	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.subscriptions (user_did, feed_url) VALUES (?, ?)`, "did:test:bob", "https://dev.com/feed")
-	assert.NilError(t, err)
-	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.subscriptions (user_did, feed_url) VALUES (?, ?)`, "did:test:bob", "https://shared.com/feed")
-	assert.NilError(t, err)
-
-	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.articles (feed_url, guid, title, summary, url, published) VALUES (?, ?, ?, ?, ?, datetime('now'))`,
-		"https://tech.com/feed", "1", "golang programming tutorial", "learn go programming", "https://tech.com/go")
-	assert.NilError(t, err)
-	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.articles (feed_url, guid, title, summary, url, published) VALUES (?, ?, ?, ?, ?, datetime('now'))`,
-		"https://dev.com/feed", "2", "rust programming tutorial", "learn rust programming", "https://dev.com/rust")
-	assert.NilError(t, err)
-	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.articles (feed_url, guid, title, summary, url, published) VALUES (?, ?, ?, ?, ?, datetime('now'))`,
-		"https://dev.com/feed", "3", "cooking dinner recipes", "easy dinner recipes", "https://dev.com/cook")
-	assert.NilError(t, err)
-
-	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.likes (uri, author_did, feed_url, article_url, created_at) VALUES (?, ?, ?, ?, datetime('now'))`,
-		"at://alice/like/1", "did:test:alice", "https://tech.com/feed", "https://tech.com/go")
-	assert.NilError(t, err)
-	_, err = dbs.SQLDB().ExecContext(ctx, `INSERT INTO articles.likes (uri, author_did, feed_url, article_url, created_at) VALUES (?, ?, ?, ?, datetime('now'))`,
-		"at://bob/like/1", "did:test:bob", "https://dev.com/feed", "https://dev.com/rust")
-	assert.NilError(t, err)
+	seedArticleRecData(t, ctx, dbs)
 
 	engine := newTestEngine(dbs)
-
 	assert.NilError(t, engine.ComputeFeedSimilarity(ctx))
 	assert.NilError(t, engine.ComputeUserSimilarity(ctx))
 	assert.NilError(t, engine.ComputeArticleEmbeddings(ctx))
 
-	recs, err := engine.GetArticleRecommendations(ctx, "did:test:alice", 10)
+	recs, err := engine.GetArticleRecommendations(ctx, "did:test:alice", []string{"en"}, 10)
 	assert.NilError(t, err)
-	assert.Assert(t, len(recs) > 0, "alice should get article recommendations")
+	assert.Assert(t, len(recs) > 0, "alice should get recommendations with language filter")
+
+	urls := make(map[string]bool)
+	for _, r := range recs {
+		urls[r.URL] = true
+	}
+	assert.Assert(t, urls["https://tech.com/go"], "should include article with language 'en'")
+	assert.Assert(t, urls["https://dev.com/cook"], "should include article with empty language (unclassified)")
+	assert.Assert(t, !urls["https://dev.com/rust"], "should exclude article with language 'fr'")
+	assert.Assert(t, !urls["https://dev.com/python"], "should exclude article with language 'de'")
+}
+
+func TestArticleRecommendations_LanguageFilter_MultipleLanguages(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupClusterTestDB(t)
+	seedArticleRecData(t, ctx, dbs)
+
+	engine := newTestEngine(dbs)
+	assert.NilError(t, engine.ComputeFeedSimilarity(ctx))
+	assert.NilError(t, engine.ComputeUserSimilarity(ctx))
+	assert.NilError(t, engine.ComputeArticleEmbeddings(ctx))
+
+	recs, err := engine.GetArticleRecommendations(ctx, "did:test:alice", []string{"en", "fr"}, 10)
+	assert.NilError(t, err)
+	assert.Assert(t, len(recs) > 0, "alice should get recommendations with multi-language filter")
+
+	urls := make(map[string]bool)
+	for _, r := range recs {
+		urls[r.URL] = true
+	}
+	assert.Assert(t, urls["https://tech.com/go"], "should include article with language 'en'")
+	assert.Assert(t, urls["https://dev.com/rust"], "should include article with language 'fr'")
+	assert.Assert(t, urls["https://dev.com/cook"], "should include article with empty language (unclassified)")
+	assert.Assert(t, !urls["https://dev.com/python"], "should exclude article with language 'de'")
+}
+
+func TestArticleRecommendations_LanguageFilter_NoPreferences(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupClusterTestDB(t)
+	seedArticleRecData(t, ctx, dbs)
+
+	engine := newTestEngine(dbs)
+	assert.NilError(t, engine.ComputeFeedSimilarity(ctx))
+	assert.NilError(t, engine.ComputeUserSimilarity(ctx))
+	assert.NilError(t, engine.ComputeArticleEmbeddings(ctx))
+
+	recs, err := engine.GetArticleRecommendations(ctx, "did:test:alice", nil, 10)
+	assert.NilError(t, err)
+	assert.Assert(t, len(recs) > 0, "alice should get all recommendations without language filter")
+
+	urls := make(map[string]bool)
+	for _, r := range recs {
+		urls[r.URL] = true
+	}
+	assert.Assert(t, urls["https://tech.com/go"], "should include 'en' article")
+	assert.Assert(t, urls["https://dev.com/rust"], "should include 'fr' article")
+	assert.Assert(t, urls["https://dev.com/cook"], "should include unclassified article")
+	assert.Assert(t, urls["https://dev.com/python"], "should include 'de' article")
+}
+
+func TestArticleRecommendations_LanguageFilter_EmptyPreferences(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupClusterTestDB(t)
+	seedArticleRecData(t, ctx, dbs)
+
+	engine := newTestEngine(dbs)
+	assert.NilError(t, engine.ComputeFeedSimilarity(ctx))
+	assert.NilError(t, engine.ComputeUserSimilarity(ctx))
+	assert.NilError(t, engine.ComputeArticleEmbeddings(ctx))
+
+	recs, err := engine.GetArticleRecommendations(ctx, "did:test:alice", []string{}, 10)
+	assert.NilError(t, err)
+	assert.Assert(t, len(recs) > 0, "empty language list should show all articles")
+
+	urls := make(map[string]bool)
+	for _, r := range recs {
+		urls[r.URL] = true
+	}
+	assert.Assert(t, urls["https://tech.com/go"], "should include 'en' article")
+	assert.Assert(t, urls["https://dev.com/rust"], "should include 'fr' article")
+	assert.Assert(t, urls["https://dev.com/cook"], "should include unclassified article")
+	assert.Assert(t, urls["https://dev.com/python"], "should include 'de' article")
 }
 
 func TestFeedEmbeddingRecomputedOnDescriptionChange(t *testing.T) {
