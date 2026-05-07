@@ -30,10 +30,15 @@ func (s *Server) handleTrending(w http.ResponseWriter, r *http.Request) {
 		userDID = user.DID
 	}
 
+	var userLangs []string
+	if user != nil {
+		userLangs, _ = s.dbs.Users.GetLanguages(ctx, user.DID)
+	}
+
 	var trending []*db.TrendingItem
 	var err error
 	if scope == "for-me" {
-		trending, err = s.dbs.Articles.ListTrendingArticlesForUser(ctx, userDID, since, page.Limit()+1, page.Offset())
+		trending, err = s.dbs.Articles.ListTrendingArticlesForUser(ctx, userDID, since, userLangs, page.Limit()+1, page.Offset())
 	} else {
 		trending, err = s.dbs.Articles.ListTrendingArticles(ctx, userDID, since, page.Limit()+1, page.Offset())
 	}

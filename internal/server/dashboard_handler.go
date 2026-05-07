@@ -72,7 +72,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	since := time.Now().AddDate(0, 0, -7).Format(time.RFC3339)
 
-	personalTrending, err := s.dbs.Articles.ListTrendingArticlesForUser(ctx, user.DID, since, 5, 0)
+	personalTrending, err := s.dbs.Articles.ListTrendingArticlesForUser(ctx, user.DID, since, userLangs, 5, 0)
 	if err != nil {
 		s.logger.Warn("failed to list personal trending", "error", err, "did", user.DID)
 	}

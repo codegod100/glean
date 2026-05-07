@@ -234,6 +234,19 @@ func (e *Engine) ComputeFeedRecommendationsOnDemand(ctx context.Context, userDID
 	return results, rows.Err()
 }
 
+func buildLangFilter(languages []string, prefix string) (string, []any) {
+	if len(languages) == 0 {
+		return "", nil
+	}
+	ph := make([]string, len(languages))
+	args := make([]any, len(languages))
+	for i, l := range languages {
+		ph[i] = "?"
+		args[i] = l
+	}
+	return "AND (" + prefix + "language IN (" + strings.Join(ph, ",") + ") OR " + prefix + "language = '')", args
+}
+
 func normalizeFeedScores(recs []*FeedRecommendation) {
 	if len(recs) < 2 {
 		return
@@ -409,16 +422,7 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 		}
 	}
 
-	langFilter := ""
-	langArgs := []any{}
-	if len(languages) > 0 {
-		ph := make([]string, len(languages))
-		for i, l := range languages {
-			ph[i] = "?"
-			langArgs = append(langArgs, l)
-		}
-		langFilter = " AND (a.language IN (" + strings.Join(ph, ",") + ") OR a.language = '')"
-	}
+	langFilter, langArgs := buildLangFilter(languages, "a.")
 
 	query := fmt.Sprintf(`
 		WITH similar_users AS (
@@ -465,7 +469,7 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 		LEFT JOIN social_likes sl ON sl.feed_url = la.feed_url AND sl.article_url = la.article_url
 		LEFT JOIN _content_boost cb ON cb.article_id = a.id
 		LEFT JOIN articles.read_state rs ON rs.article_id = a.id AND rs.user_did = ?
-		WHERE COALESCE(rs.is_read, 0) = 0%s
+		WHERE COALESCE(rs.is_read, 0) = 0 %s
 		ORDER BY score DESC, (CASE WHEN a.published > 'now' THEN 1 ELSE 0 END), a.published DESC
 		LIMIT ?
 	`, langFilter)

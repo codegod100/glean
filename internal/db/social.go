@@ -9,6 +9,19 @@ import (
 
 var ErrDuplicateLike = errors.New("already liked this article")
 
+func buildLangFilter(languages []string, prefix string) (string, []any) {
+	if len(languages) == 0 {
+		return "", nil
+	}
+	ph := make([]string, len(languages))
+	args := make([]any, len(languages))
+	for i, l := range languages {
+		ph[i] = "?"
+		args[i] = l
+	}
+	return "AND (" + prefix + "language IN (" + strings.Join(ph, ",") + ") OR " + prefix + "language = '')", args
+}
+
 type Annotation struct {
 	ID           int64
 	URI          string
@@ -367,7 +380,9 @@ type TrendingItem struct {
 	HasLiked        bool
 }
 
-func (s *ArticleStore) ListTrendingArticlesForUser(ctx context.Context, userDID, since string, limit, offset int) ([]*TrendingItem, error) {
+func (s *ArticleStore) ListTrendingArticlesForUser(ctx context.Context, userDID, since string, languages []string, limit, offset int) ([]*TrendingItem, error) {
+	langFilter, langArgs := buildLangFilter(languages, "ar.")
+
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT ar.id, ar.title, COALESCE(ar.url, ''), COALESCE(ar.author, ''),
 		       COALESCE(ar.summary, ''), l.feed_url, COALESCE(f.title, ''),
@@ -388,11 +403,12 @@ func (s *ArticleStore) ListTrendingArticlesForUser(ctx context.Context, userDID,
 		    UNION SELECT ?
 		    UNION SELECT f.target_did FROM follows f WHERE f.user_did = ?
 		  )
+		  `+langFilter+`
 		GROUP BY ar.id
 		-- Future-published articles (e.g., scheduled) sort last
 		ORDER BY like_count DESC, annotation_count DESC, (CASE WHEN ar.published > 'now' THEN 1 ELSE 0 END), ar.published DESC
 		LIMIT ? OFFSET ?
-	`, since, userDID, since, userDID, userDID, userDID, userDID, userDID, limit, offset)
+	`, append(append([]any{since, userDID, since, userDID, userDID, userDID, userDID, userDID}, langArgs...), limit, offset)...)
 	if err != nil {
 		return nil, err
 	}
