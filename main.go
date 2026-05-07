@@ -91,7 +91,7 @@ func main() {
 	cron := cluster.NewCron(engine, *clusterInterval, logger)
 
 	handler := atproto.NewStreamDBHandler(dbs.Articles, dbs.Users, logger)
-	jetstream := atproto.NewJetstreamConsumer(*jetstreamURL, handler.Handle, logger)
+	jetstream := atproto.NewJetstreamConsumer(*jetstreamURL, handler.Handle, logger, dbs.CursorStore())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

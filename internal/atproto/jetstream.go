@@ -10,10 +10,15 @@ import (
 
 	jsc "github.com/bluesky-social/jetstream/pkg/client"
 	"github.com/bluesky-social/jetstream/pkg/models"
-	"go.uber.org/atomic"
 
 	"pkg.rbrt.fr/glean/internal/metrics"
 )
+
+// CursorStore stores the Jetstream cursor.
+type CursorStore interface {
+	LoadCursor(ctx context.Context) (*int64, error)
+	SaveCursor(ctx context.Context, cursor int64) error
+}
 
 type Event struct {
 	Type       string
@@ -28,14 +33,16 @@ type Event struct {
 type EventHandler func(ctx context.Context, event *Event) error
 
 type jetstreamScheduler struct {
-	handler EventHandler
-	logger  *slog.Logger
-	cursor  atomic.Int64
+	handler     EventHandler
+	logger      *slog.Logger
+	cursorStore CursorStore
 }
 
 func (s *jetstreamScheduler) AddWork(ctx context.Context, _ string, evt *models.Event) error {
 	if evt.TimeUS > 0 {
-		s.cursor.Store(evt.TimeUS)
+		if err := s.cursorStore.SaveCursor(ctx, evt.TimeUS); err != nil {
+			s.logger.Warn("failed to save cursor", "error", err)
+		}
 	}
 
 	if evt.Kind != models.EventKindCommit || evt.Commit == nil {
@@ -71,15 +78,18 @@ func (s *jetstreamScheduler) AddWork(ctx context.Context, _ string, evt *models.
 func (s *jetstreamScheduler) Shutdown() {}
 
 type JetstreamConsumer struct {
-	client *jsc.Client
-	logger *slog.Logger
-	sched  *jetstreamScheduler
+	client      *jsc.Client
+	logger      *slog.Logger
+	sched       *jetstreamScheduler
+	cursorStore CursorStore
+	rewind      time.Duration
 }
 
-func NewJetstreamConsumer(jetstreamURL string, handler EventHandler, logger *slog.Logger) *JetstreamConsumer {
+func NewJetstreamConsumer(jetstreamURL string, handler EventHandler, logger *slog.Logger, cursorStore CursorStore) *JetstreamConsumer {
 	sched := &jetstreamScheduler{
-		handler: handler,
-		logger:  logger,
+		handler:     handler,
+		logger:      logger,
+		cursorStore: cursorStore,
 	}
 
 	wsURL := jetstreamURL
@@ -111,20 +121,32 @@ func NewJetstreamConsumer(jetstreamURL string, handler EventHandler, logger *slo
 		return nil
 	}
 
+	rewind := 5 * time.Second
+	if cursorStore == nil {
+		rewind = 0
+	}
+
 	return &JetstreamConsumer{
-		client: c,
-		logger: logger,
-		sched:  sched,
+		client:      c,
+		logger:      logger,
+		sched:       sched,
+		cursorStore: cursorStore,
+		rewind:      rewind,
 	}
 }
 
 func (jc *JetstreamConsumer) Start(ctx context.Context) error {
 	for {
-		cursor := jc.sched.cursor.Load()
 		var cursorPtr *int64
-		if cursor > 0 {
-			adjusted := cursor - int64(5*time.Second/time.Microsecond)
-			cursorPtr = &adjusted
+		if jc.cursorStore != nil {
+			cur, err := jc.cursorStore.LoadCursor(ctx)
+			if err != nil {
+				jc.logger.Warn("failed to load cursor, starting from now", "error", err)
+			} else if cur != nil {
+				rewound := max(*cur-int64(jc.rewind/time.Microsecond), 0)
+				cursorPtr = &rewound
+				jc.logger.Info("resuming jetstream", "cursor_us", *cur, "rewound_us", rewound)
+			}
 		}
 
 		err := jc.client.ConnectAndRead(ctx, cursorPtr)

@@ -13,7 +13,7 @@ func init() {
 }
 
 // SchemaVersion must be incremented each time a migration is added to the migrations slice (used so that fresh dbs skip running migrations).
-const SchemaVersion = 3
+const SchemaVersion = 4
 
 type migration struct {
 	id   int
@@ -36,6 +36,11 @@ var migrations = []migration{
 		id:   3,
 		name: "article_language_user_languages",
 		run:  migrateArticleLanguageUserLanguages,
+	},
+	{
+		id:   4,
+		name: "jetstream_cursor",
+		run:  migrateJetstreamCursor,
 	},
 }
 
@@ -211,5 +216,16 @@ func migrateArticleLanguageUserLanguages(db *DB) error {
 		return fmt.Errorf("create user_settings: %w", err)
 	}
 
+	return nil
+}
+
+func migrateJetstreamCursor(db *DB) error {
+	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS jetstream_cursor (
+		id INTEGER PRIMARY KEY CHECK(id = 1),
+		cursor_us INTEGER NOT NULL
+	)`)
+	if err != nil {
+		return fmt.Errorf("create jetstream_cursor: %w", err)
+	}
 	return nil
 }

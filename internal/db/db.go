@@ -175,6 +175,10 @@ func (s *Store) SQLDB() *sql.DB {
 	return s.db.DB
 }
 
+func (s *Store) CursorStore() *DBCursorStore {
+	return NewCursorStore(s.db)
+}
+
 func initUsersSchema(db *DB) error {
 	for _, s := range usersSchema {
 		if _, err := db.Exec(s); err != nil {
@@ -265,6 +269,11 @@ var usersSchema = []string{
 	`CREATE INDEX IF NOT EXISTS idx_dismissed_user_type ON dismissed_recommendations(user_did, target_type)`,
 	`CREATE INDEX IF NOT EXISTS idx_impressions_user_unacted ON recommendation_impressions(user_did, acted, shown_count)`,
 	`CREATE INDEX IF NOT EXISTS idx_impressions_last_shown ON recommendation_impressions(last_shown_at)`,
+
+	`CREATE TABLE IF NOT EXISTS jetstream_cursor (
+		id INTEGER PRIMARY KEY CHECK(id = 1),
+		cursor_us INTEGER NOT NULL
+	)`,
 }
 
 var articlesSchema = []string{
