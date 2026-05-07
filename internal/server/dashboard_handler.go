@@ -9,52 +9,130 @@ import (
 
 	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/cluster"
+	"pkg.rbrt.fr/glean/internal/db"
 )
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	ctx := r.Context()
 
-	unreadCount, err := s.dbs.Articles.GetUnreadCount(ctx, user.DID, "")
-	if err != nil {
-		s.logger.Warn("failed to get unread count", "error", err, "did", user.DID)
-	}
-
-	subCount, err := s.dbs.Articles.GetSubscriptionCount(ctx, user.DID)
-	if err != nil {
-		s.logger.Warn("failed to get subscription count", "error", err, "did", user.DID)
-	}
+	var (
+		unreadCount      int
+		subCount         int
+		userLangs        []string
+		articles         []*db.Article
+		articleRecs      []*cluster.ArticleRecommendation
+		peopleRecs       []*cluster.PersonRecommendation
+		feedRecs         []*cluster.FeedRecommendation
+		personalTrending []*db.TrendingItem
+		globalTrending   []*db.TrendingItem
+	)
 
 	page := pageFromRequest(r, 25)
-	articles, err := s.dbs.Articles.ListUnreadArticles(ctx, user.DID, "", page.Limit()+1, page.Offset())
-	if err != nil {
-		s.logger.Warn("failed to list unread articles", "error", err, "did", user.DID)
-	}
-	totalFetched := len(articles)
-	page = page.Paginate(totalFetched)
-	if page.HasNext {
-		articles = articles[:page.PageSize]
+	since := time.Now().AddDate(0, 0, -7).Format(time.RFC3339)
+
+	g, gCtx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		var err error
+		unreadCount, err = s.dbs.Articles.GetUnreadCount(gCtx, user.DID, "")
+		if err != nil {
+			s.logger.Warn("failed to get unread count", "error", err, "did", user.DID)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		subCount, err = s.dbs.Articles.GetSubscriptionCount(gCtx, user.DID)
+		if err != nil {
+			s.logger.Warn("failed to get subscription count", "error", err, "did", user.DID)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		articles, err = s.dbs.Articles.ListUnreadArticles(gCtx, user.DID, "", page.Limit()+1, page.Offset())
+		if err != nil {
+			s.logger.Warn("failed to list unread articles", "error", err, "did", user.DID)
+			return nil
+		}
+		totalFetched := len(articles)
+		page = page.Paginate(totalFetched)
+		if page.HasNext {
+			articles = articles[:page.PageSize]
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		userLangs, err = s.dbs.Users.GetLanguages(gCtx, user.DID)
+		if err != nil {
+			s.logger.Warn("failed to get user languages", "error", err, "did", user.DID)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		peopleRecs, err = s.engine.GetPeopleRecommendations(gCtx, user.DID, 5)
+		if err != nil {
+			s.logger.Warn("failed to get people recommendations", "error", err, "did", user.DID)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		feedRecs, err = s.engine.GetFeedRecommendations(gCtx, user.DID, 5)
+		if err != nil {
+			s.logger.Warn("failed to get feed recommendations", "error", err, "did", user.DID)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		globalTrending, err = s.dbs.Articles.ListTrendingArticles(gCtx, user.DID, since, 10, 0)
+		if err != nil {
+			s.logger.Warn("failed to list global trending", "error", err, "did", user.DID)
+		}
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		s.logger.Warn("dashboard phase 1 error", "error", err, "did", user.DID)
 	}
 
-	userLangs, err := s.dbs.Users.GetLanguages(ctx, user.DID)
-	if err != nil {
-		s.logger.Warn("failed to get user languages", "error", err, "did", user.DID)
-	}
+	g2, gCtx2 := errgroup.WithContext(ctx)
 
-	articleRecs, err := s.engine.GetArticleRecommendations(ctx, user.DID, userLangs, 5)
-	if err != nil {
-		s.logger.Warn("failed to get article recommendations", "error", err, "did", user.DID)
-	}
+	g2.Go(func() error {
+		var err error
+		articleRecs, err = s.engine.GetArticleRecommendations(gCtx2, user.DID, userLangs, 5)
+		if err != nil {
+			s.logger.Warn("failed to get article recommendations", "error", err, "did", user.DID)
+		}
+		return nil
+	})
 
-	peopleRecs, err := s.engine.GetPeopleRecommendations(ctx, user.DID, 5)
-	if err != nil {
-		s.logger.Warn("failed to get people recommendations", "error", err, "did", user.DID)
-	}
-	resolvePeopleHandles(ctx, peopleRecs)
+	g2.Go(func() error {
+		var err error
+		personalTrending, err = s.dbs.Articles.ListTrendingArticlesForUser(gCtx2, user.DID, since, userLangs, 5, 0)
+		if err != nil {
+			s.logger.Warn("failed to list personal trending", "error", err, "did", user.DID)
+		}
+		return nil
+	})
 
-	feedRecs, err := s.engine.GetFeedRecommendations(ctx, user.DID, 5)
-	if err != nil {
-		s.logger.Warn("failed to get feed recommendations", "error", err, "did", user.DID)
+	g2.Go(func() error {
+		resolvePeopleHandles(gCtx2, peopleRecs)
+		return nil
+	})
+
+	if err := g2.Wait(); err != nil {
+		s.logger.Warn("dashboard phase 2 error", "error", err, "did", user.DID)
 	}
 
 	var impressions []cluster.Impression
@@ -68,18 +146,6 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		if err := s.engine.RecordImpressions(ctx, user.DID, impressions); err != nil {
 			s.logger.Warn("failed to record impressions", "error", err)
 		}
-	}
-
-	since := time.Now().AddDate(0, 0, -7).Format(time.RFC3339)
-
-	personalTrending, err := s.dbs.Articles.ListTrendingArticlesForUser(ctx, user.DID, since, userLangs, 5, 0)
-	if err != nil {
-		s.logger.Warn("failed to list personal trending", "error", err, "did", user.DID)
-	}
-
-	globalTrending, err := s.dbs.Articles.ListTrendingArticles(ctx, user.DID, since, 10, 0)
-	if err != nil {
-		s.logger.Warn("failed to list global trending", "error", err, "did", user.DID)
 	}
 
 	var followedPeople, discoverPeople []*cluster.PersonRecommendation

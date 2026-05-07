@@ -34,38 +34,58 @@ func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 	likedPage := Pagination{Page: likedPageNum, PageSize: limit}
 	annotPage := Pagination{Page: annotPageNum, PageSize: limit}
 
-	articles, err := s.dbs.Articles.ListLikedArticles(ctx, user.DID, limit+1, likedPage.Offset())
-	if err != nil {
-		s.logger.Warn("failed to list liked articles", "error", err, "did", user.DID)
-	}
-	likedHasMore := len(articles) > limit
-	if likedHasMore {
-		articles = articles[:limit]
-	}
-	likedPage = likedPage.Paginate(len(articles))
-	if likedHasMore {
-		likedPage.HasNext = true
-		likedPage.NextPage = likedPage.Page + 1
-	}
+	var (
+		articles    []*db.Article
+		annotations []*db.Annotation
+	)
 
-	navSuffix := buildNavSuffix("", true)
-	for _, a := range articles {
-		a.NavSuffix = navSuffix
-	}
+	g, gCtx := errgroup.WithContext(ctx)
 
-	annotations, err := s.dbs.Articles.ListAnnotations(ctx, "", "", user.DID, limit+1, annotPage.Offset())
-	if err != nil {
-		s.logger.Warn("failed to list annotations", "error", err, "did", user.DID)
-	}
-	resolveAnnotationHandles(ctx, annotations)
-	annotHasMore := len(annotations) > limit
-	if annotHasMore {
-		annotations = annotations[:limit]
-	}
-	annotPage = annotPage.Paginate(len(annotations))
-	if annotHasMore {
-		annotPage.HasNext = true
-		annotPage.NextPage = annotPage.Page + 1
+	g.Go(func() error {
+		var err error
+		articles, err = s.dbs.Articles.ListLikedArticles(gCtx, user.DID, limit+1, likedPage.Offset())
+		if err != nil {
+			s.logger.Warn("failed to list liked articles", "error", err, "did", user.DID)
+			return nil
+		}
+		likedHasMore := len(articles) > limit
+		if likedHasMore {
+			articles = articles[:limit]
+		}
+		likedPage = likedPage.Paginate(len(articles))
+		if likedHasMore {
+			likedPage.HasNext = true
+			likedPage.NextPage = likedPage.Page + 1
+		}
+		navSuffix := buildNavSuffix("", true)
+		for _, a := range articles {
+			a.NavSuffix = navSuffix
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		annotations, err = s.dbs.Articles.ListAnnotations(gCtx, "", "", user.DID, limit+1, annotPage.Offset())
+		if err != nil {
+			s.logger.Warn("failed to list annotations", "error", err, "did", user.DID)
+			return nil
+		}
+		resolveAnnotationHandles(gCtx, annotations)
+		annotHasMore := len(annotations) > limit
+		if annotHasMore {
+			annotations = annotations[:limit]
+		}
+		annotPage = annotPage.Paginate(len(annotations))
+		if annotHasMore {
+			annotPage.HasNext = true
+			annotPage.NextPage = annotPage.Page + 1
+		}
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		s.logger.Warn("library error", "error", err, "did", user.DID)
 	}
 
 	s.render(w, r, "library.html", map[string]any{

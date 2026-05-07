@@ -22,50 +22,104 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	page := pageFromRequest(r, 50)
-	subs, err := s.dbs.Articles.ListSubscriptions(ctx, user.DID, category, page.Limit()+1, page.Offset())
-	if err != nil {
-		s.logger.Warn("failed to list subscriptions", "error", err, "did", user.DID)
-	}
-	totalFetched := len(subs)
-	page = page.Paginate(totalFetched)
-	if page.HasNext {
-		subs = subs[:page.PageSize]
-	}
 
-	subCount, err := s.dbs.Articles.GetSubscriptionCount(ctx, user.DID)
-	if err != nil {
-		s.logger.Warn("failed to get subscription count", "error", err, "did", user.DID)
-	}
+	var (
+		subs       []*db.Subscription
+		subCount   int
+		feedRecs   []*cluster.FeedRecommendation
+		peopleRecs []*cluster.PersonRecommendation
+		deadFeeds  []*db.Feed
+		categories []string
+	)
 
-	feedRecs, err := s.engine.GetFeedRecommendations(ctx, user.DID, 6)
-	if err != nil {
-		s.logger.Warn("failed to get feed recommendations", "error", err, "did", user.DID)
-	}
+	g, gCtx := errgroup.WithContext(ctx)
 
-	peopleRecs, err := s.engine.GetPeopleRecommendations(ctx, user.DID, 5)
-	if err != nil {
-		s.logger.Warn("failed to get people recommendations", "error", err, "did", user.DID)
-	}
-	resolvePeopleHandles(ctx, peopleRecs)
-
-	if len(feedRecs) > 0 {
-		impressions := make([]cluster.Impression, len(feedRecs))
-		for i, rec := range feedRecs {
-			impressions[i] = cluster.Impression{TargetType: "feed", TargetID: rec.FeedURL}
+	g.Go(func() error {
+		var err error
+		subs, err = s.dbs.Articles.ListSubscriptions(gCtx, user.DID, category, page.Limit()+1, page.Offset())
+		if err != nil {
+			s.logger.Warn("failed to list subscriptions", "error", err, "did", user.DID)
+			return nil
 		}
-		if err := s.engine.RecordImpressions(ctx, user.DID, impressions); err != nil {
-			s.logger.Warn("failed to record impressions", "error", err)
+		totalFetched := len(subs)
+		page = page.Paginate(totalFetched)
+		if page.HasNext {
+			subs = subs[:page.PageSize]
 		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		subCount, err = s.dbs.Articles.GetSubscriptionCount(gCtx, user.DID)
+		if err != nil {
+			s.logger.Warn("failed to get subscription count", "error", err, "did", user.DID)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		feedRecs, err = s.engine.GetFeedRecommendations(gCtx, user.DID, 6)
+		if err != nil {
+			s.logger.Warn("failed to get feed recommendations", "error", err, "did", user.DID)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		peopleRecs, err = s.engine.GetPeopleRecommendations(gCtx, user.DID, 5)
+		if err != nil {
+			s.logger.Warn("failed to get people recommendations", "error", err, "did", user.DID)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		deadFeeds, err = s.dbs.Articles.ListDeadFeeds(gCtx, user.DID, 7)
+		if err != nil {
+			s.logger.Warn("failed to list dead feeds", "error", err, "did", user.DID)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		categories, err = s.dbs.Articles.GetCategories(gCtx, user.DID)
+		if err != nil {
+			s.logger.Warn("failed to get categories", "error", err, "did", user.DID)
+		}
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		s.logger.Warn("feeds phase 1 error", "error", err, "did", user.DID)
 	}
 
-	deadFeeds, err := s.dbs.Articles.ListDeadFeeds(ctx, user.DID, 7)
-	if err != nil {
-		s.logger.Warn("failed to list dead feeds", "error", err, "did", user.DID)
-	}
+	g2, gCtx2 := errgroup.WithContext(ctx)
 
-	categories, err := s.dbs.Articles.GetCategories(ctx, user.DID)
-	if err != nil {
-		s.logger.Warn("failed to get categories", "error", err, "did", user.DID)
+	g2.Go(func() error {
+		resolvePeopleHandles(gCtx2, peopleRecs)
+		return nil
+	})
+
+	g2.Go(func() error {
+		if len(feedRecs) > 0 {
+			impressions := make([]cluster.Impression, len(feedRecs))
+			for i, rec := range feedRecs {
+				impressions[i] = cluster.Impression{TargetType: "feed", TargetID: rec.FeedURL}
+			}
+			if err := s.engine.RecordImpressions(gCtx2, user.DID, impressions); err != nil {
+				s.logger.Warn("failed to record impressions", "error", err)
+			}
+		}
+		return nil
+	})
+
+	if err := g2.Wait(); err != nil {
+		s.logger.Warn("feeds phase 2 error", "error", err, "did", user.DID)
 	}
 
 	var followedPeople, discoverPeople []*cluster.PersonRecommendation
@@ -349,7 +403,9 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 				return nil
 			})
 		}
-		_ = g.Wait()
+		if err := g.Wait(); err != nil {
+			s.logger.Warn("opml fetch error", "error", err)
+		}
 	}()
 
 	w.Header().Set("HX-Redirect", "/feeds")

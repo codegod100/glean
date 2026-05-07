@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/sync/errgroup"
 
 	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/db"
@@ -165,48 +166,89 @@ func (s *Server) handleArticleDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.dbs.Articles.MarkArticleRead(ctx, user.DID, id); err != nil {
-		s.logger.Warn("failed to mark article read", "error", err, "id", id)
-	}
-
-	readState, err := s.dbs.Articles.GetReadState(ctx, user.DID, id)
-	if err != nil {
-		s.logger.Warn("failed to get read state", "error", err, "id", id)
-	}
-
-	var likeCount int
-	if article.URL.Valid {
-		likeCount, err = s.dbs.Articles.GetLikeCount(ctx, article.FeedURL, article.URL.String)
-		if err != nil {
-			s.logger.Warn("failed to get like count", "error", err, "feed", article.FeedURL)
-		}
-	}
-
-	liked := false
-	if article.URL.Valid {
-		liked, err = s.dbs.Articles.HasLiked(ctx, user.DID, article.FeedURL, article.URL.String)
-		if err != nil {
-			s.logger.Warn("failed to check if liked", "error", err)
-		}
-	}
-
-	annotations, err := s.dbs.Articles.ListAnnotations(ctx, "", article.URL.String, "", 20, 0)
-	if err != nil {
-		s.logger.Warn("failed to list annotations", "error", err)
-	}
-	resolveAnnotationHandles(ctx, annotations)
-
-	feed, err := s.dbs.Articles.GetFeed(ctx, article.FeedURL)
-	if err != nil {
-		s.logger.Warn("failed to get feed", "error", err, "feed", article.FeedURL)
-	}
+	var (
+		readState   *db.ReadState
+		likeCount   int
+		liked       bool
+		annotations []*db.Annotation
+		feed        *db.Feed
+		nextID      *int64
+	)
 
 	fromFeedURL := r.URL.Query().Get("from_feed")
 	navLiked := r.URL.Query().Get("liked") == "1"
 
-	nextID, err := s.dbs.Articles.GetNextArticleID(ctx, user.DID, id, fromFeedURL, navLiked)
-	if err != nil {
-		s.logger.Warn("failed to get next article", "error", err, "id", id)
+	g, gCtx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		if err := s.dbs.Articles.MarkArticleRead(gCtx, user.DID, id); err != nil {
+			s.logger.Warn("failed to mark article read", "error", err, "id", id)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		readState, err = s.dbs.Articles.GetReadState(gCtx, user.DID, id)
+		if err != nil {
+			s.logger.Warn("failed to get read state", "error", err, "id", id)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		if article.URL.Valid {
+			var err error
+			likeCount, err = s.dbs.Articles.GetLikeCount(gCtx, article.FeedURL, article.URL.String)
+			if err != nil {
+				s.logger.Warn("failed to get like count", "error", err, "feed", article.FeedURL)
+			}
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		if article.URL.Valid {
+			var err error
+			liked, err = s.dbs.Articles.HasLiked(gCtx, user.DID, article.FeedURL, article.URL.String)
+			if err != nil {
+				s.logger.Warn("failed to check if liked", "error", err)
+			}
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		annotations, err = s.dbs.Articles.ListAnnotations(gCtx, "", article.URL.String, "", 20, 0)
+		if err != nil {
+			s.logger.Warn("failed to list annotations", "error", err)
+			return nil
+		}
+		resolveAnnotationHandles(gCtx, annotations)
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		feed, err = s.dbs.Articles.GetFeed(gCtx, article.FeedURL)
+		if err != nil {
+			s.logger.Warn("failed to get feed", "error", err, "feed", article.FeedURL)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		nextID, err = s.dbs.Articles.GetNextArticleID(gCtx, user.DID, id, fromFeedURL, navLiked)
+		if err != nil {
+			s.logger.Warn("failed to get next article", "error", err, "id", id)
+		}
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		s.logger.Warn("article detail error", "error", err, "id", id)
 	}
 
 	s.render(w, r, "article_detail.html", map[string]any{
