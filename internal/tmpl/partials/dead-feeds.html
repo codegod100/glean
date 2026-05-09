@@ -6,9 +6,9 @@
         {{range .DeadFeeds}}
         <div class="dead-feed-item flex items-start justify-between gap-3 text-sm flex-wrap">
             <div class="min-w-0 flex-1">
-                <span class="text-spot-text truncate block">{{if .Title.Valid}}{{.Title.String}}{{else}}{{.FeedURL}}{{end}}</span>
+                <span class="text-spot-text truncate block font-medium">{{if .Title.Valid}}{{.Title.String}}{{else}}{{.FeedURL}}{{end}}</span>
                 <div class="flex items-center gap-2 mt-1 flex-wrap">
-                    <span class="text-spot-red text-xs">{{.ErrorCount}} errors</span>
+                    <span class="text-spot-red text-xs font-medium">{{.ErrorCount}} errors</span>
                     {{if .LastError.Valid}}<span class="text-spot-secondary text-xs truncate max-w-48" title="{{.LastError.String}}">{{.LastError.String}}</span>{{end}}
                 </div>
             </div>

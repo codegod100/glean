@@ -52,62 +52,66 @@
     </dialog>
     <dialog id="shortcuts-dialog" class="bg-spot-surface rounded-xl p-6 max-w-xs shadow-spot-elevated border border-spot-divider backdrop:bg-black/50" onclick="if(event.target===this)this.close()">
         <h3 class="text-sm font-bold text-spot-text uppercase tracking-wide mb-4">Keyboard shortcuts</h3>
-        <div class="space-y-2 text-sm">
-            <div class="text-spot-secondary font-bold text-xs uppercase tracking-wide">Navigation</div>
-            <div class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
-                <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">g</kbd><span class="text-spot-secondary">Dashboard</span>
-                <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">a</kbd><span class="text-spot-secondary">Articles</span>
-                <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">f</kbd><span class="text-spot-secondary">Feeds</span>
-                <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">t</kbd><span class="text-spot-secondary">Trending</span>
-                <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">l</kbd><span class="text-spot-secondary">Library</span>
+        <div class="space-y-3 text-sm">
+            <div>
+                <div class="text-spot-secondary font-bold text-xs uppercase tracking-wide mb-2">Navigation</div>
+                <div class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
+                    <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">g</kbd><span class="text-spot-secondary">Dashboard</span>
+                    <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">a</kbd><span class="text-spot-secondary">Articles</span>
+                    <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">f</kbd><span class="text-spot-secondary">Feeds</span>
+                    <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">t</kbd><span class="text-spot-secondary">Trending</span>
+                    <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">l</kbd><span class="text-spot-secondary">Library</span>
+                </div>
             </div>
-            <div class="text-spot-secondary font-bold text-xs uppercase tracking-wide pt-2">Articles</div>
-            <div class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
-                <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">j</kbd><span class="text-spot-secondary">Next article</span>
-                <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">k</kbd><span class="text-spot-secondary">Previous article</span>
-                <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">o</kbd><span class="text-spot-secondary">Open article</span>
-                <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">m</kbd><span class="text-spot-secondary">Toggle read</span>
+            <div>
+                <div class="text-spot-secondary font-bold text-xs uppercase tracking-wide mb-2">Articles</div>
+                <div class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
+                    <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">j</kbd><span class="text-spot-secondary">Next article</span>
+                    <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">k</kbd><span class="text-spot-secondary">Previous article</span>
+                    <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">o</kbd><span class="text-spot-secondary">Open article</span>
+                    <kbd class="text-spot-text bg-spot-hover rounded px-1.5 py-0.5 text-xs font-mono text-center min-w-[28px]">m</kbd><span class="text-spot-secondary">Toggle read</span>
+                </div>
             </div>
         </div>
-        <button onclick="document.getElementById('shortcuts-dialog').close()" class="mt-4 w-full text-sm text-spot-text px-4 py-2 rounded-pill border border-spot-outline hover:border-spot-text transition">Close</button>
+        <button onclick="document.getElementById('shortcuts-dialog').close()" class="mt-5 w-full text-sm text-spot-text px-4 py-2 rounded-pill border border-spot-outline hover:border-spot-text transition">Close</button>
     </dialog>
     {{if or .User (or (eq .ActivePath "/trending") (eq .ActivePath "/stats"))}}
     <aside class="hidden lg:flex flex-col w-60 bg-spot-bg h-screen fixed left-0 top-0 px-3 py-4 z-20">
         <div class="mb-8 px-3">
             {{template "logo-link"}}
         </div>
-        <nav class="flex flex-col gap-1 text-sm">
-            <a href="/dashboard" class="sidebar-link flex items-center gap-3 px-3 py-2 rounded-md {{activeClass .ActivePath "/dashboard"}}">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1"/></svg>
+        <nav class="flex flex-col gap-0.5 text-sm">
+            <a href="/dashboard" class="sidebar-link flex items-center gap-3 px-3 py-2 rounded-lg {{activeClass .ActivePath "/dashboard"}}">
+                <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1"/></svg>
                 Dashboard
             </a>
-            <a href="/articles" class="sidebar-link flex items-center gap-3 px-3 py-2 rounded-md {{activeClass .ActivePath "/articles"}}">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2"/></svg>
+            <a href="/articles" class="sidebar-link flex items-center gap-3 px-3 py-2 rounded-lg {{activeClass .ActivePath "/articles"}}">
+                <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2"/></svg>
                 Articles
             </a>
-            <a href="/trending" class="sidebar-link flex items-center gap-3 px-3 py-2 rounded-md {{activeClass .ActivePath "/trending"}}">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+            <a href="/trending" class="sidebar-link flex items-center gap-3 px-3 py-2 rounded-lg {{activeClass .ActivePath "/trending"}}">
+                <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
                 Trending
             </a>
-            <a href="/feeds" class="sidebar-link flex items-center gap-3 px-3 py-2 rounded-md {{activeClass .ActivePath "/feeds"}}">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7m-7-1a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
+            <a href="/feeds" class="sidebar-link flex items-center gap-3 px-3 py-2 rounded-lg {{activeClass .ActivePath "/feeds"}}">
+                <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7m-7-1a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
                 Feeds
             </a>
-            <a href="/library" class="sidebar-link flex items-center gap-3 px-3 py-2 rounded-md {{activeClass .ActivePath "/library"}}">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>
+            <a href="/library" class="sidebar-link flex items-center gap-3 px-3 py-2 rounded-lg {{activeClass .ActivePath "/library"}}">
+                <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>
                 Library
             </a>
         </nav>
         <div class="mt-auto pt-4 border-t border-spot-divider-30 px-1">
             {{if .User}}
             <div class="flex items-center gap-2">
-                <a href="/profile/{{.User.DID}}" class="flex items-center gap-2 flex-1 min-w-0 px-2 py-1.5 rounded-md hover:bg-spot-hover-50 transition">
-                    {{if .User.AvatarURL}}<img src="{{.User.AvatarURL}}" class="w-7 h-7 rounded-full shrink-0">{{end}}
+                <a href="/profile/{{.User.DID}}" class="flex items-center gap-2.5 flex-1 min-w-0 px-2 py-1.5 rounded-lg hover:bg-spot-hover-50 transition">
+                    {{if .User.AvatarURL}}<img src="{{.User.AvatarURL}}" class="w-7 h-7 rounded-full shrink-0 ring-1 ring-spot-divider">{{end}}
                     <span class="text-sm font-medium truncate text-spot-text">@{{.User.Handle}}</span>
                 </a>
                 <form method="POST" action="/auth/logout" class="shrink-0">
                     {{csrfInput .CSRFToken}}
-                    <button type="submit" class="text-spot-secondary hover:text-spot-red p-1.5 rounded-md hover:bg-spot-hover-50 transition" title="Logout">
+                    <button type="submit" class="text-spot-muted hover:text-spot-red p-1.5 rounded-md hover:bg-spot-hover-50 transition" title="Logout">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
                     </button>
                 </form>
@@ -124,27 +128,27 @@
 
     <main id="main-content" class="{{if or .User (or (eq .ActivePath "/trending") (eq .ActivePath "/stats"))}}lg:ml-60{{end}} flex-1 min-h-screen flex flex-col">
         {{if or .User (or (eq .ActivePath "/trending") (eq .ActivePath "/stats"))}}
-        <div class="lg:hidden bg-spot-surface border-b border-spot-divider px-2 py-2 flex items-center justify-between sticky top-0 z-20">
+        <div class="lg:hidden bg-spot-surface/80 backdrop-blur-lg border-b border-spot-divider px-3 py-2 flex items-center justify-between sticky top-0 z-20">
             {{template "logo-link"}}
             <div class="flex items-center gap-0.5">
-                <a href="/dashboard" class="p-1.5 rounded-md {{if eq .ActivePath "/dashboard"}}text-spot-green{{else}}text-spot-secondary hover:text-spot-text{{end}} transition" title="Dashboard">
-                    <svg class="w-[1.2rem] h-[1.2rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1"/></svg>
+                <a href="/dashboard" class="p-2 rounded-lg {{if eq .ActivePath "/dashboard"}}text-spot-green bg-spot-green/10{{else}}text-spot-secondary hover:text-spot-text hover:bg-spot-hover-50{{end}} transition" title="Dashboard">
+                    <svg class="w-[1.15rem] h-[1.15rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1"/></svg>
                 </a>
-                <a href="/articles" class="p-1.5 rounded-md {{if eq .ActivePath "/articles"}}text-spot-green{{else}}text-spot-secondary hover:text-spot-text{{end}} transition" title="Articles">
-                    <svg class="w-[1.2rem] h-[1.2rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2"/></svg>
+                <a href="/articles" class="p-2 rounded-lg {{if eq .ActivePath "/articles"}}text-spot-green bg-spot-green/10{{else}}text-spot-secondary hover:text-spot-text hover:bg-spot-hover-50{{end}} transition" title="Articles">
+                    <svg class="w-[1.15rem] h-[1.15rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2"/></svg>
                 </a>
-                <a href="/trending" class="p-1.5 rounded-md {{if eq .ActivePath "/trending"}}text-spot-green{{else}}text-spot-secondary hover:text-spot-text{{end}} transition" title="Trending">
-                    <svg class="w-[1.2rem] h-[1.2rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                <a href="/trending" class="p-2 rounded-lg {{if eq .ActivePath "/trending"}}text-spot-green bg-spot-green/10{{else}}text-spot-secondary hover:text-spot-text hover:bg-spot-hover-50{{end}} transition" title="Trending">
+                    <svg class="w-[1.15rem] h-[1.15rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
                 </a>
-                <a href="/feeds" class="p-1.5 rounded-md {{if eq .ActivePath "/feeds"}}text-spot-green{{else}}text-spot-secondary hover:text-spot-text{{end}} transition" title="Feeds">
-                    <svg class="w-[1.2rem] h-[1.2rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7m-7-1a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
+                <a href="/feeds" class="p-2 rounded-lg {{if eq .ActivePath "/feeds"}}text-spot-green bg-spot-green/10{{else}}text-spot-secondary hover:text-spot-text hover:bg-spot-hover-50{{end}} transition" title="Feeds">
+                    <svg class="w-[1.15rem] h-[1.15rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7m-7-1a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
                 </a>
-                <a href="/library" class="p-1.5 rounded-md {{if eq .ActivePath "/library"}}text-spot-green{{else}}text-spot-secondary hover:text-spot-text{{end}} transition" title="Library">
-                    <svg class="w-[1.2rem] h-[1.2rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>
+                <a href="/library" class="p-2 rounded-lg {{if eq .ActivePath "/library"}}text-spot-green bg-spot-green/10{{else}}text-spot-secondary hover:text-spot-text hover:bg-spot-hover-50{{end}} transition" title="Library">
+                    <svg class="w-[1.15rem] h-[1.15rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>
                 </a>
                 {{if .User}}
                 <a href="/profile/{{.User.DID}}" class="shrink-0 ml-1" title="@{{.User.Handle}}">
-                    {{if .User.AvatarURL}}<img src="{{.User.AvatarURL}}" class="w-7 h-7 rounded-full ring-1 ring-spot-divider">{{end}}
+                    {{if .User.AvatarURL}}<img src="{{.User.AvatarURL}}" class="w-7 h-7 rounded-full ring-2 ring-spot-divider">{{end}}
                 </a>
                 {{else}}
                 <a href="/auth/login" class="bg-spot-green text-white rounded-pill px-3 py-1 text-xs font-bold uppercase tracking-button hover:brightness-110 transition shrink-0 ml-1">Sign in</a>
@@ -160,7 +164,7 @@
                 <div class="max-w-6xl mx-auto px-4 lg:px-8 py-6 lg:py-8">
                     <div class="hidden md:grid md:grid-cols-[2fr_1fr] md:gap-8 md:items-start">
                         <div class="grid grid-cols-3 gap-8">
-                            <div class="flex flex-col gap-1.5">
+                            <div class="flex flex-col gap-2">
                                 <div class="text-spot-text font-bold text-xs uppercase tracking-wide mb-1">Browse</div>
                                 <a href="/dashboard" class="text-xs text-spot-secondary hover:text-spot-text hover:underline inline-flex gap-1.5 items-center transition">
                                     <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1"/></svg>
@@ -175,7 +179,7 @@
                                     Articles
                                 </a>
                             </div>
-                            <div class="flex flex-col gap-1.5">
+                            <div class="flex flex-col gap-2">
                                 <div class="text-spot-text font-bold text-xs uppercase tracking-wide mb-1">Library</div>
                                 <a href="/feeds" class="text-xs text-spot-secondary hover:text-spot-text hover:underline inline-flex gap-1.5 items-center transition">
                                     <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7m-7-1a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
@@ -186,7 +190,7 @@
                                     Library
                                 </a>
                             </div>
-                            <div class="flex flex-col gap-1.5">
+                            <div class="flex flex-col gap-2">
                                 <div class="text-spot-text font-bold text-xs uppercase tracking-wide mb-1">Settings</div>
                                 <button onclick="toggleTheme()" class="text-xs text-spot-secondary hover:text-spot-text hover:underline inline-flex gap-1.5 items-center transition text-left">
                                     <svg class="w-3.5 h-3.5 shrink-0 theme-icon-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
@@ -210,13 +214,13 @@
 
                     <div class="md:hidden flex flex-col gap-5">
                         <div class="grid grid-cols-2 gap-6">
-                            <div class="flex flex-col gap-1.5">
+                            <div class="flex flex-col gap-2">
                                 <div class="text-spot-text font-bold text-xs uppercase tracking-wide mb-1">Browse</div>
                                 <a href="/dashboard" class="text-xs text-spot-secondary hover:text-spot-text transition">Dashboard</a>
                                 <a href="/trending" class="text-xs text-spot-secondary hover:text-spot-text transition">Trending</a>
                                 <a href="/articles" class="text-xs text-spot-secondary hover:text-spot-text transition">Articles</a>
                             </div>
-                            <div class="flex flex-col gap-1.5">
+                            <div class="flex flex-col gap-2">
                                 <div class="text-spot-text font-bold text-xs uppercase tracking-wide mb-1">Library</div>
                                 <a href="/feeds" class="text-xs text-spot-secondary hover:text-spot-text transition">Feeds</a>
                                 <a href="/library" class="text-xs text-spot-secondary hover:text-spot-text transition">Library</a>
@@ -274,8 +278,6 @@
 
     applyTheme();
 
-    // reload page when page restored from bfcache.
-    // useful for reloading article read/unread status.
     window.addEventListener('pageshow', function(e) {
         if (e.persisted) location.reload();
     });

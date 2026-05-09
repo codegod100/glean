@@ -1,6 +1,6 @@
 {{define "feeds.html"}}
 <div class="flex items-center justify-between gap-3 mb-2 flex-wrap">
-    <h1 class="text-2xl font-bold text-spot-text">Feeds <span class="text-base font-normal text-spot-secondary">({{.SubscriptionCount}})</span></h1>
+    <h1 class="text-2xl font-bold text-spot-text" style="letter-spacing: -0.02em;">Feeds <span class="text-base font-normal text-spot-secondary">({{.SubscriptionCount}})</span></h1>
     <div class="flex items-center gap-3">
         <button id="refresh-btn"
                 hx-post="/feeds/refresh" hx-target="#feed-list" hx-swap="innerHTML"
@@ -34,7 +34,7 @@ function gleanRefreshPoll(){setTimeout(function(){htmx.ajax('GET','/feeds/list',
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="lg:col-span-2">
         {{if .Categories}}
-        <div class="flex gap-2 mb-6 flex-wrap">
+        <div class="flex gap-1.5 mb-6 flex-wrap">
             <a href="/feeds" class="text-sm px-4 py-1.5 rounded-pill font-bold {{if not .Category}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}} transition">All</a>
             {{range .Categories}}
             <a href="/feeds?category={{.}}" class="text-sm px-4 py-1.5 rounded-pill font-bold {{if eq $.Category .}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}} transition">{{.}}</a>
@@ -42,16 +42,16 @@ function gleanRefreshPoll(){setTimeout(function(){htmx.ajax('GET','/feeds/list',
         </div>
         {{end}}
 
-        <div id="feed-list" class="bg-spot-surface rounded-xl divide-y divide-spot-divider">
+        <div id="feed-list" class="bg-spot-surface rounded-xl divide-y divide-spot-divider overflow-hidden">
             {{range .Subscriptions}}
             {{template "feed-item.html" dict "FeedURL" .FeedURL "FeedTitle" .FeedTitle "Category" .Category "FaviconURL" .FaviconURL "UnreadCount" .UnreadCount "CSRFToken" $.CSRFToken}}
             {{else}}
             <div class="flex flex-col items-center justify-center py-12 px-6 text-center">
-                <div class="w-14 h-14 rounded-full bg-spot-hover flex items-center justify-center mb-4 mx-auto">
-                    <svg class="w-7 h-7 text-spot-muted" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7m-7-1a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
+                <div class="w-14 h-14 rounded-2xl bg-spot-green/15 flex items-center justify-center mb-4 mx-auto">
+                    <svg class="w-7 h-7 text-spot-green" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7m-7-1a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
                 </div>
-                <p class="text-sm text-spot-secondary mb-1">No feeds yet</p>
-                <p class="text-xs text-spot-muted">Add one from the sidebar to get started.</p>
+                <p class="text-sm text-spot-text font-semibold mb-1">No feeds yet</p>
+                <p class="text-xs text-spot-muted">Add one using the form on the right to get started.</p>
             </div>
             {{end}}
         </div>
@@ -68,16 +68,16 @@ function gleanRefreshPoll(){setTimeout(function(){htmx.ajax('GET','/feeds/list',
                   class="space-y-3">
                 {{csrfInput .CSRFToken}}
                 <input type="text" name="feed_url" placeholder="https://example.com/feed.xml or at://did:plc:.../site.standard.publication/..."
-                       class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder"
+                       class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder"
                        required>
                 <input type="text" name="category" placeholder="Category (optional)"
-                       class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
-                <button type="submit" class="w-full bg-spot-green text-white rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Add</button>
+                       class="w-full bg-spot-hover text-spot-text rounded-pill px-5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
+                <button type="submit" class="w-full bg-spot-green text-white rounded-pill px-5 py-2.5 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Add</button>
             </form>
             <div id="add-feed-error" class="text-sm text-spot-red"></div>
             <div class="border-t border-spot-divider pt-4 space-y-3">
                 <h2 class="text-xs text-spot-secondary font-bold uppercase tracking-wide">Import / Export</h2>
-                <form hx-post="/feeds/opml/upload" hx-encoding="multipart/form-data" class="flex flex-col gap-2">
+                <form hx-post="/feeds/opml/upload" hx-encoding="multipart/form-data" class="flex flex-col gap-2.5">
                     {{csrfInput .CSRFToken}}
                     <input type="file" name="opml" accept=".opml,.xml" class="text-sm text-spot-secondary file:mr-2 file:py-1 file:px-3 file:rounded-pill file:border-0 file:text-sm file:bg-spot-hover file:text-spot-text hover:file:bg-spot-surface file:cursor-pointer">
                     <button type="submit" class="w-full border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-sm font-bold uppercase tracking-button hover:border-spot-text transition">Import OPML</button>
@@ -97,7 +97,7 @@ function gleanRefreshPoll(){setTimeout(function(){htmx.ajax('GET','/feeds/list',
             </div>
             {{end}}
             {{if .DiscoverPeople}}
-            <h2 class="text-lg font-semibold text-spot-text mb-4 {{if .FollowedPeople}}mt-6{{end}}">Discover new readers</h2>
+            <h2 class="text-lg font-semibold text-spot-text mb-4 {{if .FollowedPeople}}mt-8{{end}}">Discover new readers</h2>
             <div class="space-y-3">
                 {{range .DiscoverPeople}}
                 {{template "profile-card.html" .}}

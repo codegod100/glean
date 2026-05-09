@@ -1,6 +1,6 @@
 {{define "stats.html"}}
 <div class="flex items-center justify-between mb-2">
-    <h1 class="text-2xl font-bold text-spot-text">Stats</h1>
+    <h1 class="text-2xl font-bold text-spot-text" style="letter-spacing: -0.02em;">Stats</h1>
 </div>
 <p class="text-sm text-spot-secondary mb-6">Application metrics and performance data.</p>
 
@@ -11,12 +11,12 @@
 <div id="metrics-content" class="space-y-3">
     {{range $category, $metrics := .Metrics}}
     <div class="bg-spot-surface rounded-xl overflow-hidden">
-        <div class="px-4 py-3 border-b border-spot-divider">
+        <div class="px-5 py-3.5 border-b border-spot-divider">
             <h2 class="font-semibold text-spot-text">{{$category}}</h2>
         </div>
         <div class="divide-y divide-spot-divider">
             {{range $metrics}}
-            <div class="px-4 py-3 flex items-start justify-between hover:bg-spot-hover transition">
+            <div class="px-5 py-3.5 flex items-start justify-between hover:bg-spot-hover transition">
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2">
                         <span class="text-sm font-medium text-spot-text">{{.Name}}</span>
@@ -25,7 +25,7 @@
                         {{end}}
                     </div>
                     {{if .Labels}}
-                    <div class="flex gap-2 mt-1">
+                    <div class="flex gap-1.5 mt-1.5">
                         {{range $key, $value := .Labels}}
                         <span class="text-xs bg-spot-hover text-spot-secondary px-2 py-0.5 rounded-pill">{{$key}}={{$value}}</span>
                         {{end}}
@@ -46,11 +46,11 @@
         </div>
     </div>
     {{else}}
-    <div class="bg-spot-surface rounded-xl py-12 px-6 text-center">
-        <div class="w-14 h-14 rounded-full bg-spot-hover flex items-center justify-center mb-4 mx-auto">
-            <svg class="w-7 h-7 text-spot-muted" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19.5v-15m0 0l-6.75 6.75M12.75 4.5l6.75 6.75"/></svg>
+    <div class="bg-spot-surface rounded-2xl py-14 px-6 text-center">
+        <div class="w-14 h-14 rounded-2xl bg-spot-green/15 flex items-center justify-center mb-5 mx-auto">
+            <svg class="w-7 h-7 text-spot-green" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19.5v-15m0 0l-6.75 6.75M12.75 4.5l6.75 6.75"/></svg>
         </div>
-        <p class="text-sm text-spot-secondary mb-1">No metrics available</p>
+        <p class="text-sm text-spot-text font-semibold mb-1">No metrics available</p>
         <p class="text-xs text-spot-muted">Metrics will appear here once the application has been running for a while.</p>
     </div>
     {{end}}

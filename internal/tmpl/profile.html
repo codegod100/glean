@@ -1,20 +1,20 @@
 {{define "profile.html"}}
 <div class="max-w-2xl mx-auto">
-    <div class="bg-spot-surface rounded-xl p-6 mb-6">
-        <div class="flex items-center gap-4">
+    <div class="bg-spot-surface rounded-2xl p-6 mb-6">
+        <div class="flex items-center gap-5">
             {{if .ProfileUser.AvatarURL}}<img src="{{.ProfileUser.AvatarURL}}" class="w-20 h-20 rounded-full ring-2 ring-spot-divider">{{else}}<div class="w-20 h-20 rounded-full bg-spot-hover flex items-center justify-center text-spot-muted"><svg class="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-7 8-7s8 3 8 7"/></svg></div>{{end}}
             <div class="min-w-0 flex-1">
-                <h1 class="text-2xl font-bold text-spot-text truncate">
+                <h1 class="text-2xl font-bold text-spot-text truncate" style="letter-spacing: -0.02em;">
                     {{if .ProfileUser.DisplayName}}{{.ProfileUser.DisplayName}}{{end}}
                 </h1>
-                <p class="flex items-center gap-1.5 text-spot-secondary">@{{.ProfileUser.Handle}}<a href="https://bsky.app/profile/{{.ProfileUser.Handle}}" target="_blank" rel="noopener" class="text-spot-secondary hover:text-spot-green transition"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">{{template "icon-bluesky"}}</svg></a></p>
+                <p class="flex items-center gap-1.5 text-spot-secondary mt-1">@{{.ProfileUser.Handle}}<a href="https://bsky.app/profile/{{.ProfileUser.Handle}}" target="_blank" rel="noopener" class="text-spot-secondary hover:text-spot-green transition"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">{{template "icon-bluesky"}}</svg></a></p>
                 <div class="flex gap-4 mt-3">
                     <a href="/feeds" class="group">
-                        <span class="text-lg font-bold text-spot-text">{{.SubscriptionCount}}</span>
+                        <span class="text-xl font-bold text-spot-text">{{.SubscriptionCount}}</span>
                         <span class="text-sm text-spot-secondary ml-1 group-hover:text-spot-text transition">feeds</span>
                     </a>
-                    <a href="/library" class="border-l border-spot-divider pl-4 group">
-                        <span class="text-lg font-bold text-spot-text">{{.AnnotationCount}}</span>
+                    <a href="/library" class="border-l border-spot-divider pl-5 group">
+                        <span class="text-xl font-bold text-spot-text">{{.AnnotationCount}}</span>
                         <span class="text-sm text-spot-secondary ml-1 group-hover:text-spot-text transition">annotations</span>
                     </a>
                 </div>
@@ -28,7 +28,7 @@
         <form id="lang-form" hx-post="/settings/languages" hx-swap="none" hx-on::after-request="location.reload()">
             <p class="text-sm font-semibold text-spot-text mb-1">Recommendation languages</p>
             <p class="text-xs text-spot-secondary mb-4">Filter article recommendations to specific languages. Leave empty to show all.</p>
-            <div class="flex flex-wrap gap-2 mb-4">
+            <div class="flex flex-wrap gap-1.5 mb-4">
                 {{range .AvailableLanguages}}
                 <label class="lang-pill cursor-pointer text-sm px-4 py-1.5 rounded-pill font-bold transition {{if containsString $.UserLanguages .Code}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
                     <input type="checkbox" name="languages" value="{{.Code}}" {{if containsString $.UserLanguages .Code}}checked{{end}} class="hidden">
@@ -56,9 +56,9 @@
     {{end}}
 
     <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide mb-3">Feeds</h2>
-    <div class="bg-spot-surface rounded-xl divide-y divide-spot-divider mb-6">
+    <div class="bg-spot-surface rounded-xl divide-y divide-spot-divider mb-6 overflow-hidden">
         {{range .Subscriptions}}
-        <a href="/articles?feed={{.FeedURL}}" class="flex items-center gap-3 px-5 py-3 hover:bg-spot-hover-50 transition first:rounded-t-xl last:rounded-b-xl">
+        <a href="/articles?feed={{.FeedURL}}" class="flex items-center gap-3 px-5 py-3.5 hover:bg-spot-hover-50 transition">
             {{template "favicon" dict "src" .FaviconURL.String "size" "w-5 h-5"}}
             <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2 flex-wrap">
@@ -70,7 +70,7 @@
             <svg class="w-4 h-4 text-spot-muted shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
         </a>
         {{else}}
-        <div class="px-4 py-6 text-center text-spot-secondary text-sm">No feeds.</div>
+        <div class="px-5 py-6 text-center text-spot-secondary text-sm">No feeds.</div>
         {{end}}
     </div>
 
@@ -79,7 +79,7 @@
         {{range .Annotations}}
         {{template "annotation-card.html" dict "annotation" . "userDID" $.CurrentUserDID}}
         {{else}}
-        <p class="text-sm text-spot-secondary text-center py-4">No annotations.</p>
+        <p class="text-sm text-spot-secondary text-center py-6">No annotations.</p>
         {{end}}
     </div>
 </div>

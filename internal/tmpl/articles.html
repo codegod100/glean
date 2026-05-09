@@ -2,15 +2,15 @@
     <div id="new-articles-poll" hx-get="/articles/new-count?since={{.Now.Unix}}&return={{if .FeedURL}}/articles?feed={{.FeedURL}}{{else}}/articles{{end}}" hx-trigger="every 30s" hx-swap="innerHTML"></div>
 
     {{if .Feed}}
-    <div class="mb-6">
-        <div class="flex items-center gap-2 mb-3">
+    <div class="mb-8">
+        <div class="flex items-center gap-2 mb-4">
             <a href="/articles" class="text-xs text-spot-secondary hover:text-spot-text transition">&larr; All articles</a>
         </div>
         <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                {{template "favicon" dict "src" .Feed.FaviconURL.String "size" "w-8 h-8"}}
+            <div class="flex items-center gap-3.5">
+                {{template "favicon" dict "src" .Feed.FaviconURL.String "size" "w-10 h-10"}}
                 <div>
-                    <h1 class="text-2xl font-bold text-spot-text">{{if .Feed.SiteURL.Valid}}<a href="{{.Feed.SiteURL.String}}" target="_blank" rel="noopener noreferrer" class="hover:text-spot-green transition">{{end}}{{if .Feed.Title.Valid}}{{.Feed.Title.String}}{{else}}{{.Feed.FeedURL}}{{end}}{{if .Feed.SiteURL.Valid}}</a>{{end}}</h1>
+                    <h1 class="text-2xl font-bold text-spot-text" style="letter-spacing: -0.02em;">{{if .Feed.SiteURL.Valid}}<a href="{{.Feed.SiteURL.String}}" target="_blank" rel="noopener noreferrer" class="hover:text-spot-green transition">{{end}}{{if .Feed.Title.Valid}}{{.Feed.Title.String}}{{else}}{{.Feed.FeedURL}}{{end}}{{if .Feed.SiteURL.Valid}}</a>{{end}}</h1>
                     {{if .Feed.SiteURL.Valid}}<a href="{{.Feed.SiteURL.String}}" target="_blank" rel="noopener noreferrer" class="text-xs text-spot-secondary hover:text-spot-green transition">{{.Feed.SiteURL.String}}</a>{{end}}
                 </div>
             </div>
@@ -30,11 +30,11 @@
                 {{end}}
             </div>
         </div>
-        {{if .Feed.Description.Valid}}<p class="text-sm text-spot-secondary mt-2">{{.Feed.Description.String}}</p>{{end}}
+        {{if .Feed.Description.Valid}}<p class="text-sm text-spot-secondary mt-3 leading-relaxed">{{.Feed.Description.String}}</p>{{end}}
     </div>
     {{else}}
     <div class="flex items-center justify-between mb-2">
-        <h1 class="text-2xl font-bold text-spot-text">Articles</h1>
+        <h1 class="text-2xl font-bold text-spot-text" style="letter-spacing: -0.02em;">Articles</h1>
         <form hx-post="/articles/mark-all-read" hx-confirm="Mark all articles as read?">
             {{csrfInput .CSRFToken}}
             <button type="submit" class="border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:border-spot-text transition">Mark all read</button>
@@ -47,26 +47,26 @@
         <form method="GET" action="/articles" class="flex-1" id="search-form">
             <div class="relative">
                 <input type="text" name="q" value="{{.SearchQuery}}" placeholder="Search articles..."
-                       class="w-full bg-spot-hover text-spot-text rounded-pill pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder"
+                       class="w-full bg-spot-hover text-spot-text rounded-pill pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder"
                        hx-get="/articles" hx-trigger="keyup changed delay:300ms, search" hx-target="#article-list" hx-swap="innerHTML" hx-include="[name='q']">
                 <svg class="w-4 h-4 text-spot-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                 {{if .FeedURL}}<input type="hidden" name="feed" value="{{.FeedURL}}">{{end}}
                 {{if .Status}}<input type="hidden" name="status" value="{{.Status}}">{{end}}
             </div>
         </form>
-        <div class="flex items-center gap-2 shrink-0">
+        <div class="flex items-center gap-1.5 shrink-0">
              <a href="/articles?status=all{{if .FeedURL}}&feed={{.FeedURL}}{{end}}"
-                class="px-4 py-1.5 rounded-pill text-xs font-bold uppercase tracking-button transition
+                class="px-3.5 py-1.5 rounded-pill text-xs font-bold uppercase tracking-button transition
                         {{if eq .Status "all"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
                   All
              </a>
              <a href="/articles?status=unread{{if .FeedURL}}&feed={{.FeedURL}}{{end}}"
-                class="px-4 py-1.5 rounded-pill text-xs font-bold uppercase tracking-button transition
+                class="px-3.5 py-1.5 rounded-pill text-xs font-bold uppercase tracking-button transition
                        {{if or (eq .Status "unread") (eq .Status "")}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
                  Unread
              </a>
             <a href="/articles?status=read{{if .FeedURL}}&feed={{.FeedURL}}{{end}}"
-               class="px-4 py-1.5 rounded-pill text-xs font-bold uppercase tracking-button transition
+               class="px-3.5 py-1.5 rounded-pill text-xs font-bold uppercase tracking-button transition
                       {{if eq .Status "read"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
                 Read
             </a>

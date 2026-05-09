@@ -15,16 +15,17 @@
     </div>
 
     <article>
-        <h1 class="text-2xl font-bold leading-tight">
+        <h1 class="text-2xl font-bold leading-tight" style="letter-spacing: -0.02em;">
             {{if .Article.URL.Valid}}<a href="{{.Article.URL.String}}" target="_blank" rel="noopener noreferrer" class="text-spot-text hover:text-spot-green transition">{{.Article.Title}}</a>
             {{else}}<span class="text-spot-text">{{.Article.Title}}</span>{{end}}
         </h1>
 
-        <div class="flex items-center gap-2.5 mt-3 text-sm text-spot-secondary flex-wrap">
-            {{if .Article.Author.Valid}}<span>{{.Article.Author.String}}</span>{{end}}
-            {{if .Article.Published.Valid}}<span>{{.Article.Published.Time.Format "Jan 2, 2006 15:04"}}</span>{{end}}
+        <div class="flex items-center gap-2.5 mt-4 text-sm text-spot-secondary flex-wrap">
+            {{if .Article.Author.Valid}}<span class="font-medium">{{.Article.Author.String}}</span>{{end}}
+            {{if .Article.Published.Valid}}<span class="text-spot-muted">&middot;</span><span>{{.Article.Published.Time.Format "Jan 2, 2006 15:04"}}</span>{{end}}
             {{if .Feed}}
-            <a href="/articles?feed={{.Feed.FeedURL}}" class="inline-flex items-center gap-1 hover:text-spot-green transition">
+            <span class="text-spot-muted">&middot;</span>
+            <a href="/articles?feed={{.Feed.FeedURL}}" class="inline-flex items-center gap-1.5 hover:text-spot-green transition">
                 {{if .Feed}}{{template "favicon" dict "src" .Feed.FaviconURL.String "size" "w-4 h-4"}}{{end}}
                 {{if .Feed.Title.Valid}}{{.Feed.Title.String}}{{else}}{{.Feed.FeedURL}}{{end}}
             </a>
@@ -66,7 +67,7 @@
 
         {{if .Article.URL.Valid}}
         {{with youtubeID .Article.URL.String}}
-        <div class="my-6 aspect-video w-full rounded-xl overflow-hidden shadow-spot">
+        <div class="my-8 aspect-video w-full rounded-xl overflow-hidden shadow-spot-heavy">
             <iframe class="w-full h-full" src="https://www.youtube.com/embed/{{.}}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
         </div>
         {{end}}
@@ -97,7 +98,7 @@
         {{if and (not .Article.Content.Valid) (not .Article.FullContent.Valid) .Article.URL.Valid (not (isEmbedURL .Article.URL.String))}}
         <div id="article-content" class="mt-6">
             <button hx-post="/articles/{{.Article.ID}}/fetch-content" hx-target="#article-content" hx-swap="outerHTML"
-                    class="border border-spot-outline text-spot-text rounded-pill px-2.5 py-1.5 text-xs font-bold uppercase tracking-button hover:border-spot-text transition inline-flex items-center gap-1.5">
+                    class="border border-spot-outline text-spot-text rounded-pill px-3 py-1.5 text-xs font-bold uppercase tracking-button hover:border-spot-text transition inline-flex items-center gap-1.5">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
                 Fetch full content
             </button>
@@ -110,7 +111,7 @@
     <hr class="my-8 border-spot-divider">
 
     <section>
-        <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center justify-between mb-5">
             <h2 class="text-lg font-semibold text-spot-text">Annotations</h2>
             <button id="toggle-highlights" class="text-xs text-spot-secondary hover:text-spot-text transition inline-flex items-center gap-1.5">
                 <span id="toggle-highlights-icon" class="w-4 h-4 inline-flex">
@@ -132,11 +133,11 @@
             <input type="hidden" name="quote" id="quote-input">
             <div>
                 <textarea name="note" rows="2" placeholder="Add a note..."
-                          class="w-full bg-spot-hover text-spot-text rounded-pill px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder resize-none"></textarea>
+                          class="w-full bg-spot-hover text-spot-text rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder resize-none"></textarea>
             </div>
             <div class="flex gap-2">
                 <input type="text" name="tags" placeholder="Tags (comma separated)"
-                       class="flex-1 bg-spot-hover text-spot-text rounded-pill px-5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
+                       class="flex-1 bg-spot-hover text-spot-text rounded-pill px-5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
                 <button type="submit" class="bg-spot-green text-white rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Annotate</button>
             </div>
         </form>
@@ -145,12 +146,12 @@
             {{range .Annotations}}
             {{template "annotation-card.html" dict "annotation" . "userDID" $.CurrentUserDID}}
             {{else}}
-            <p class="text-sm text-spot-secondary">No annotations yet. Be the first to add one.</p>
+            <p class="text-sm text-spot-secondary text-center py-6">No annotations yet. Select text above or add a note.</p>
             {{end}}
         </div>
     </section>
 
-    <div class="flex items-center justify-between mt-8">
+    <div class="flex items-center justify-between mt-8 mb-4">
         <a href="javascript:history.back()" class="text-sm text-spot-secondary hover:text-spot-text inline-flex items-center gap-1.5 transition">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
             Back

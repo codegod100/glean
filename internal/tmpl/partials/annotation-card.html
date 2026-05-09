@@ -1,5 +1,5 @@
 {{define "annotation-card.html"}}
-<div id="annotation-{{.annotation.ID}}" class="bg-spot-surface rounded-xl p-5 border border-spot-divider shadow-sm">
+<div id="annotation-{{.annotation.ID}}" class="bg-spot-surface rounded-xl p-5 border border-spot-divider">
     {{if .annotation.ArticleURL}}
     <div class="text-xs mb-3 flex items-center gap-2">
         {{if .annotation.ArticleID.Valid}}<a href="/articles/{{.annotation.ArticleID.Int64}}" class="text-spot-green hover:text-spot-text transition truncate inline-flex items-center gap-1">
@@ -28,10 +28,10 @@
             {{if .annotation.CreatedAt.Valid}}<span>&middot;</span><span>{{.annotation.CreatedAt.Time.Format "Jan 2, 2006 15:04"}}</span>{{end}}
         </div>
         {{if eq .annotation.AuthorDID .userDID}}
-        <div class="flex items-center gap-2">
-            <button class="text-xs text-spot-secondary hover:text-spot-text transition" onclick="editAnnotation(this, {{.annotation.ID}}, '{{js .annotation.FeedURL}}', '{{js .annotation.ArticleURL}}', '{{js .annotation.Quote.String}}', '{{js .annotation.Note.String}}', '{{js .annotation.Tags.String}}')">Edit</button>
+        <div class="flex items-center gap-3">
+            <button class="text-xs text-spot-secondary hover:text-spot-text transition font-medium" onclick="editAnnotation(this, {{.annotation.ID}}, '{{js .annotation.FeedURL}}', '{{js .annotation.ArticleURL}}', '{{js .annotation.Quote.String}}', '{{js .annotation.Note.String}}', '{{js .annotation.Tags.String}}')">Edit</button>
             <button hx-post="/library/{{.annotation.ID}}/delete" hx-target="#annotation-{{.annotation.ID}}" hx-swap="outerHTML swap:0.3s" hx-confirm="Delete this annotation?"
-                    class="text-xs text-spot-secondary hover:text-spot-red transition">Delete</button>
+                    class="text-xs text-spot-secondary hover:text-spot-red transition font-medium">Delete</button>
         </div>
         {{end}}
     </div>

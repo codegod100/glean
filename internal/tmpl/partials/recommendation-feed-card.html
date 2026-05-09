@@ -1,10 +1,10 @@
 {{define "recommendation-feed-card.html"}}
-<div class="recommendation-card bg-spot-surface rounded-xl p-3 hover:bg-spot-hover-50 transition shadow-spot">
+<div class="recommendation-card bg-spot-surface rounded-xl p-3.5 hover:bg-spot-hover-50 transition shadow-spot">
     <div class="flex items-center justify-between gap-2">
-        <a href="/articles?feed={{.feed_url}}" class="min-w-0 flex items-center gap-2 flex-1">
-            {{template "favicon" dict "src" .favicon_url "size" "w-4 h-4"}}
+        <a href="/articles?feed={{.feed_url}}" class="min-w-0 flex items-center gap-2.5 flex-1">
+            {{template "favicon" dict "src" .favicon_url "size" "w-5 h-5"}}
             <div class="min-w-0">
-                <div class="font-bold text-sm text-spot-text truncate">{{if .title}}{{.title}}{{else}}{{.feed_url}}{{end}}</div>
+                <div class="font-semibold text-sm text-spot-text truncate">{{if .title}}{{.title}}{{else}}{{.feed_url}}{{end}}</div>
                 {{if .description}}<p class="text-xs text-spot-secondary truncate mt-0.5">{{.description}}</p>{{end}}
             </div>
         </a>

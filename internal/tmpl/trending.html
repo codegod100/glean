@@ -1,16 +1,14 @@
 {{define "trending.html"}}
 {{if not .User}}
-<div class="bg-spot-surface rounded-xl shadow-spot-heavy p-6 mb-6 flex items-center justify-between gap-4 flex-wrap">
-    <div>
-        <p class="text-sm text-spot-text font-bold">Sign in to like, annotate, and get personalized recommendations.</p>
-    </div>
+<div class="bg-spot-surface rounded-xl shadow-spot p-6 mb-6 flex items-center justify-between gap-4 flex-wrap">
+    <p class="text-sm text-spot-text font-medium">Sign in to like, annotate, and get personalized recommendations.</p>
     <a href="/auth/login" class="bg-spot-green text-white rounded-pill px-5 py-2 text-xs font-bold uppercase tracking-button hover:brightness-110 transition shrink-0">Sign in</a>
 </div>
 {{end}}
 
 <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
-    <h1 class="text-2xl font-bold text-spot-text">Trending</h1>
-    <div class="flex gap-2">
+    <h1 class="text-2xl font-bold text-spot-text" style="letter-spacing: -0.02em;">Trending</h1>
+    <div class="flex gap-1.5">
         <a href="/trending?scope=all"
            class="text-sm px-4 py-1.5 rounded-pill font-bold {{if ne .Scope "for-me"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}} transition">All</a>
         <a href="/trending?scope=for-me"
@@ -25,11 +23,11 @@
     {{range .Trending}}
     {{template "trending-card.html" .}}
     {{else}}
-    <div class="bg-spot-surface rounded-xl py-12 px-6 text-center">
-        <div class="w-14 h-14 rounded-full bg-spot-hover flex items-center justify-center mb-4 mx-auto">
-            <svg class="w-7 h-7 text-spot-muted" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+    <div class="bg-spot-surface rounded-2xl py-12 px-6 text-center">
+        <div class="w-14 h-14 rounded-2xl bg-spot-green/15 flex items-center justify-center mb-5 mx-auto">
+            <svg class="w-7 h-7 text-spot-green" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
         </div>
-        <p class="text-sm text-spot-secondary mb-1">No trending articles yet</p>
+        <p class="text-sm text-spot-text font-semibold mb-1">No trending articles yet</p>
         <p class="text-xs text-spot-muted">Start liking and annotating to see trends.</p>
     </div>
     {{end}}

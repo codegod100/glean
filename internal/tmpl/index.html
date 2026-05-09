@@ -1,7 +1,8 @@
 {{define "index.html"}}
 <style>
-.landing-hero { padding-top: 6rem; padding-bottom: 4rem; }
-@media (min-width: 768px) { .landing-hero { padding-top: 8rem; padding-bottom: 6rem; } }
+.landing-hero { padding-top: 4rem; padding-bottom: 3rem; }
+@media (min-width: 768px) { .landing-hero { padding-top: 6rem; padding-bottom: 5rem; } }
+@media (min-width: 1024px) { .landing-hero { padding-top: 7rem; padding-bottom: 6rem; } }
 </style>
 
 <section class="landing-hero">
@@ -12,77 +13,77 @@
                     <span class="w-10 h-10">{{template "logo-icon"}}</span>
                     <span class="font-bold text-xl text-spot-text" style="letter-spacing: -0.02em;">Glean</span>
                 </div>
-                <h1 class="text-3xl md:text-5xl font-bold mb-6 leading-[1.1] text-spot-text" style="letter-spacing: -0.03em;">
+                <h1 class="text-4xl md:text-5xl lg:text-[3.5rem] font-bold mb-6 leading-[1.08] text-spot-text" style="letter-spacing: -0.035em;">
                     The social<br>RSS reader.
                 </h1>
-                <p class="text-lg text-spot-secondary mb-8 max-w-md leading-relaxed">
+                <p class="text-lg md:text-xl text-spot-secondary mb-8 max-w-md leading-relaxed" style="letter-spacing: -0.01em;">
                     Read your feeds. See what your circle reads. Discover new sources through personalized recommendations. All on AT Protocol.
                 </p>
                 <div class="flex flex-col sm:flex-row gap-3">
-                    <a href="/auth/login" class="bg-spot-green text-white rounded-pill px-7 py-3 text-sm font-bold uppercase tracking-button hover:brightness-110 transition active:scale-95 inline-flex items-center justify-center gap-2">
+                    <a href="/auth/login" class="bg-spot-green text-white rounded-pill px-8 py-3.5 text-sm font-bold uppercase tracking-button hover:brightness-110 transition active:scale-[0.98] inline-flex items-center justify-center gap-2 shadow-spot">
                         Sign in
                     </a>
-                    <a href="/trending" class="border border-spot-outline text-spot-text rounded-pill px-7 py-3 text-sm font-bold uppercase tracking-button hover:border-spot-text transition active:scale-95">
+                    <a href="/trending" class="border border-spot-outline text-spot-text rounded-pill px-8 py-3.5 text-sm font-bold uppercase tracking-button hover:border-spot-text hover:bg-spot-hover-50 transition active:scale-[0.98]">
                         See what's trending
                     </a>
                 </div>
             </div>
 
             <div class="hidden lg:block">
-                <div class="bg-spot-surface rounded-xl shadow-spot overflow-hidden">
-                    <div class="px-5 py-3 border-b border-spot-divider flex items-center gap-2">
-                        <div class="w-2 h-2 rounded-full bg-spot-red"></div>
-                        <div class="w-2 h-2 rounded-full bg-spot-orange"></div>
-                        <div class="w-2 h-2 rounded-full bg-spot-green"></div>
-                        <span class="text-xs text-spot-muted ml-3">Dashboard</span>
+                <div class="bg-spot-surface rounded-2xl shadow-spot-heavy overflow-hidden">
+                    <div class="px-5 py-3.5 border-b border-spot-divider flex items-center gap-2">
+                        <div class="w-2.5 h-2.5 rounded-full bg-spot-red/80"></div>
+                        <div class="w-2.5 h-2.5 rounded-full bg-spot-orange/80"></div>
+                        <div class="w-2.5 h-2.5 rounded-full bg-spot-green/80"></div>
+                        <span class="text-xs text-spot-muted ml-3 font-medium">Dashboard</span>
                     </div>
-                    <div class="p-4 space-y-2">
-                        <div class="rounded-lg px-4 py-3 flex items-start gap-3 hover:bg-spot-hover transition">
-                            <div class="w-8 h-8 rounded-full bg-spot-green/20 shrink-0 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-spot-green" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 0 1-2.25 2.25M16.5 7.5V18a2.25 2.25 0 0 0 2.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 0 0 2.25 2.25h13.5M6 7.5h3v3H6v-3Z"/></svg>
+                    <div class="p-3.5 space-y-1.5">
+                        <div class="rounded-xl px-4 py-3.5 flex items-start gap-3 hover:bg-spot-hover transition cursor-default">
+                            <div class="w-9 h-9 rounded-lg bg-spot-green/15 shrink-0 flex items-center justify-center">
+                                <svg class="w-4.5 h-4.5 text-spot-green" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 0 1-2.25 2.25M16.5 7.5V18a2.25 2.25 0 0 0 2.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 0 0 2.25 2.25h13.5M6 7.5h3v3H6v-3Z"/></svg>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <div class="text-sm font-bold text-spot-text leading-tight">Why the open web is making a comeback</div>
-                                <div class="text-xs text-spot-secondary mt-0.5">theopenweb.press &middot; 2h ago</div>
+                                <div class="text-sm font-semibold text-spot-text leading-tight">Why the open web is making a comeback</div>
+                                <div class="text-xs text-spot-secondary mt-1">theopenweb.press &middot; 2h ago</div>
                             </div>
                             <div class="flex items-center gap-1 text-spot-green shrink-0">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">{{template "icon-heart"}}</svg>
-                                <span class="text-xs">12</span>
+                                <span class="text-xs font-medium">12</span>
                             </div>
                         </div>
-                        <div class="rounded-lg px-4 py-3 flex items-start gap-3 hover:bg-spot-hover transition">
-                            <div class="w-8 h-8 rounded-full bg-spot-blue/20 shrink-0 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-spot-blue" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z"/></svg>
+                        <div class="rounded-xl px-4 py-3.5 flex items-start gap-3 hover:bg-spot-hover transition cursor-default">
+                            <div class="w-9 h-9 rounded-lg bg-spot-blue/15 shrink-0 flex items-center justify-center">
+                                <svg class="w-4.5 h-4.5 text-spot-blue" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z"/></svg>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <div class="text-sm font-bold text-spot-text leading-tight">How to take back control of your reading list</div>
-                                <div class="text-xs text-spot-secondary mt-0.5">readwrite.cafe &middot; 5h ago</div>
+                                <div class="text-sm font-semibold text-spot-text leading-tight">How to take back control of your reading list</div>
+                                <div class="text-xs text-spot-secondary mt-1">readwrite.cafe &middot; 5h ago</div>
                             </div>
                         </div>
-                        <div class="rounded-lg px-4 py-3 flex items-start gap-3 hover:bg-spot-hover transition">
-                            <div class="w-8 h-8 rounded-full bg-spot-orange/20 shrink-0 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-spot-orange" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.362 5.214A8.252 8.252 0 0 1 12 21 8.25 8.25 0 0 1 6.038 7.047 8.287 8.287 0 0 0 9 9.601a8.983 8.983 0 0 1 3.361-6.867 8.21 8.21 0 0 0 3 2.48Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 18a3.75 3.75 0 0 0 .495-7.468 5.99 5.99 0 0 0-1.925 3.547 5.975 5.975 0 0 1-2.133-1.001A3.75 3.75 0 0 0 12 18Z"/></svg>
+                        <div class="rounded-xl px-4 py-3.5 flex items-start gap-3 hover:bg-spot-hover transition cursor-default">
+                            <div class="w-9 h-9 rounded-lg bg-spot-orange/15 shrink-0 flex items-center justify-center">
+                                <svg class="w-4.5 h-4.5 text-spot-orange" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.362 5.214A8.252 8.252 0 0 1 12 21 8.25 8.25 0 0 1 6.038 7.047 8.287 8.287 0 0 0 9 9.601a8.983 8.983 0 0 1 3.361-6.867 8.21 8.21 0 0 0 3 2.48Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 18a3.75 3.75 0 0 0 .495-7.468 5.99 5.99 0 0 0-1.925 3.547 5.975 5.975 0 0 1-2.133-1.001A3.75 3.75 0 0 0 12 18Z"/></svg>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <div class="text-sm font-bold text-spot-text leading-tight">RSS is not dead, it was just resting</div>
-                                <div class="text-xs text-spot-secondary mt-0.5">syndication.xyz &middot; 8h ago</div>
+                                <div class="text-sm font-semibold text-spot-text leading-tight">RSS is not dead, it was just resting</div>
+                                <div class="text-xs text-spot-secondary mt-1">syndication.xyz &middot; 8h ago</div>
                             </div>
                             <div class="flex items-center gap-1 text-spot-secondary shrink-0">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z"/></svg>
                                 <span class="text-xs">3</span>
                             </div>
                         </div>
-                        <div class="rounded-lg px-4 py-3 flex items-start gap-3 hover:bg-spot-hover transition">
-                            <div class="w-8 h-8 rounded-full bg-spot-green/20 shrink-0 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-spot-green" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
+                        <div class="rounded-xl px-4 py-3.5 flex items-start gap-3 hover:bg-spot-hover transition cursor-default">
+                            <div class="w-9 h-9 rounded-lg bg-spot-green/15 shrink-0 flex items-center justify-center">
+                                <svg class="w-4.5 h-4.5 text-spot-green" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <div class="text-sm font-bold text-spot-text leading-tight">The case for owning your reading history</div>
-                                <div class="text-xs text-spot-secondary mt-0.5">protocolweekly.io &middot; 1d ago</div>
+                                <div class="text-sm font-semibold text-spot-text leading-tight">The case for owning your reading history</div>
+                                <div class="text-xs text-spot-secondary mt-1">protocolweekly.io &middot; 1d ago</div>
                             </div>
                         </div>
                     </div>
-                    <div class="px-5 py-3 border-t border-spot-divider flex items-center justify-between">
+                    <div class="px-5 py-3.5 border-t border-spot-divider flex items-center justify-between bg-spot-hover/30">
                         <div class="flex items-center gap-2 text-xs text-spot-muted">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941"/></svg>
                             4 trending in your network
@@ -96,26 +97,30 @@
 </section>
 
 <section class="max-w-6xl mx-auto px-6 py-16">
+    <div class="text-center mb-12">
+        <h2 class="text-2xl md:text-3xl font-bold text-spot-text mb-3" style="letter-spacing: -0.025em;">Reading, reimagined</h2>
+        <p class="text-spot-secondary max-w-lg mx-auto">Everything you need to stay informed, discover great writing, and connect with fellow readers.</p>
+    </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
-        <div>
-            <div class="flex items-center gap-2 mb-3">
+        <div class="text-center md:text-left">
+            <div class="w-10 h-10 rounded-xl bg-spot-green/15 flex items-center justify-center mb-4 mx-auto md:mx-0">
                 <svg class="w-5 h-5 text-spot-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7m-7-1a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
-                <h3 class="font-bold text-spot-text">Subscribe</h3>
             </div>
+            <h3 class="font-bold text-spot-text mb-2">Subscribe</h3>
             <p class="text-sm text-spot-secondary leading-relaxed">Add any RSS or Atom feed. Import your existing subscriptions from another reader via OPML. Highlight passages and leave notes on articles.</p>
         </div>
-        <div>
-            <div class="flex items-center gap-2 mb-3">
+        <div class="text-center md:text-left">
+            <div class="w-10 h-10 rounded-xl bg-spot-green/15 flex items-center justify-center mb-4 mx-auto md:mx-0">
                 <svg class="w-5 h-5 text-spot-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                <h3 class="font-bold text-spot-text">Discover</h3>
             </div>
+            <h3 class="font-bold text-spot-text mb-2">Discover</h3>
             <p class="text-sm text-spot-secondary leading-relaxed">Find new articles and feeds through personalized recommendations based on what your circle and readers with similar tastes are subscribing to.</p>
         </div>
-        <div>
-            <div class="flex items-center gap-2 mb-3">
+        <div class="text-center md:text-left">
+            <div class="w-10 h-10 rounded-xl bg-spot-green/15 flex items-center justify-center mb-4 mx-auto md:mx-0">
                 <svg class="w-5 h-5 text-spot-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                <h3 class="font-bold text-spot-text">Connect</h3>
             </div>
+            <h3 class="font-bold text-spot-text mb-2">Connect</h3>
             <p class="text-sm text-spot-secondary leading-relaxed">Find and follow people with similar reading tastes. See what they read and share. Build your circle on the Atmosphere.</p>
         </div>
     </div>
@@ -124,25 +129,25 @@
 <section class="bg-spot-green-house">
     <div class="max-w-6xl mx-auto px-6 py-16">
         <div class="max-w-2xl">
-            <h2 class="text-2xl md:text-3xl font-bold text-white mb-4" style="letter-spacing: -0.02em;">Your feeds. Your data. Yours.</h2>
+            <h2 class="text-2xl md:text-3xl font-bold text-white mb-4" style="letter-spacing: -0.025em;">Your feeds. Your data. Yours.</h2>
             <p class="text-[rgba(255,255,255,0.70)] leading-relaxed mb-8">
                 Glean stores subscriptions and annotations in your personal data repository (PDS) on the AT Protocol. Your social graph comes from your existing Bluesky or Atmosphere connections. Take your data anywhere. Glean will never show you ads or track you.
             </p>
-            <div class="flex flex-wrap gap-x-8 gap-y-4 text-sm">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
                 <div class="flex items-center gap-2 text-[rgba(255,255,255,0.70)]">
-                    <svg class="w-4 h-4 text-spot-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    <svg class="w-4 h-4 text-spot-green shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                     AT Protocol identity
                 </div>
                 <div class="flex items-center gap-2 text-[rgba(255,255,255,0.70)]">
-                    <svg class="w-4 h-4 text-spot-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    <svg class="w-4 h-4 text-spot-green shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                     Portable data
                 </div>
                 <div class="flex items-center gap-2 text-[rgba(255,255,255,0.70)]">
-                    <svg class="w-4 h-4 text-spot-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    <svg class="w-4 h-4 text-spot-green shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                     <a href="https://tangled.org/julien.rbrt.fr/glean" class="hover:text-white transition">Open source</a>
                 </div>
                 <div class="flex items-center gap-2 text-[rgba(255,255,255,0.70)]">
-                    <svg class="w-4 h-4 text-spot-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    <svg class="w-4 h-4 text-spot-green shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                     Self-hostable
                 </div>
             </div>
@@ -152,9 +157,9 @@
 
 <section class="py-16 text-center">
     <div class="max-w-md mx-auto px-6">
-        <h2 class="text-2xl font-bold text-spot-text mb-3" style="letter-spacing: -0.02em;">Start reading</h2>
-            <p class="text-spot-secondary mb-6 text-sm leading-relaxed">Sign in with your Bluesky handle or any Atmosphere account. Your network is already waiting.</p>
-        <a href="/auth/login" class="bg-spot-green text-white rounded-pill px-8 py-3 text-sm font-bold uppercase tracking-button hover:brightness-110 transition active:scale-95 inline-flex items-center justify-center gap-2">
+        <h2 class="text-2xl md:text-3xl font-bold text-spot-text mb-3" style="letter-spacing: -0.025em;">Start reading</h2>
+        <p class="text-spot-secondary mb-6 text-sm leading-relaxed">Sign in with your Bluesky handle or any Atmosphere account. Your network is already waiting.</p>
+        <a href="/auth/login" class="bg-spot-green text-white rounded-pill px-10 py-3.5 text-sm font-bold uppercase tracking-button hover:brightness-110 transition active:scale-[0.98] inline-flex items-center justify-center gap-2 shadow-spot">
             Get started
         </a>
     </div>
