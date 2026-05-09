@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
 	"strconv"
@@ -41,6 +42,21 @@ func main() {
 	atproto.InitIdentity(envOr("GLEAN_PLC_URL", "https://didplc.glean.at"))
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+	if pprofAddr := envOr("GLEAN_PPROF_ADDR", ""); pprofAddr != "" {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/debug/pprof/", pprof.Index)
+		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+		go func() {
+			logger.Info("starting pprof server", "addr", pprofAddr)
+			if err := http.ListenAndServe(pprofAddr, mux); err != nil {
+				logger.Error("pprof server error", "error", err)
+			}
+		}()
+	}
 
 	vec.Auto()
 	dbs, err := db.Open(*dbPath)

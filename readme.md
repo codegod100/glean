@@ -72,6 +72,7 @@ Then open `http://localhost:8080`.
 | `GLEAN_LLM_BASE_URL`         | _(empty)_                  | LLM API base URL for language detection (see below)        |
 | `GLEAN_LLM_API_KEY`          | _(empty)_                  | API key for the LLM endpoint                               |
 | `GLEAN_LLM_MODEL`            | `gpt-4o-mini`              | LLM model name                                             |
+| `GLEAN_PPROF_ADDR`           | _(empty)_                  | Enable pprof profiling server (e.g. `:6060`, off by default) |
 
 For production:
 
