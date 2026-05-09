@@ -52,50 +52,48 @@ func (e *Engine) ComputeArticleEmbeddings(ctx context.Context) error {
 		return fmt.Errorf("clean stale article embeddings: %w", err)
 	}
 
-	rows, err := conn.QueryContext(ctx, `
-		SELECT a.id, COALESCE(a.title, '') || ' ' || COALESCE(a.summary, '') || ' ' || COALESCE(a.content, '')
-		FROM articles.articles a
-		WHERE (COALESCE(a.title, '') != '' OR COALESCE(a.summary, '') != '' OR COALESCE(a.content, '') != '')
-		AND a.id NOT IN (SELECT article_id FROM recs.article_embeddings)
-		ORDER BY a.id
-	`)
-	if err != nil {
-		return err
-	}
-
-	type article struct {
-		id   int64
-		text string
-	}
-	var batch []article
-	for rows.Next() {
-		var a article
-		if err := rows.Scan(&a.id, &a.text); err != nil {
-			rows.Close()
+	totalComputed := 0
+	for {
+		rows, err := conn.QueryContext(ctx, `
+			SELECT a.id, COALESCE(a.title, '') || ' ' || COALESCE(a.summary, '') || ' ' || COALESCE(a.content, '')
+			FROM articles.articles a
+			WHERE (COALESCE(a.title, '') != '' OR COALESCE(a.summary, '') != '' OR COALESCE(a.content, '') != '')
+			AND a.id NOT IN (SELECT article_id FROM recs.article_embeddings)
+			ORDER BY a.id
+			LIMIT ?
+		`, embedBatchSize)
+		if err != nil {
 			return err
 		}
-		a.text = truncateForEmbed(a.text)
-		batch = append(batch, a)
-	}
-	rows.Close()
 
-	if len(batch) == 0 {
-		e.logger.Info("article embeddings up to date")
-		return nil
-	}
+		type article struct {
+			id   int64
+			text string
+		}
+		var batch []article
+		for rows.Next() {
+			var a article
+			if err := rows.Scan(&a.id, &a.text); err != nil {
+				rows.Close()
+				return err
+			}
+			a.text = truncateForEmbed(a.text)
+			batch = append(batch, a)
+		}
+		rows.Close()
 
-	for i := 0; i < len(batch); i += embedBatchSize {
-		end := min(i+embedBatchSize, len(batch))
-		sub := batch[i:end]
+		if len(batch) == 0 {
+			break
+		}
 
-		texts := make([]string, len(sub))
-		for j, a := range sub {
+		texts := make([]string, len(batch))
+		for j, a := range batch {
 			texts[j] = a.text
 		}
 
 		embeddings, err := e.embedder.Embed(ctx, texts, "Represent this news article for retrieving topically similar articles. Focus on the subjects, themes, and key entities discussed.")
 		if err != nil {
-			return fmt.Errorf("embed batch %d: %w", i/embedBatchSize, err)
+			return fmt.Errorf("embed batch starting at total %d: %w", totalComputed, err)
 		}
 
 		tx, err := conn.BeginTx(ctx, nil)
@@ -111,7 +109,7 @@ func (e *Engine) ComputeArticleEmbeddings(ctx context.Context) error {
 			}
 			if _, err := tx.ExecContext(ctx,
 				`INSERT OR IGNORE INTO recs.article_embeddings(article_id, embedding) VALUES (?, ?)`,
-				sub[j].id, blob,
+				batch[j].id, blob,
 			); err != nil {
 				return fmt.Errorf("insert embedding: %w", err)
 			}
@@ -121,13 +119,18 @@ func (e *Engine) ComputeArticleEmbeddings(ctx context.Context) error {
 			return err
 		}
 
+		totalComputed += len(batch)
 		e.logger.Info("article embeddings batch computed",
-			slog.Int("batch", i/embedBatchSize),
-			slog.Int("count", len(sub)),
+			slog.Int("batch_total", totalComputed),
+			slog.Int("count", len(batch)),
 		)
 	}
 
-	e.logger.Info("article embeddings computed", slog.Int("total", len(batch)))
+	if totalComputed == 0 {
+		e.logger.Info("article embeddings up to date")
+	} else {
+		e.logger.Info("article embeddings computed", slog.Int("total", totalComputed))
+	}
 	return nil
 }
 
@@ -268,56 +271,54 @@ func (e *Engine) ComputeFeedEmbeddings(ctx context.Context) error {
 		return fmt.Errorf("clean stale feed embeddings: %w", err)
 	}
 
-	rows, err := conn.QueryContext(ctx, `
-		SELECT f.feed_url, COALESCE(f.title, '') || ' ' || COALESCE(f.description, '')
-		FROM articles.feeds f
-		WHERE (COALESCE(f.title, '') != '' OR COALESCE(f.description, '') != '')
-		AND (
-			f.feed_url NOT IN (SELECT feed_url FROM recs.feed_embedding_meta)
-			OR EXISTS (
-				SELECT 1 FROM recs.feed_embedding_meta fm
-				WHERE fm.feed_url = f.feed_url
-				AND fm.source_text != COALESCE(f.title, '') || ' ' || COALESCE(f.description, '')
+	totalComputed := 0
+	for {
+		rows, err := conn.QueryContext(ctx, `
+			SELECT f.feed_url, COALESCE(f.title, '') || ' ' || COALESCE(f.description, '')
+			FROM articles.feeds f
+			WHERE (COALESCE(f.title, '') != '' OR COALESCE(f.description, '') != '')
+			AND (
+				f.feed_url NOT IN (SELECT feed_url FROM recs.feed_embedding_meta)
+				OR EXISTS (
+					SELECT 1 FROM recs.feed_embedding_meta fm
+					WHERE fm.feed_url = f.feed_url
+					AND fm.source_text != COALESCE(f.title, '') || ' ' || COALESCE(f.description, '')
+				)
 			)
-		)
-		ORDER BY f.feed_url
-	`)
-	if err != nil {
-		return err
-	}
-
-	type feed struct {
-		url  string
-		text string
-	}
-	var batch []feed
-	for rows.Next() {
-		var f feed
-		if err := rows.Scan(&f.url, &f.text); err != nil {
-			rows.Close()
+			ORDER BY f.feed_url
+			LIMIT ?
+		`, embedBatchSize)
+		if err != nil {
 			return err
 		}
-		batch = append(batch, f)
-	}
-	rows.Close()
 
-	if len(batch) == 0 {
-		e.logger.Info("feed embeddings up to date")
-		return nil
-	}
+		type feed struct {
+			url  string
+			text string
+		}
+		var batch []feed
+		for rows.Next() {
+			var f feed
+			if err := rows.Scan(&f.url, &f.text); err != nil {
+				rows.Close()
+				return err
+			}
+			batch = append(batch, f)
+		}
+		rows.Close()
 
-	for i := 0; i < len(batch); i += embedBatchSize {
-		end := min(i+embedBatchSize, len(batch))
-		sub := batch[i:end]
+		if len(batch) == 0 {
+			break
+		}
 
-		texts := make([]string, len(sub))
-		for j, f := range sub {
+		texts := make([]string, len(batch))
+		for j, f := range batch {
 			texts[j] = f.text
 		}
 
 		embeddings, err := e.embedder.Embed(ctx, texts, "Represent this RSS feed description for discovering feeds with similar editorial focus and topic coverage.")
 		if err != nil {
-			return fmt.Errorf("embed feed batch %d: %w", i/embedBatchSize, err)
+			return fmt.Errorf("embed feed batch starting at total %d: %w", totalComputed, err)
 		}
 
 		tx, err := conn.BeginTx(ctx, nil)
@@ -332,19 +333,19 @@ func (e *Engine) ComputeFeedEmbeddings(ctx context.Context) error {
 				return fmt.Errorf("serialize feed embedding: %w", err)
 			}
 			if _, err := tx.ExecContext(ctx,
-				`DELETE FROM recs.feed_embeddings WHERE feed_url = ?`, sub[j].url,
+				`DELETE FROM recs.feed_embeddings WHERE feed_url = ?`, batch[j].url,
 			); err != nil {
 				return fmt.Errorf("delete feed embedding: %w", err)
 			}
 			if _, err := tx.ExecContext(ctx,
 				`INSERT INTO recs.feed_embeddings(feed_url, embedding) VALUES (?, ?)`,
-				sub[j].url, blob,
+				batch[j].url, blob,
 			); err != nil {
 				return fmt.Errorf("insert feed embedding: %w", err)
 			}
 			if _, err := tx.ExecContext(ctx,
 				`INSERT OR REPLACE INTO recs.feed_embedding_meta(feed_url, source_text) VALUES (?, ?)`,
-				sub[j].url, sub[j].text,
+				batch[j].url, batch[j].text,
 			); err != nil {
 				return fmt.Errorf("insert feed embedding: %w", err)
 			}
@@ -354,13 +355,18 @@ func (e *Engine) ComputeFeedEmbeddings(ctx context.Context) error {
 			return err
 		}
 
+		totalComputed += len(batch)
 		e.logger.Info("feed embeddings batch computed",
-			slog.Int("batch", i/embedBatchSize),
-			slog.Int("count", len(sub)),
+			slog.Int("batch_total", totalComputed),
+			slog.Int("count", len(batch)),
 		)
 	}
 
-	e.logger.Info("feed embeddings computed", slog.Int("total", len(batch)))
+	if totalComputed == 0 {
+		e.logger.Info("feed embeddings up to date")
+	} else {
+		e.logger.Info("feed embeddings computed", slog.Int("total", totalComputed))
+	}
 	return nil
 }
 

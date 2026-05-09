@@ -6,6 +6,7 @@ import (
 )
 
 const maxFollowDepth = 3
+const maxReachablePerUser = 10000
 
 func chunk[T any](s []T, size int) [][]T {
 	var chunks [][]T
@@ -33,43 +34,10 @@ func (e *Engine) ComputeFollowDistancesData(ctx context.Context, sources []strin
 	distances := make(map[pair]int)
 
 	for _, src := range sources {
-		frontier := []string{src}
-		reachable := map[string]int{src: 0}
-
-		for depth := 0; depth < maxFollowDepth && len(frontier) > 0; depth++ {
-			var nextLevel []string
-			for _, batch := range chunk(frontier, 500) {
-				ph := make([]string, len(batch))
-				args := make([]any, len(batch))
-				for i, did := range batch {
-					ph[i] = "?"
-					args[i] = did
-				}
-
-				rows, err := e.db.QueryContext(ctx,
-					fmt.Sprintf(`SELECT target_did FROM main.follows WHERE user_did IN (%s) AND user_did != target_did`, joinPh(ph)),
-					args...,
-				)
-				if err != nil {
-					return nil, err
-				}
-
-				for rows.Next() {
-					var dst string
-					if err := rows.Scan(&dst); err != nil {
-						rows.Close()
-						return nil, err
-					}
-					if _, ok := reachable[dst]; !ok {
-						reachable[dst] = depth + 1
-						nextLevel = append(nextLevel, dst)
-					}
-				}
-				rows.Close()
-			}
-			frontier = nextLevel
+		reachable, err := e.bfsReachable(ctx, src)
+		if err != nil {
+			return nil, err
 		}
-
 		for other, d := range reachable {
 			if d > 0 {
 				distances[pair{src, other}] = d
@@ -82,6 +50,50 @@ func (e *Engine) ComputeFollowDistancesData(ctx context.Context, sources []strin
 		result = append(result, followDistance{userA: k.src, userB: k.dst, distance: d})
 	}
 	return result, nil
+}
+
+func (e *Engine) bfsReachable(ctx context.Context, src string) (map[string]int, error) {
+	reachable := map[string]int{src: 0}
+	frontier := []string{src}
+
+	for depth := 0; depth < maxFollowDepth && len(frontier) > 0; depth++ {
+		var nextLevel []string
+		for _, batch := range chunk(frontier, 500) {
+			ph := make([]string, len(batch))
+			args := make([]any, len(batch))
+			for i, did := range batch {
+				ph[i] = "?"
+				args[i] = did
+			}
+
+			rows, err := e.db.QueryContext(ctx,
+				fmt.Sprintf(`SELECT target_did FROM main.follows WHERE user_did IN (%s) AND user_did != target_did`, joinPh(ph)),
+				args...,
+			)
+			if err != nil {
+				return reachable, err
+			}
+
+			for rows.Next() {
+				var dst string
+				if err := rows.Scan(&dst); err != nil {
+					rows.Close()
+					return reachable, err
+				}
+				if _, ok := reachable[dst]; !ok {
+					if len(reachable) >= maxReachablePerUser {
+						rows.Close()
+						return reachable, nil
+					}
+					reachable[dst] = depth + 1
+					nextLevel = append(nextLevel, dst)
+				}
+			}
+			rows.Close()
+		}
+		frontier = nextLevel
+	}
+	return reachable, nil
 }
 
 func (e *Engine) WriteFollowDistances(ctx context.Context, distances []followDistance) error {

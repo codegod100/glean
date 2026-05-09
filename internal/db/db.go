@@ -46,7 +46,7 @@ func Open(basePath string) (*Store, error) {
 				`PRAGMA busy_timeout = 30000`,
 				`PRAGMA synchronous = NORMAL`,
 				`PRAGMA cache = shared`,
-				`PRAGMA temp_store = MEMORY`,
+				`PRAGMA temp_store = FILE`,
 				`PRAGMA mmap_size = 268435456`,
 			} {
 				if _, err := conn.Exec(p, nil); err != nil {
@@ -62,7 +62,7 @@ func Open(basePath string) (*Store, error) {
 				`PRAGMA articles.busy_timeout = 30000`,
 				`PRAGMA articles.synchronous = NORMAL`,
 				`PRAGMA articles.cache = shared`,
-				`PRAGMA articles.temp_store = MEMORY`,
+				`PRAGMA articles.temp_store = FILE`,
 				`PRAGMA articles.mmap_size = 268435456`,
 			} {
 				if _, err := conn.Exec(p, nil); err != nil {
@@ -78,7 +78,7 @@ func Open(basePath string) (*Store, error) {
 				`PRAGMA recs.busy_timeout = 30000`,
 				`PRAGMA recs.synchronous = NORMAL`,
 				`PRAGMA recs.cache = shared`,
-				`PRAGMA recs.temp_store = MEMORY`,
+				`PRAGMA recs.temp_store = FILE`,
 				`PRAGMA recs.mmap_size = 268435456`,
 			} {
 				if _, err := conn.Exec(p, nil); err != nil {

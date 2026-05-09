@@ -149,7 +149,7 @@ func pruneProfileCache() {
 	for _, k := range toDelete {
 		profileCache.Delete(k)
 	}
-	profileCacheSize.Store(int64(len(toDelete)))
+	profileCacheSize.Add(-int64(len(toDelete)))
 }
 
 func ResolveProfile(ctx context.Context, did string) Profile {

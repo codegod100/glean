@@ -155,7 +155,7 @@ func (e *Engine) computeEmbeddingSimilarity(ctx context.Context, tx *sql.Tx) err
 	}
 
 	const knnLimit = 50
-	stmt, err := tx.PrepareContext(ctx, `
+	knnStmt, err := tx.PrepareContext(ctx, `
 		SELECT feed_url, distance
 		FROM recs.feed_embeddings
 		WHERE embedding MATCH ? AND k = ?
@@ -164,7 +164,7 @@ func (e *Engine) computeEmbeddingSimilarity(ctx context.Context, tx *sql.Tx) err
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	defer knnStmt.Close()
 
 	updateStmt, err := tx.PrepareContext(ctx,
 		`UPDATE _feed_sim_staging SET jaccard = jaccard + ? WHERE feed_a = ? AND feed_b = ?`,
@@ -175,7 +175,7 @@ func (e *Engine) computeEmbeddingSimilarity(ctx context.Context, tx *sql.Tx) err
 	defer updateStmt.Close()
 
 	for _, f := range feeds {
-		knnRows, err := stmt.QueryContext(ctx, f.vec, knnLimit)
+		knnRows, err := knnStmt.QueryContext(ctx, f.vec, knnLimit)
 		if err != nil {
 			return err
 		}
