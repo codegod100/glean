@@ -17,7 +17,7 @@ func TestExtractContent_ArticleElement(t *testing.T) {
 		<footer>footer</footer>
 	</body></html>`
 
-	content, err := extractContent(strings.NewReader(html))
+	content, err := extractContent(strings.NewReader(html), "")
 	assert.NilError(t, err)
 	assert.Assert(t, strings.Contains(content, "This is the article content"))
 	assert.Assert(t, !strings.Contains(content, "navigation"))
@@ -30,7 +30,7 @@ func TestExtractContent_MainElement(t *testing.T) {
 		<main><p>Main content area with sufficient text to be considered a proper article body for reading purposes.</p></main>
 	</body></html>`
 
-	content, err := extractContent(strings.NewReader(html))
+	content, err := extractContent(strings.NewReader(html), "")
 	assert.NilError(t, err)
 	assert.Assert(t, strings.Contains(content, "Main content area"))
 }
@@ -40,7 +40,7 @@ func TestExtractContent_RoleMain(t *testing.T) {
 		<div role="main"><p>Content in a role=main div with enough text to be useful for the reader to enjoy.</p></div>
 	</body></html>`
 
-	content, err := extractContent(strings.NewReader(html))
+	content, err := extractContent(strings.NewReader(html), "")
 	assert.NilError(t, err)
 	assert.Assert(t, strings.Contains(content, "Content in a role=main div"))
 }
@@ -53,7 +53,7 @@ func TestExtractContent_LargestDiv(t *testing.T) {
 		</div>
 	</body></html>`
 
-	content, err := extractContent(strings.NewReader(html))
+	content, err := extractContent(strings.NewReader(html), "")
 	assert.NilError(t, err)
 	assert.Assert(t, strings.Contains(content, "Lorem ipsum"))
 }
@@ -67,7 +67,7 @@ func TestExtractContent_RemovesScripts(t *testing.T) {
 		</article>
 	</body></html>`
 
-	content, err := extractContent(strings.NewReader(html))
+	content, err := extractContent(strings.NewReader(html), "")
 	assert.NilError(t, err)
 	assert.Assert(t, strings.Contains(content, "Good content"))
 	assert.Assert(t, !strings.Contains(content, "alert"))
@@ -77,7 +77,7 @@ func TestExtractContent_RemovesScripts(t *testing.T) {
 func TestExtractContent_EmptyBody(t *testing.T) {
 	html := `<!DOCTYPE html><html><body></body></html>`
 
-	content, err := extractContent(strings.NewReader(html))
+	content, err := extractContent(strings.NewReader(html), "")
 	assert.NilError(t, err)
 	assert.Equal(t, content, "")
 }
@@ -136,7 +136,7 @@ func TestRenderNode_VoidElements(t *testing.T) {
 		</article>
 	</body></html>`
 
-	content, err := extractContent(strings.NewReader(html))
+	content, err := extractContent(strings.NewReader(html), "")
 	assert.NilError(t, err)
 	assert.Assert(t, strings.Contains(content, "<br>"))
 	assert.Assert(t, strings.Contains(content, "<img"))
@@ -150,7 +150,7 @@ func TestRenderNode_StripsDeadLinks(t *testing.T) {
 		</article>
 	</body></html>`
 
-	content, err := extractContent(strings.NewReader(html))
+	content, err := extractContent(strings.NewReader(html), "")
 	assert.NilError(t, err)
 	assert.Assert(t, strings.Contains(content, "home"))
 	assert.Assert(t, strings.Contains(content, "about"))
@@ -176,7 +176,7 @@ func TestRenderNode_StripsDeadImages(t *testing.T) {
 		</article>
 	</body></html>`
 
-	content, err := extractContent(strings.NewReader(html))
+	content, err := extractContent(strings.NewReader(html), "")
 	assert.NilError(t, err)
 	assert.Assert(t, !strings.Contains(content, `/images/photo.jpg`))
 	assert.Assert(t, !strings.Contains(content, `data:image`))

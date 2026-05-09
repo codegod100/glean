@@ -8,12 +8,14 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
 	"pkg.rbrt.fr/glean/internal/httpclient"
 
 	"golang.org/x/net/html"
+	"golang.org/x/net/html/charset"
 )
 
 type Scraper struct {
@@ -53,26 +55,30 @@ func (s *Scraper) Scrape(ctx context.Context, articleURL string) (string, error)
 }
 
 func (s *Scraper) scrapeDirect(ctx context.Context, articleURL string) (string, error) {
-	body, err := s.fetch(ctx, articleURL)
+	resp, err := s.fetch(ctx, articleURL)
 	if err != nil {
 		return "", fmt.Errorf("fetching article: %w", err)
 	}
-	return extractContent(body)
+	return extractContent(resp.Body, resp.ContentType)
 }
 
 func (s *Scraper) scrapeArchive(ctx context.Context, articleURL string) (string, error) {
-	archiveURL := s.archiveURL + articleURL
-	body, err := s.fetch(ctx, archiveURL)
+	resp, err := s.fetch(ctx, s.archiveURL+articleURL)
 	if err != nil {
 		return "", fmt.Errorf("fetching from archive.is: %w", err)
 	}
-	return extractContent(body)
+	return extractContent(resp.Body, resp.ContentType)
 }
 
-func (s *Scraper) fetch(ctx context.Context, url string) (io.Reader, error) {
-	reader, err := s.doFetch(ctx, url)
+type fetchResult struct {
+	Body        io.Reader
+	ContentType string
+}
+
+func (s *Scraper) fetch(ctx context.Context, url string) (*fetchResult, error) {
+	resp, err := s.doFetch(ctx, url)
 	if err == nil {
-		return reader, nil
+		return resp, nil
 	}
 
 	var se *httpclient.StatusError
@@ -92,7 +98,7 @@ func (s *Scraper) fetch(ctx context.Context, url string) (io.Reader, error) {
 	return s.doFetch(ctx, url)
 }
 
-func (s *Scraper) doFetch(ctx context.Context, url string) (io.Reader, error) {
+func (s *Scraper) doFetch(ctx context.Context, url string) (*fetchResult, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -112,7 +118,10 @@ func (s *Scraper) doFetch(ctx context.Context, url string) (io.Reader, error) {
 		if err != nil {
 			return nil, fmt.Errorf("reading body: %w", err)
 		}
-		return bytes.NewReader(data), nil
+		return &fetchResult{
+			Body:        bytes.NewReader(data),
+			ContentType: resp.Header.Get("Content-Type"),
+		}, nil
 	}
 
 	se := &httpclient.StatusError{StatusCode: resp.StatusCode}
@@ -122,23 +131,15 @@ func (s *Scraper) doFetch(ctx context.Context, url string) (io.Reader, error) {
 	return nil, se
 }
 
-func extractContent(r io.Reader) (string, error) {
-	doc, err := html.Parse(r)
+func extractContent(r io.Reader, contentType string) (string, error) {
+	doc, err := parseHTML(r, contentType)
 	if err != nil {
 		return "", fmt.Errorf("parsing HTML: %w", err)
 	}
 
 	removeUnwanted(doc)
 
-	if content := findElement(doc, "article"); content != nil {
-		return renderNode(content), nil
-	}
-
-	if content := findElementByRole(doc, "main"); content != nil {
-		return renderNode(content), nil
-	}
-
-	if content := findElement(doc, "main"); content != nil {
+	if content := findArticle(doc); content != nil {
 		return renderNode(content), nil
 	}
 
@@ -147,6 +148,101 @@ func extractContent(r io.Reader) (string, error) {
 	}
 
 	return "", nil
+}
+
+func parseHTML(r io.Reader, contentType string) (*html.Node, error) {
+	ct := contentType
+	if ct == "" {
+		ct = "text/html; charset=utf-8"
+	} else if !strings.Contains(ct, "charset") {
+		ct += "; charset=utf-8"
+	}
+
+	decoded, err := charset.NewReader(r, ct)
+	if err != nil {
+		return nil, fmt.Errorf("decoding body: %w", err)
+	}
+
+	return html.Parse(decoded)
+}
+
+func findArticle(doc *html.Node) *html.Node {
+	for _, strategy := range articleFindStrategies {
+		if node := strategy(doc); node != nil {
+			return node
+		}
+	}
+	return nil
+}
+
+var articleFindStrategies = []func(*html.Node) *html.Node{
+	func(n *html.Node) *html.Node { return findByTag(n, "article") },
+	func(n *html.Node) *html.Node { return findByRole(n, "main") },
+	func(n *html.Node) *html.Node { return findByTag(n, "main") },
+	func(n *html.Node) *html.Node { return findByAttr(n, "itemprop", "articleBody") },
+	func(n *html.Node) *html.Node { return findByContentClass(n) },
+}
+
+func findByContentClass(root *html.Node) *html.Node {
+	var best *html.Node
+	bestLen := 0
+
+	forEachElement(root, func(n *html.Node) {
+		for _, attr := range n.Attr {
+			if attr.Key != "class" && attr.Key != "id" {
+				continue
+			}
+			val := strings.ToLower(attr.Val)
+			if !matchesContentPattern(val) {
+				continue
+			}
+			tl := textLength(n)
+			if tl > bestLen && tl >= minContentLength {
+				best = n
+				bestLen = tl
+			}
+		}
+	})
+	return best
+}
+
+var contentPatterns = []string{
+	"post-content", "entry-content", "article-content",
+	"article-body", "article__body", "article__content",
+	"story-body", "story-content", "content-body",
+	"post-body", "post-entry", "entry-body",
+	"blog-content", "blog-post", "wp-content",
+	"main-content", "page-content", "body-content",
+}
+
+func matchesContentPattern(val string) bool {
+	for _, p := range contentPatterns {
+		if strings.Contains(val, p) {
+			return true
+		}
+	}
+	return false
+}
+
+var unwantedTags = map[string]bool{
+	"script": true, "style": true, "nav": true, "header": true, "footer": true,
+	"aside": true, "noscript": true, "iframe": true, "form": true, "svg": true,
+	"button": true, "input": true, "textarea": true, "select": true,
+}
+
+var unwantedRoles = map[string]bool{
+	"complementary": true, "banner": true, "contentinfo": true, "navigation": true,
+}
+
+var unwantedClassPatterns = []string{
+	"comment", "sidebar", "advertisement", "ad-banner",
+	"social-share", "share-button", "newsletter", "popup",
+	"cookie", "paywall", "related-post", "related-article",
+	"taboola", "outbrain", "disqus",
+}
+
+var unwantedIDPatterns = []string{
+	"comment", "sidebar", "footer", "header", "nav", "disqus",
 }
 
 func removeUnwanted(n *html.Node) {
@@ -167,34 +263,21 @@ func isUnwanted(n *html.Node) bool {
 	if n.Type != html.ElementNode {
 		return false
 	}
-	switch n.Data {
-	case "script", "style", "nav", "header", "footer", "aside",
-		"noscript", "iframe", "form", "svg", "button", "input",
-		"textarea", "select":
+	if unwantedTags[n.Data] {
 		return true
 	}
 	for _, attr := range n.Attr {
-		if attr.Key == "class" {
-			cls := strings.ToLower(attr.Val)
-			if strings.Contains(cls, "comment") ||
-				strings.Contains(cls, "sidebar") ||
-				strings.Contains(cls, "advertisement") ||
-				strings.Contains(cls, "ad-banner") ||
-				strings.Contains(cls, "social-share") ||
-				strings.Contains(cls, "newsletter") ||
-				strings.Contains(cls, "popup") ||
-				strings.Contains(cls, "cookie") ||
-				strings.Contains(cls, "paywall") {
+		switch attr.Key {
+		case "class":
+			if containsAny(strings.ToLower(attr.Val), unwantedClassPatterns) {
 				return true
 			}
-		}
-		if attr.Key == "id" {
-			id := strings.ToLower(attr.Val)
-			if strings.Contains(id, "comment") ||
-				strings.Contains(id, "sidebar") ||
-				strings.Contains(id, "footer") ||
-				strings.Contains(id, "header") ||
-				strings.Contains(id, "nav") {
+		case "id":
+			if containsAny(strings.ToLower(attr.Val), unwantedIDPatterns) {
+				return true
+			}
+		case "role":
+			if unwantedRoles[strings.ToLower(attr.Val)] {
 				return true
 			}
 		}
@@ -202,150 +285,249 @@ func isUnwanted(n *html.Node) bool {
 	return false
 }
 
-func findElement(n *html.Node, tag string) *html.Node {
-	if n.Type == html.ElementNode && n.Data == tag {
-		return n
-	}
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		if found := findElement(c, tag); found != nil {
-			return found
-		}
-	}
-	return nil
+func containsAny(s string, patterns []string) bool {
+	return slices.ContainsFunc(patterns, func(p string) bool {
+		return strings.Contains(s, p)
+	})
 }
 
-func findElementByRole(n *html.Node, role string) *html.Node {
-	if n.Type == html.ElementNode {
-		for _, attr := range n.Attr {
-			if attr.Key == "role" && attr.Val == role {
-				return n
-			}
-		}
-	}
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		if found := findElementByRole(c, role); found != nil {
-			return found
-		}
-	}
-	return nil
-}
+const minContentLength = 200
 
 func findLargestTextNode(root *html.Node) *html.Node {
 	var best *html.Node
 	bestLen := 0
 
-	var walk func(*html.Node)
-	walk = func(n *html.Node) {
-		if n.Type == html.ElementNode {
-			switch n.Data {
-			case "div", "section", "td":
-				textLen := textLength(n)
-				if textLen > bestLen && textLen > 200 {
-					best = n
-					bestLen = textLen
-				}
-			}
+	forEachElement(root, func(n *html.Node) {
+		if n.Data != "div" && n.Data != "section" && n.Data != "td" {
+			return
 		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			walk(c)
+		tl := textLength(n)
+		if tl > bestLen && tl >= minContentLength {
+			best = n
+			bestLen = tl
 		}
-	}
-	walk(root)
+	})
 	return best
 }
 
 func textLength(n *html.Node) int {
 	total := 0
-	var walk func(*html.Node)
-	walk = func(c *html.Node) {
-		if c.Type == html.TextNode {
-			total += len(strings.TrimSpace(c.Data))
-		}
-		for child := c.FirstChild; child != nil; child = child.NextSibling {
-			walk(child)
+	forEachText(n, func(t string) {
+		total += len(strings.TrimSpace(t))
+	})
+	return total
+}
+
+func forEachElement(n *html.Node, fn func(*html.Node)) {
+	if n.Type == html.ElementNode {
+		fn(n)
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		forEachElement(c, fn)
+	}
+}
+
+func forEachText(n *html.Node, fn func(string)) {
+	if n.Type == html.TextNode {
+		fn(n.Data)
+		return
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		forEachText(c, fn)
+	}
+}
+
+func findByTag(n *html.Node, tag string) *html.Node {
+	if n.Type == html.ElementNode && n.Data == tag {
+		return n
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if found := findByTag(c, tag); found != nil {
+			return found
 		}
 	}
-	walk(n)
-	return total
+	return nil
+}
+
+func findByRole(n *html.Node, role string) *html.Node {
+	return findByAttr(n, "role", role)
+}
+
+func findByAttr(n *html.Node, key, val string) *html.Node {
+	if n.Type == html.ElementNode {
+		for _, attr := range n.Attr {
+			if attr.Key == key && attr.Val == val {
+				return n
+			}
+		}
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if found := findByAttr(c, key, val); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+var voidElements = map[string]bool{
+	"br": true, "hr": true, "img": true, "input": true, "meta": true,
+	"link": true, "area": true, "base": true, "col": true, "embed": true,
+	"source": true, "track": true, "wbr": true,
 }
 
 func renderNode(n *html.Node) string {
 	var buf strings.Builder
-	var write func(*html.Node)
-	write = func(node *html.Node) {
-		if node.Type == html.TextNode {
-			buf.WriteString(node.Data)
-			return
-		}
-		if node.Type == html.ElementNode {
-			if node.Data == "a" && isDeadLink(node) {
-				for c := node.FirstChild; c != nil; c = c.NextSibling {
-					write(c)
-				}
-				return
-			}
-			if node.Data == "img" && isDeadImage(node) {
-				return
-			}
-			buf.WriteString("<")
-			buf.WriteString(node.Data)
-			for _, attr := range node.Attr {
-				buf.WriteString(" ")
-				buf.WriteString(attr.Key)
-				buf.WriteString(`="`)
-				buf.WriteString(html.EscapeString(attr.Val))
-				buf.WriteString(`"`)
-			}
-			buf.WriteString(">")
-		}
-		for c := node.FirstChild; c != nil; c = c.NextSibling {
-			write(c)
-		}
-		if node.Type == html.ElementNode && !isVoidElement(node.Data) {
-			buf.WriteString("</")
-			buf.WriteString(node.Data)
-			buf.WriteString(">")
-		}
-	}
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		write(c)
-	}
+	renderChildren(&buf, n)
 	return strings.TrimSpace(buf.String())
 }
 
-func isVoidElement(tag string) bool {
-	switch tag {
-	case "br", "hr", "img", "input", "meta", "link", "area",
-		"base", "col", "embed", "source", "track", "wbr":
-		return true
+func renderChildren(buf *strings.Builder, n *html.Node) {
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		renderNodeInto(buf, c)
 	}
-	return false
 }
 
-func isDeadLink(n *html.Node) bool {
-	for _, attr := range n.Attr {
-		if attr.Key != "href" {
-			continue
-		}
-		href := strings.TrimSpace(attr.Val)
-		if strings.HasPrefix(href, "http://") || strings.HasPrefix(href, "https://") {
-			return false
-		}
-		return true
+func renderNodeInto(buf *strings.Builder, node *html.Node) {
+	if node.Type == html.TextNode {
+		buf.WriteString(node.Data)
+		return
 	}
-	return true
+	if node.Type != html.ElementNode {
+		return
+	}
+
+	tag := node.Data
+
+	if tag == "a" {
+		renderLink(buf, node)
+		return
+	}
+	if tag == "img" {
+		renderImage(buf, node)
+		return
+	}
+	if tag == "source" && !isMediaSource(node) {
+		return
+	}
+
+	writeOpenTag(buf, node, filterTagAttrs(tag))
+	renderChildren(buf, node)
+	if !voidElements[tag] {
+		buf.WriteString("</")
+		buf.WriteString(tag)
+		buf.WriteString(">")
+	}
 }
 
-func isDeadImage(n *html.Node) bool {
-	for _, attr := range n.Attr {
-		if attr.Key != "src" {
+func renderLink(buf *strings.Builder, node *html.Node) {
+	href := getAttr(node, "href")
+	href = strings.TrimSpace(href)
+
+	if isHTTPURL(href) {
+		writeOpenTag(buf, node, filterTagAttrs("a"))
+		renderChildren(buf, node)
+		buf.WriteString("</a>")
+		return
+	}
+
+	renderChildren(buf, node)
+}
+
+func renderImage(buf *strings.Builder, node *html.Node) {
+	src := resolveImgSrc(node)
+	if src == "" {
+		return
+	}
+
+	buf.WriteString("<img")
+	writeFilteredAttrs(buf, node, filterTagAttrs("img"))
+	buf.WriteString(` src="`)
+	buf.WriteString(html.EscapeString(src))
+	buf.WriteString(`"`)
+
+	if getAttr(node, "alt") == "" {
+		buf.WriteString(` alt=""`)
+	}
+	if !hasDimensions(node) {
+		buf.WriteString(` loading="lazy"`)
+	}
+	buf.WriteString(">")
+}
+
+func resolveImgSrc(node *html.Node) string {
+	for _, key := range []string{"src", "data-src", "data-lazy-src"} {
+		v := getAttr(node, key)
+		if v != "" && isReachableURL(v) {
+			return v
+		}
+	}
+	return ""
+}
+
+func isReachableURL(s string) bool {
+	return isHTTPURL(s) || strings.HasPrefix(s, "//")
+}
+
+func isHTTPURL(s string) bool {
+	return strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://")
+}
+
+func filterTagAttrs(tag string) func(string) bool {
+	if tag == "img" {
+		return func(key string) bool {
+			return key == "alt" || key == "width" || key == "height" || key == "class"
+		}
+	}
+	return defaultAttrFilter
+}
+
+var defaultAttrFilter = func() func(string) bool {
+	allowed := map[string]bool{
+		"href": true, "src": true, "alt": true, "title": true,
+		"class": true, "id": true, "width": true, "height": true,
+		"type": true, "controls": true, "preload": true, "poster": true,
+		"cite": true, "datetime": true, "colspan": true, "rowspan": true,
+		"loading": true, "decoding": true, "itemprop": true,
+		"role": true, "aria-label": true, "aria-hidden": true,
+	}
+	return func(key string) bool { return allowed[key] }
+}()
+
+func writeOpenTag(buf *strings.Builder, node *html.Node, allow func(string) bool) {
+	buf.WriteString("<")
+	buf.WriteString(node.Data)
+	writeFilteredAttrs(buf, node, allow)
+	buf.WriteString(">")
+}
+
+func writeFilteredAttrs(buf *strings.Builder, node *html.Node, allow func(string) bool) {
+	for _, attr := range node.Attr {
+		if !allow(attr.Key) {
 			continue
 		}
-		src := strings.TrimSpace(attr.Val)
-		if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
-			return false
-		}
-		return true
+		buf.WriteString(" ")
+		buf.WriteString(attr.Key)
+		buf.WriteString(`="`)
+		buf.WriteString(html.EscapeString(attr.Val))
+		buf.WriteString(`"`)
 	}
-	return true
+}
+
+func hasDimensions(node *html.Node) bool {
+	w, h := getAttr(node, "width"), getAttr(node, "height")
+	return w != "" && w != "0" && h != "" && h != "0"
+}
+
+func isMediaSource(node *html.Node) bool {
+	t := getAttr(node, "type")
+	return strings.HasPrefix(t, "video/") || strings.HasPrefix(t, "audio/")
+}
+
+func getAttr(n *html.Node, key string) string {
+	for _, attr := range n.Attr {
+		if attr.Key == key {
+			return attr.Val
+		}
+	}
+	return ""
 }
