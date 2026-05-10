@@ -434,7 +434,7 @@ func TestListSubscriptionsWithoutURI_EmptyWhenAllHaveURI(t *testing.T) {
 	assert.Equal(t, len(subs), 0)
 }
 
-func TestUpdateSubscriptionURI_UpdatesSubscription(t *testing.T) {
+func TestUpdateSubscription_UpdatesSubscription(t *testing.T) {
 	ctx := context.Background()
 	dbs := setupTestDB(t)
 	userDID := seedSubscriptionData(t, ctx, dbs)
@@ -442,7 +442,7 @@ func TestUpdateSubscriptionURI_UpdatesSubscription(t *testing.T) {
 	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://a.com/feed.xml"})
 	assert.NilError(t, dbs.Articles.CreateSubscription(ctx, userDID, "https://a.com/feed.xml", "A", "cat", "", ""))
 
-	assert.NilError(t, dbs.Articles.UpdateSubscriptionURI(ctx, userDID, "https://a.com/feed.xml", "at://new-uri", "new-cid"))
+	assert.NilError(t, dbs.Articles.UpdateSubscription(ctx, userDID, "https://a.com/feed.xml", "A", "cat", "at://new-uri", "new-cid"))
 
 	s, err := dbs.Articles.GetSubscription(ctx, userDID, "https://a.com/feed.xml")
 	assert.NilError(t, err)
@@ -452,19 +452,20 @@ func TestUpdateSubscriptionURI_UpdatesSubscription(t *testing.T) {
 	assert.Equal(t, s.Category.String, "cat")
 }
 
-func TestUpdateSubscriptionURI_NoOverwriteIfExists(t *testing.T) {
+func TestUpdateSubscription_UpdatesCategory(t *testing.T) {
 	ctx := context.Background()
 	dbs := setupTestDB(t)
 	userDID := seedSubscriptionData(t, ctx, dbs)
 
 	_ = dbs.Articles.UpsertFeed(ctx, &Feed{FeedURL: "https://a.com/feed.xml"})
-	assert.NilError(t, dbs.Articles.CreateSubscription(ctx, userDID, "https://a.com/feed.xml", "A", "", "at://original", "cid1"))
+	assert.NilError(t, dbs.Articles.CreateSubscription(ctx, userDID, "https://a.com/feed.xml", "A", "old", "at://uri", "cid1"))
 
-	assert.NilError(t, dbs.Articles.UpdateSubscriptionURI(ctx, userDID, "https://a.com/feed.xml", "at://new-uri", "cid2"))
+	assert.NilError(t, dbs.Articles.UpdateSubscription(ctx, userDID, "https://a.com/feed.xml", "A", "new", "at://uri", "cid2"))
 
 	s, err := dbs.Articles.GetSubscription(ctx, userDID, "https://a.com/feed.xml")
 	assert.NilError(t, err)
-	assert.Equal(t, s.URI.String, "at://new-uri")
+	assert.Equal(t, s.Category.String, "new")
+	assert.Equal(t, s.URI.String, "at://uri")
 	assert.Equal(t, s.CID.String, "cid2")
 }
 

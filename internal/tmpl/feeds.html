@@ -15,6 +15,7 @@
 <script>
 function gleanRefreshStart(){document.getElementById('refresh-indicator').style.display='inline';document.getElementById('refresh-btn').disabled=true}
 function gleanRefreshPoll(){setTimeout(function(){htmx.ajax('GET','/feeds/list',{target:'#feed-list',swap:'innerHTML'});document.getElementById('refresh-indicator').style.display='none';document.getElementById('refresh-btn').disabled=false},5000)}
+function gleanToggleEdit(id){var i=document.getElementById('feed-edit-'+id);if(i){i.classList.toggle('hidden');if(!i.classList.contains('hidden'))i.querySelector('input[name=category]').focus()}}
 </script>
 <p class="text-sm text-spot-secondary mb-6">Manage your RSS, Atom, and AT Protocol subscriptions.</p>
 
@@ -33,18 +34,19 @@ function gleanRefreshPoll(){setTimeout(function(){htmx.ajax('GET','/feeds/list',
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="lg:col-span-2">
-        {{if .Categories}}
+        {{if .SubscriptionCount}}
         <div class="flex gap-1.5 mb-6 flex-wrap">
             <a href="/feeds" class="text-sm px-4 py-1.5 rounded-pill font-bold {{if not .Category}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}} transition">All</a>
             {{range .Categories}}
             <a href="/feeds?category={{.}}" class="text-sm px-4 py-1.5 rounded-pill font-bold {{if eq $.Category .}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}} transition">{{.}}</a>
             {{end}}
+            <a href="/feeds?category=__none__" class="text-sm px-4 py-1.5 rounded-pill font-bold {{if eq .Category "__none__"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}} transition">Uncategorized</a>
         </div>
         {{end}}
 
         <div id="feed-list" class="bg-spot-surface rounded-xl divide-y divide-spot-divider overflow-hidden">
             {{range .Subscriptions}}
-            {{template "feed-item.html" dict "FeedURL" .FeedURL "FeedTitle" .FeedTitle "Category" .Category "FaviconURL" .FaviconURL "UnreadCount" .UnreadCount "CSRFToken" $.CSRFToken}}
+            {{template "feed-item.html" dict "ID" .ID "FeedURL" .FeedURL "FeedTitle" .FeedTitle "Category" .Category "FaviconURL" .FaviconURL "UnreadCount" .UnreadCount "CSRFToken" $.CSRFToken}}
             {{else}}
             <div class="flex flex-col items-center justify-center py-12 px-6 text-center">
                 <div class="w-14 h-14 rounded-2xl bg-spot-green/15 flex items-center justify-center mb-4 mx-auto">

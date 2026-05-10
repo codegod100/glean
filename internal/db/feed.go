@@ -196,7 +196,9 @@ func (s *ArticleStore) ListSubscriptions(ctx context.Context, userDID, category 
 		WHERE s.user_did = ?`
 	args := []any{userDID}
 
-	if category != "" {
+	if category == "__none__" {
+		query += ` AND (s.category IS NULL OR s.category = '')`
+	} else if category != "" {
 		query += ` AND s.category = ?`
 		args = append(args, category)
 	}
@@ -434,10 +436,10 @@ func (s *ArticleStore) ListSubscriptionsWithoutURI(ctx context.Context, userDID 
 	return subs, rows.Err()
 }
 
-func (s *ArticleStore) UpdateSubscriptionURI(ctx context.Context, userDID, feedURL, uri, cid string) error {
+func (s *ArticleStore) UpdateSubscription(ctx context.Context, userDID, feedURL, title, category, uri, cid string) error {
 	_, err := s.db.ExecContext(ctx,
-		`UPDATE articles.subscriptions SET uri = ?, cid = ? WHERE user_did = ? AND feed_url = ?`,
-		nilIfEmpty(uri), nilIfEmpty(cid), userDID, feedURL)
+		`UPDATE articles.subscriptions SET title = ?, category = ?, uri = ?, cid = ? WHERE user_did = ? AND feed_url = ?`,
+		nilIfEmpty(title), nilIfEmpty(category), nilIfEmpty(uri), nilIfEmpty(cid), userDID, feedURL)
 	return err
 }
 

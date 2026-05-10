@@ -1,6 +1,6 @@
 {{define "feed-list.html"}}
 {{range .Subscriptions}}
-{{template "feed-item.html" dict "FeedURL" .FeedURL "FeedTitle" .FeedTitle "Category" .Category "FaviconURL" .FaviconURL "UnreadCount" .UnreadCount "CSRFToken" $.CSRFToken}}
+{{template "feed-item.html" dict "ID" .ID "FeedURL" .FeedURL "FeedTitle" .FeedTitle "Category" .Category "FaviconURL" .FaviconURL "UnreadCount" .UnreadCount "CSRFToken" $.CSRFToken}}
 {{else}}
 <div class="flex flex-col items-center justify-center py-12 px-6 text-center">
     <div class="w-14 h-14 rounded-2xl bg-spot-green/15 flex items-center justify-center mb-5 mx-auto">

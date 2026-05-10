@@ -162,6 +162,7 @@ func (s *Server) setupRoutes() {
 		r.Use(s.requireAuth)
 		r.Get("/", s.handleFeeds)
 		r.Post("/add", s.handleAddFeed)
+		r.Post("/edit", s.handleEditFeed)
 		r.Delete("/remove", s.handleRemoveFeed)
 		r.Post("/opml/upload", s.handleOPMLUpload)
 		r.Get("/opml/download", s.handleOPMLDownload)

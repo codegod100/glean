@@ -256,11 +256,76 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, r, "feed-item.html", map[string]any{
 		"User":        user,
+		"ID":          sub.ID,
 		"FeedURL":     sub.FeedURL,
 		"FeedTitle":   sub.FeedTitle,
 		"Category":    sub.Category,
 		"FaviconURL":  sub.FaviconURL,
 		"UnreadCount": sub.UnreadCount,
+	})
+}
+
+func (s *Server) handleEditFeed(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	feedURL := r.FormValue("feed_url")
+	category := r.FormValue("category")
+
+	if feedURL == "" {
+		http.Error(w, "url required", http.StatusBadRequest)
+		return
+	}
+
+	sub, err := s.dbs.Articles.GetSubscription(r.Context(), user.DID, feedURL)
+	if err != nil {
+		s.logger.Error("failed to get subscription", "error", err)
+		http.Error(w, "subscription not found", http.StatusNotFound)
+		return
+	}
+
+	cid := sub.CID.String
+
+	if sub.URI.Valid && sub.URI.String != "" {
+		if client := s.pdsClientForUser(r); client != nil {
+			parsed, ok := atproto.ParseRecordURI(sub.URI.String)
+			if ok {
+				record := atproto.SubscriptionRecord{
+					CreatedAt: time.Now().Format(time.RFC3339),
+					FeedURL:   feedURL,
+					Title:     sub.FeedTitle,
+					Category:  category,
+				}
+				_, newCID, putErr := client.PutRecord(r.Context(), user.DID, parsed.Collection, parsed.RKey, record)
+				if putErr != nil {
+					s.logger.Error("failed to put subscription record on PDS", "error", putErr)
+					http.Error(w, "failed to update subscription on PDS: "+putErr.Error(), http.StatusInternalServerError)
+					return
+				}
+				cid = newCID
+			}
+		}
+	}
+
+	if err := s.dbs.Articles.UpdateSubscription(r.Context(), user.DID, feedURL, sub.FeedTitle, category, sub.URI.String, cid); err != nil {
+		s.logger.Error("failed to update subscription", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	updated, err := s.dbs.Articles.GetSubscription(r.Context(), user.DID, feedURL)
+	if err != nil {
+		s.logger.Warn("failed to get updated subscription", "error", err)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	s.render(w, r, "feed-item.html", map[string]any{
+		"User":        user,
+		"ID":          updated.ID,
+		"FeedURL":     updated.FeedURL,
+		"FeedTitle":   updated.FeedTitle,
+		"Category":    updated.Category,
+		"FaviconURL":  updated.FaviconURL,
+		"UnreadCount": updated.UnreadCount,
 	})
 }
 

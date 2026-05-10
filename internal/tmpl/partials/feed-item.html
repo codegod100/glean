@@ -1,4 +1,5 @@
 {{define "feed-item.html"}}
+<div id="feed-{{.ID}}" class="contents">
 <div class="feed-item px-5 py-4 flex items-center justify-between gap-3 hover:bg-spot-hover-50 transition">
     <a href="/articles?feed={{.FeedURL}}" class="min-w-0 flex-1 flex items-center gap-3">
         {{template "favicon" dict "src" .FaviconURL.String "size" "w-5 h-5"}}
@@ -10,14 +11,35 @@
             <div class="text-xs text-spot-muted truncate mt-0.5">{{.FeedURL}}</div>
         </div>
     </a>
-    <div class="flex items-center gap-3 shrink-0">
+    <div class="flex items-center gap-1.5 shrink-0">
         {{if .UnreadCount}}<span class="text-xs bg-spot-green/15 text-spot-green px-2.5 py-0.5 rounded-pill font-bold">{{.UnreadCount}}</span>{{end}}
-        <form hx-delete="/feeds/remove" hx-target="closest .feed-item" hx-swap="outerHTML swap:0.3s"
-              hx-confirm="Unsubscribe from this feed?" class="inline">
+        <button type="button"
+                onclick="gleanToggleEdit({{.ID}})"
+                title="Edit Category"
+                class="text-spot-muted hover:text-spot-text transition p-1 rounded hover:bg-spot-hover inline-flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"/></svg>
+        </button>
+        <form hx-delete="/feeds/remove" hx-target="#feed-{{.ID}}" hx-swap="outerHTML swap:0.3s"
+              hx-confirm="Unsubscribe from this feed?" class="inline-flex items-center">
             {{csrfInput .CSRFToken}}
             <input type="hidden" name="url" value="{{.FeedURL}}">
-            <button type="submit" class="text-xs text-spot-secondary hover:text-spot-red transition font-medium">Unsubscribe</button>
+            <button type="submit" title="Unsubscribe" class="text-spot-muted hover:text-spot-red transition p-1 rounded hover:bg-spot-red/10 inline-flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+            </button>
         </form>
     </div>
+</div>
+<div id="feed-edit-{{.ID}}" class="px-5 py-4 bg-spot-hover/50 hidden">
+    <form hx-post="/feeds/edit" hx-target="#feed-{{.ID}}" hx-swap="outerHTML"
+          class="flex items-center gap-2">
+        {{csrfInput .CSRFToken}}
+        <input type="hidden" name="feed_url" value="{{.FeedURL}}">
+        <input type="text" name="category" value="{{if .Category.Valid}}{{.Category.String}}{{end}}"
+               placeholder="Category (optional)"
+               class="flex-1 bg-spot-surface text-spot-text rounded-pill px-4 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
+        <button type="submit" class="bg-spot-green text-white rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:brightness-110 transition">Save</button>
+        <button type="button" onclick="gleanToggleEdit({{.ID}})" class="text-xs text-spot-secondary hover:text-spot-text transition font-medium px-2 py-1.5">Cancel</button>
+    </form>
+</div>
 </div>
 {{end}}

@@ -44,6 +44,30 @@ func (c *Client) CreateRecord(ctx context.Context, did, collection string, recor
 	return out.URI, out.CID, nil
 }
 
+func (c *Client) PutRecord(ctx context.Context, did, collection, rkey string, record any) (string, string, error) {
+	input := map[string]any{
+		"repo":       did,
+		"collection": collection,
+		"rkey":       rkey,
+		"record":     record,
+	}
+
+	var out struct {
+		URI string `json:"uri"`
+		CID string `json:"cid"`
+	}
+
+	nsid, err := syntax.ParseNSID("com.atproto.repo.putRecord")
+	if err != nil {
+		return "", "", fmt.Errorf("parsing NSID: %w", err)
+	}
+
+	if err := c.api.Post(ctx, nsid, input, &out); err != nil {
+		return "", "", err
+	}
+	return out.URI, out.CID, nil
+}
+
 func (c *Client) DeleteRecord(ctx context.Context, did, collection, rkey string) error {
 	input := map[string]any{
 		"repo":       did,

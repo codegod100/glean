@@ -287,7 +287,7 @@ func (s *Sync) backfillMissingPDSRecords(ctx context.Context, userDID string) er
 			s.logger.Error("failed to backfill PDS record", "error", err, "url", sub.FeedURL)
 			continue
 		}
-		if err := s.articles.UpdateSubscriptionURI(ctx, userDID, sub.FeedURL, uri, cid); err != nil {
+		if err := s.articles.UpdateSubscription(ctx, userDID, sub.FeedURL, sub.Title, sub.Category, uri, cid); err != nil {
 			s.logger.Error("failed to backfill subscription URI", "error", err, "url", sub.FeedURL)
 			continue
 		}
