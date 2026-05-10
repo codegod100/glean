@@ -99,7 +99,7 @@ func main() {
 		})
 	}
 
-	engine := cluster.NewEngine(dbs.SQLDB(), embedder, llm, logger)
+	engine := cluster.NewEngine(dbs.SQLDB(), dbs.Articles, embedder, llm, logger, *clusterInterval, cluster.DefaultConfig())
 
 	fetcher := feed.NewFetcher(siteFetcher)
 	srv := server.New(dbs, clientID, callbackURL, *addr, scheduler, fetcher, engine, logger, []byte(sessionKey))

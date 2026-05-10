@@ -28,9 +28,6 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		globalTrending   []*db.TrendingItem
 	)
 
-	page := pageFromRequest(r, 25)
-	since := time.Now().AddDate(0, 0, -7).Format(time.RFC3339)
-
 	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
@@ -53,94 +50,64 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	g.Go(func() error {
 		var err error
-		articles, err = s.dbs.Articles.ListUnreadArticles(gCtx, user.DID, "", page.Limit()+1, page.Offset())
+		articles, err = s.dbs.Articles.ListUnreadArticles(gCtx, user.DID, "", 5, 0)
 		if err != nil {
 			s.logger.Warn("failed to list unread articles", "error", err, "did", user.DID)
-			return nil
-		}
-		totalFetched := len(articles)
-		page = page.Paginate(totalFetched)
-		if page.HasNext {
-			articles = articles[:page.PageSize]
 		}
 		return nil
 	})
 
 	g.Go(func() error {
-		var err error
-		userLangs, err = s.dbs.Users.GetLanguages(gCtx, user.DID)
-		if err != nil {
-			s.logger.Warn("failed to get user languages", "error", err, "did", user.DID)
-		}
+		userLangs, _ = s.dbs.Users.GetLanguages(gCtx, user.DID)
 		return nil
 	})
 
 	g.Go(func() error {
 		var err error
 		peopleRecs, err = s.engine.GetPeopleRecommendations(gCtx, user.DID, 5)
-		if err != nil {
-			s.logger.Warn("failed to get people recommendations", "error", err, "did", user.DID)
-		}
-		return nil
+		return err
 	})
 
 	g.Go(func() error {
 		var err error
 		feedRecs, err = s.engine.GetFeedRecommendations(gCtx, user.DID, 5)
-		if err != nil {
-			s.logger.Warn("failed to get feed recommendations", "error", err, "did", user.DID)
-		}
-		return nil
+		return err
 	})
 
-	g.Go(func() error {
-		var err error
-		globalTrending, err = s.dbs.Articles.ListTrendingArticles(gCtx, user.DID, since, 10, 0)
-		if err != nil {
-			s.logger.Warn("failed to list global trending", "error", err, "did", user.DID)
-		}
-		return nil
-	})
-
-	if err := g.Wait(); err != nil {
-		s.logger.Warn("dashboard phase 1 error", "error", err, "did", user.DID)
+	if subCount == 0 {
+		g.Go(func() error {
+			var err error
+			globalTrending, err = s.engine.GetGlobalTrending(gCtx, user.DID, 5, 0)
+			return err
+		})
+	} else {
+		g.Go(func() error {
+			var err error
+			personalTrending, err = s.engine.GetPersonalTrending(gCtx, user.DID, userLangs, 5, 0)
+			return err
+		})
 	}
 
-	g2, gCtx2 := errgroup.WithContext(ctx)
+	if err := g.Wait(); err != nil {
+		s.logger.Warn("dashboard error", "error", err, "did", user.DID)
+	}
 
-	g2.Go(func() error {
+	if subCount > 0 {
 		var err error
-		articleRecs, err = s.engine.GetArticleRecommendations(gCtx2, user.DID, userLangs, 5)
+		articleRecs, err = s.engine.GetArticleRecommendations(ctx, user.DID, userLangs, 5)
 		if err != nil {
 			s.logger.Warn("failed to get article recommendations", "error", err, "did", user.DID)
 		}
-		return nil
-	})
-
-	g2.Go(func() error {
-		var err error
-		personalTrending, err = s.dbs.Articles.ListTrendingArticlesForUser(gCtx2, user.DID, since, userLangs, 5, 0)
-		if err != nil {
-			s.logger.Warn("failed to list personal trending", "error", err, "did", user.DID)
-		}
-		return nil
-	})
-
-	g2.Go(func() error {
-		resolvePeopleHandles(gCtx2, peopleRecs)
-		return nil
-	})
-
-	if err := g2.Wait(); err != nil {
-		s.logger.Warn("dashboard phase 2 error", "error", err, "did", user.DID)
 	}
+
+	resolvePeopleHandles(ctx, peopleRecs)
 
 	var impressions []cluster.Impression
-	for _, rec := range feedRecs {
-		impressions = append(impressions, cluster.Impression{TargetType: "feed", TargetID: rec.FeedURL})
-	}
 	for _, rec := range articleRecs {
 		impressions = append(impressions, cluster.Impression{TargetType: "article", TargetID: rec.URL})
+	}
+	for _, rec := range feedRecs {
+		impressions = append(impressions, cluster.Impression{TargetType: "feed", TargetID: rec.FeedURL})
 	}
 	if len(impressions) > 0 {
 		if err := s.engine.RecordImpressions(ctx, user.DID, impressions); err != nil {
@@ -159,8 +126,8 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	s.render(w, r, "dashboard.html", map[string]any{
 		"User":                   user,
-		"UnreadCount":            unreadCount,
 		"SubscriptionCount":      subCount,
+		"UnreadCount":            unreadCount,
 		"Articles":               articles,
 		"ArticleRecommendations": articleRecs,
 		"FeedRecommendations":    feedRecs,
@@ -168,9 +135,6 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"DiscoverPeople":         discoverPeople,
 		"PersonalTrending":       personalTrending,
 		"GlobalTrending":         globalTrending,
-		"Page":                   page,
-		"BaseURL":                "/dashboard",
-		"QueryParams":            map[string]string{},
 		"Now":                    time.Now(),
 	})
 }

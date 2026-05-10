@@ -350,9 +350,9 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 	for _, fu := range feedURLs {
 		f := &db.Feed{
 			FeedURL:     fu.URL,
-		Title:       db.NullStr(fu.Title),
-		SiteURL:     db.NullStr(fu.SiteURL),
-		Description: db.NullStr(fu.Description),
+			Title:       db.NullStr(fu.Title),
+			SiteURL:     db.NullStr(fu.SiteURL),
+			Description: db.NullStr(fu.Description),
 		}
 		if upsertErr := s.dbs.Articles.UpsertFeed(r.Context(), f); upsertErr != nil {
 			s.logger.Error("failed to upsert feed", "error", upsertErr)

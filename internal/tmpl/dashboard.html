@@ -12,9 +12,9 @@
     {{if eq .SubscriptionCount 0}}Get started by subscribing to RSS feeds.{{else}}Your personalized feed, based on your social graph.{{end}}
 </p>
 
-{{if eq .SubscriptionCount 0}}
 <div id="new-articles-poll" hx-get="/articles/new-count?since={{.Now.Unix}}&return=/dashboard" hx-trigger="every 30s" hx-swap="innerHTML"></div>
 
+{{if eq .SubscriptionCount 0}}
 <div class="bg-spot-surface rounded-2xl py-12 px-6 text-center mb-8">
     <div class="w-16 h-16 rounded-2xl bg-spot-green/15 flex items-center justify-center mb-5 mx-auto">
         <svg class="w-8 h-8 text-spot-green" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12.75 19.5v-15m0 0l-6.75 6.75M12.75 4.5l6.75 6.75"/></svg>
@@ -26,121 +26,11 @@
         Add feeds
     </a>
 </div>
-
-{{if .GlobalTrending}}
-<div class="mb-8">
-    <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold text-spot-text">Trending</h2>
-        <a href="/trending" class="text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition">See all</a>
-    </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {{range .GlobalTrending}}
-        {{template "trending-card.html" .}}
-        {{end}}
-    </div>
-</div>
-{{end}}
-
-{{if .FeedRecommendations}}
-<div class="mb-8">
-    <h2 class="text-lg font-semibold text-spot-text mb-4">Popular feeds to get started</h2>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {{range .FeedRecommendations}}
-        {{template "recommendation-feed-card.html" (dict "title" .Title "feed_url" .FeedURL "description" .Description "favicon_url" .FaviconURL "subscriber_count" .SubscriberCount "CSRFToken" $.CSRFToken)}}
-        {{end}}
-    </div>
-</div>
-{{end}}
-
-{{else}}
-<div id="new-articles-poll" hx-get="/articles/new-count?since={{.Now.Unix}}&return=/dashboard" hx-trigger="every 30s" hx-swap="innerHTML"></div>
-
-{{if .Articles}}
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <div class="lg:col-span-2">
-        {{if .ArticleRecommendations}}
-        <div class="mb-8">
-            <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended for you</h2>
-            <div class="space-y-3">
-                {{range .ArticleRecommendations}}
-                {{template "recommendation-article-card.html" .}}
-                {{end}}
-            </div>
-        </div>
-        {{end}}
-
-        <h2 class="text-lg font-semibold text-spot-text mb-4">Unread articles</h2>
-        <div id="article-list" class="space-y-3">
-            {{range .Articles}}
-            {{template "article-card.html" .}}
-            {{end}}
-        </div>
-
-        {{template "pagination.html" (dict "HasPrev" .Page.HasPrev "HasNext" .Page.HasNext "PrevPage" .Page.PrevPage "NextPage" .Page.NextPage "Page" .Page.Page "BaseURL" .BaseURL "QueryParams" .QueryParams)}}
-    </div>
-
-    <div class="space-y-8">
-        {{if .PersonalTrending}}
-        <div>
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-lg font-semibold text-spot-text">Trending in your network</h2>
-                <a href="/trending?scope=for-me" class="text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition">See all</a>
-            </div>
-            <div class="space-y-3">
-                {{range .PersonalTrending}}
-                {{template "trending-card.html" .}}
-                {{end}}
-            </div>
-        </div>
-        {{end}}
-
-        {{if or .FollowedPeople .DiscoverPeople}}
-        <div>
-            {{if .FollowedPeople}}
-            <h2 class="text-lg font-semibold text-spot-text mb-4">Your network</h2>
-            <div class="space-y-3">
-                {{range .FollowedPeople}}
-                {{template "profile-card.html" .}}
-                {{end}}
-            </div>
-            {{end}}
-            {{if .DiscoverPeople}}
-            <h2 class="text-lg font-semibold text-spot-text mb-4 {{if .FollowedPeople}}mt-8{{end}}">Discover new readers</h2>
-            <div class="space-y-3">
-                {{range .DiscoverPeople}}
-                {{template "profile-card.html" .}}
-                {{end}}
-            </div>
-            {{end}}
-        </div>
-        {{end}}
-
-        {{if .FeedRecommendations}}
-        <div>
-            <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended feeds</h2>
-            <div class="space-y-3">
-                {{range .FeedRecommendations}}
-                {{template "recommendation-feed-card.html" (dict "title" .Title "feed_url" .FeedURL "description" .Description "favicon_url" .FaviconURL "subscriber_count" .SubscriberCount "CSRFToken" $.CSRFToken)}}
-                {{end}}
-            </div>
-        </div>
-        {{end}}
-    </div>
-</div>
-{{else}}
-<div id="article-list"></div>
-<div class="bg-spot-surface rounded-2xl py-14 px-6 text-center mb-8">
-    <div class="w-16 h-16 rounded-2xl bg-spot-green/15 flex items-center justify-center mb-5 mx-auto">
-        <svg class="w-8 h-8 text-spot-green" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-    </div>
-    <h2 class="text-xl font-semibold text-spot-text mb-2">You're all caught up!</h2>
-    <p class="text-sm text-spot-secondary">No unread articles. Check back later for new content.</p>
-</div>
-
+{{else if .Articles}}
 {{if .ArticleRecommendations}}
 <div class="mb-8">
     <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended for you</h2>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <div class="space-y-3">
         {{range .ArticleRecommendations}}
         {{template "recommendation-article-card.html" .}}
         {{end}}
@@ -148,62 +38,92 @@
 </div>
 {{end}}
 
-{{if or .PersonalTrending (or .FollowedPeople .DiscoverPeople) .FeedRecommendations}}
-<div class="space-y-8">
-    {{if .PersonalTrending}}
-    <div>
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-semibold text-spot-text">Trending in your network</h2>
-            <a href="/trending?scope=for-me" class="text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition">See all</a>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {{range .PersonalTrending}}
-            {{template "trending-card.html" .}}
-            {{end}}
-        </div>
+<div class="mb-8">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-spot-text">Unread articles</h2>
+        <a href="/articles" class="text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition">View all</a>
     </div>
-    {{end}}
-
-    {{if or .FollowedPeople .DiscoverPeople}}
-    <div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {{if .FollowedPeople}}
-            <div>
-                <h2 class="text-lg font-semibold text-spot-text mb-4">Your network</h2>
-                <div class="space-y-3">
-                    {{range .FollowedPeople}}
-                    {{template "profile-card.html" .}}
-                    {{end}}
-                </div>
-            </div>
-            {{end}}
-            {{if .DiscoverPeople}}
-            <div>
-                <h2 class="text-lg font-semibold text-spot-text mb-4">Discover new readers</h2>
-                <div class="space-y-3">
-                    {{range .DiscoverPeople}}
-                    {{template "profile-card.html" .}}
-                    {{end}}
-                </div>
-            </div>
-            {{end}}
-        </div>
+    <div class="space-y-3">
+        {{range .Articles}}
+        {{template "article-card.html" .}}
+        {{end}}
     </div>
+    {{if gt .UnreadCount 5}}
+    <a href="/articles" class="block mt-4 text-center text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition py-2">View all {{.UnreadCount}} unread articles</a>
     {{end}}
-
-    {{if .FeedRecommendations}}
-    <div>
-        <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended feeds</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {{range .FeedRecommendations}}
-            {{template "recommendation-feed-card.html" (dict "title" .Title "feed_url" .FeedURL "description" .Description "favicon_url" .FaviconURL "subscriber_count" .SubscriberCount "CSRFToken" $.CSRFToken)}}
-            {{end}}
-        </div>
+</div>
+{{else}}
+{{if .ArticleRecommendations}}
+<div class="mb-8">
+    <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended for you</h2>
+    <div class="space-y-3">
+        {{range .ArticleRecommendations}}
+        {{template "recommendation-article-card.html" .}}
+        {{end}}
     </div>
-    {{end}}
 </div>
 {{end}}
 
+<div class="mb-8">
+    <h2 class="text-lg font-semibold text-spot-text mb-4">Unread articles</h2>
+    <div class="bg-spot-surface rounded-2xl py-14 px-6 text-center">
+        <div class="w-16 h-16 rounded-2xl bg-spot-green/15 flex items-center justify-center mb-5 mx-auto">
+            <svg class="w-8 h-8 text-spot-green" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <h3 class="text-xl font-semibold text-spot-text mb-2">You're all caught up!</h3>
+        <p class="text-sm text-spot-secondary">No unread articles. Check back later for new content.</p>
+    </div>
+</div>
 {{end}}
+
+{{if or .GlobalTrending .PersonalTrending}}
+<div class="mb-8">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-spot-text">{{if eq .SubscriptionCount 0}}Trending{{else}}Trending in your network{{end}}</h2>
+        <a href="{{if eq .SubscriptionCount 0}}/trending{{else}}/trending?scope=for-me{{end}}" class="text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition">See all</a>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {{range .GlobalTrending}}{{template "trending-card.html" .}}{{end}}
+        {{range .PersonalTrending}}{{template "trending-card.html" .}}{{end}}
+    </div>
+</div>
+{{end}}
+
+{{if or .FollowedPeople .DiscoverPeople}}
+<div class="mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {{if .FollowedPeople}}
+        <div>
+            <h2 class="text-lg font-semibold text-spot-text mb-4">Your network</h2>
+            <div class="space-y-3">
+                {{range .FollowedPeople}}
+                {{template "profile-card.html" .}}
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+        {{if .DiscoverPeople}}
+        <div>
+            <h2 class="text-lg font-semibold text-spot-text mb-4">Discover new readers</h2>
+            <div class="space-y-3">
+                {{range .DiscoverPeople}}
+                {{template "profile-card.html" .}}
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}
+
+{{if .FeedRecommendations}}
+<div class="mb-8">
+    <h2 class="text-lg font-semibold text-spot-text mb-4">{{if eq .SubscriptionCount 0}}Popular feeds to get started{{else}}Recommended feeds{{end}}</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {{range .FeedRecommendations}}
+        {{template "recommendation-feed-card.html" (dict "title" .Title "feed_url" .FeedURL "description" .Description "favicon_url" .FaviconURL "subscriber_count" .SubscriberCount "CSRFToken" $.CSRFToken)}}
+        {{end}}
+    </div>
+</div>
 {{end}}
 {{end}}

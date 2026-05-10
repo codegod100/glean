@@ -765,7 +765,7 @@ New users with <5 subscriptions get a fallback strategy:
 
 ### 7.10 Clustering Engine (Cron)
 
-A background goroutine runs on a configurable schedule (`GLEAN_CLUSTER_INTERVAL`, default 10m):
+A background goroutine runs on a configurable schedule (`GLEAN_CLUSTER_INTERVAL`, default 1h):
 
 1. **Compute feed embeddings**: Embed new feed descriptions via embedding API into `feed_embeddings` table (skipped if no embedder configured)
 2. **Compute feed similarity**: Batch-update `feed_similarity` table (Jaccard over subscriber sets + embedding cosine similarity)
@@ -907,7 +907,7 @@ The server renders HTML fragments that htmx swaps into the page. No JSON API nee
 | Route                          | Method | Description                                                         |
 | ------------------------------ | ------ | ------------------------------------------------------------------- |
 | `/`                            | GET    | Landing page / auth redirect                                        |
-| `/dashboard`                   | GET    | Main dashboard: unread articles, recommendations sidebar            |
+| `/dashboard`                   | GET    | Main dashboard: article recs, unread articles, trending, people, feeds |
 | `/feeds`                       | GET    | Manage RSS subscriptions (OPML import for onboarding)               |
 | `/feeds/list`                  | GET    | Feed list fragment (htmx partial)                                   |
 | `/feeds/opml/upload`           | POST   | Upload OPML file to bulk-import subscriptions (redirects to /feeds) |
@@ -1092,7 +1092,7 @@ Browser ──GET /articles──► Server
 ### 11.3 Recommendations
 
 ```
-Cron (every 10m) ──► Cluster Engine
+Cron (every 1h) ──► Cluster Engine
                            │
                            ├─► Compute feed similarity
                            ├─► Compute user similarity

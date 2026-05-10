@@ -19,17 +19,26 @@ import (
 
 func writeLikeButton(w http.ResponseWriter, articleID int64, liked bool, count int, bordered bool) {
 	fill := "none"
-	colorCls := "text-spot-muted"
+	likedCls := "text-spot-text bg-spot-hover hover:text-spot-red hover:bg-spot-red/15"
 	if liked {
 		fill = "currentColor"
-		colorCls = "text-spot-red"
+		likedCls = "text-spot-red bg-spot-red/15 hover:bg-spot-red/25"
 	}
+
 	w.Header().Set("Content-Type", "text/html")
-	cls := "text-spot-text rounded-pill px-3 py-1 text-xs font-bold transition inline-flex items-center gap-1.5 hover:text-spot-green"
+
 	if bordered {
-		cls = "border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:border-spot-text transition inline-flex items-center gap-1.5"
+		fmt.Fprintf(w, `<button hx-post="/articles/%d/like?bordered=true" hx-target="this" hx-swap="outerHTML" title="%s" class="group inline-flex items-center gap-1.5 text-[10px] uppercase tracking-button px-2.5 py-1 rounded-pill transition %s"><svg class="w-3.5 h-3.5" fill="%s" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/></svg><span>%d</span></button>`, articleID, likeTitle(liked), likedCls, fill, count)
+	} else {
+		fmt.Fprintf(w, `<button hx-post="/articles/%d/like" hx-target="this" hx-swap="outerHTML" title="%s" class="group inline-flex items-center gap-1 text-[10px] uppercase tracking-button px-2 py-0.5 rounded-pill transition %s"><svg class="w-3 h-3" fill="%s" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/></svg><span>%d</span></button>`, articleID, likeTitle(liked), likedCls, fill, count)
 	}
-	_, _ = fmt.Fprintf(w, `<button hx-post="/articles/%d/like?bordered=%t" hx-target="this" hx-swap="outerHTML" class="%s"><svg class="w-3.5 h-3.5 %s" fill="%s" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/></svg><span>%d</span></button>`, articleID, bordered, cls, colorCls, fill, count)
+}
+
+func likeTitle(liked bool) string {
+	if liked {
+		return "Unlike"
+	}
+	return "Like"
 }
 
 func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {

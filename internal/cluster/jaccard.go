@@ -6,6 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
+
+	"github.com/hashicorp/golang-lru/v2/expirable"
+
+	"pkg.rbrt.fr/glean/internal/db"
 )
 
 // Config controls weights used during similarity computation (feed similarity
@@ -33,20 +38,38 @@ func DefaultConfig() Config {
 // All public methods are safe for concurrent use (cron writes, on-demand reads).
 type Engine struct {
 	db       *sql.DB
-	logger   *slog.Logger
-	mu       sync.Mutex
-	config   Config
+	articles *db.ArticleStore
+
+	logger *slog.Logger
+	mu     sync.Mutex
+	config Config
+
 	embedder Embedder
 	llm      *LLMClient
+
+	feedCache             *expirable.LRU[string, []*FeedRecommendation]
+	peopleCache           *expirable.LRU[string, []*PersonRecommendation]
+	articleCache          *expirable.LRU[string, []*ArticleRecommendation]
+	globalTrendingCache   *expirable.LRU[string, []*db.TrendingItem]
+	personalTrendingCache *expirable.LRU[string, []*db.TrendingItem]
 }
 
-func NewEngine(db *sql.DB, embedder Embedder, llm *LLMClient, logger *slog.Logger) *Engine {
+// recCacheSize is the maximum number of recommendations to cache per user.
+const recCacheSize = 512
+
+func NewEngine(sqlDB *sql.DB, articles *db.ArticleStore, embedder Embedder, llm *LLMClient, logger *slog.Logger, cacheTTL time.Duration, config Config) *Engine {
 	return &Engine{
-		db:       db,
-		logger:   logger,
-		config:   DefaultConfig(),
-		embedder: embedder,
-		llm:      llm,
+		db:                    sqlDB,
+		articles:              articles,
+		logger:                logger,
+		config:                config,
+		embedder:              embedder,
+		llm:                   llm,
+		feedCache:             expirable.NewLRU[string, []*FeedRecommendation](recCacheSize, nil, cacheTTL),
+		peopleCache:           expirable.NewLRU[string, []*PersonRecommendation](recCacheSize, nil, cacheTTL),
+		articleCache:          expirable.NewLRU[string, []*ArticleRecommendation](recCacheSize, nil, cacheTTL),
+		globalTrendingCache:   expirable.NewLRU[string, []*db.TrendingItem](recCacheSize, nil, cacheTTL),
+		personalTrendingCache: expirable.NewLRU[string, []*db.TrendingItem](recCacheSize, nil, cacheTTL),
 	}
 }
 

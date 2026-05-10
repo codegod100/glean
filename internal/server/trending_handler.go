@@ -2,7 +2,6 @@ package server
 
 import (
 	"net/http"
-	"time"
 
 	"pkg.rbrt.fr/glean/internal/db"
 )
@@ -23,24 +22,23 @@ func (s *Server) handleTrending(w http.ResponseWriter, r *http.Request) {
 	}
 
 	page := pageFromRequest(r, 25)
-	since := time.Now().AddDate(0, 0, -7).Format(time.RFC3339)
 
 	var userDID string
 	if user != nil {
 		userDID = user.DID
 	}
 
-	var userLangs []string
-	if user != nil {
-		userLangs, _ = s.dbs.Users.GetLanguages(ctx, user.DID)
-	}
-
 	var trending []*db.TrendingItem
 	var err error
-	if scope == "for-me" {
-		trending, err = s.dbs.Articles.ListTrendingArticlesForUser(ctx, userDID, since, userLangs, page.Limit()+1, page.Offset())
+
+	if scope == scopeForMe {
+		var userLangs []string
+		if user != nil {
+			userLangs, _ = s.dbs.Users.GetLanguages(ctx, user.DID)
+		}
+		trending, err = s.engine.GetPersonalTrending(ctx, userDID, userLangs, page.Limit()+1, page.Offset())
 	} else {
-		trending, err = s.dbs.Articles.ListTrendingArticles(ctx, userDID, since, page.Limit()+1, page.Offset())
+		trending, err = s.engine.GetGlobalTrending(ctx, userDID, page.Limit()+1, page.Offset())
 	}
 	if err != nil {
 		s.logger.Warn("failed to list trending articles", "error", err, "scope", scope)

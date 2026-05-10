@@ -398,7 +398,7 @@ func (s *ArticleStore) ListTrendingArticlesForUser(ctx context.Context, userDID,
 		WHERE l.created_at >= ?
 		  AND l.author_did IN (
 		    SELECT CASE WHEN us.user_a = ? THEN us.user_b ELSE us.user_a END
-		    FROM user_similarity us
+		    FROM recs.user_similarity us
 		    WHERE us.user_a = ? OR us.user_b = ?
 		    UNION SELECT ?
 		    UNION SELECT f.target_did FROM follows f WHERE f.user_did = ?
