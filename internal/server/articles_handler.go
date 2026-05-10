@@ -373,7 +373,7 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			if err := s.engine.MarkImpressionActed(ctx, user.DID, "article", article.URL.String); err != nil {
+			if err := s.feedback.MarkImpressionActed(ctx, user.DID, "article", article.URL.String); err != nil {
 				s.logger.Warn("failed to mark impression acted", "error", err)
 			}
 			sig := s.engine.GetDominantSignal(s.engine.GetWeights(ctx, user.DID))
@@ -390,7 +390,7 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			if err := s.engine.MarkImpressionActed(ctx, user.DID, "article", article.URL.String); err != nil {
+			if err := s.feedback.MarkImpressionActed(ctx, user.DID, "article", article.URL.String); err != nil {
 				s.logger.Warn("failed to mark impression acted", "error", err)
 			}
 			sig := s.engine.GetDominantSignal(s.engine.GetWeights(ctx, user.DID))

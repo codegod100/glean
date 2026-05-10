@@ -29,7 +29,7 @@ func (s *Server) handleDismiss(w http.ResponseWriter, r *http.Request, field, ta
 		reason = "not_interested"
 	}
 
-	if err := s.engine.Dismiss(r.Context(), user.DID, targetType, targetID, reason); err != nil {
+	if err := s.feedback.Dismiss(r.Context(), user.DID, targetType, targetID, reason); err != nil {
 		s.logger.Error("failed to dismiss recommendation", "error", err, "type", targetType)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

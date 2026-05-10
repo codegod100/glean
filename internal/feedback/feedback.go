@@ -1,20 +1,26 @@
-package cluster
+package feedback
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
-// Impression records that a recommendation was shown to a user.
 type Impression struct {
 	TargetType string
 	TargetID   string
 }
 
-// Dismiss records that the user dismissed a recommendation. targetType is one
-// of "feed", "article", "person".
-func (e *Engine) Dismiss(ctx context.Context, userDID, targetType, targetID, reason string) error {
-	_, err := e.db.ExecContext(ctx, `
+type Service struct {
+	db *sql.DB
+}
+
+func NewService(db *sql.DB) *Service {
+	return &Service{db: db}
+}
+
+func (s *Service) Dismiss(ctx context.Context, userDID, targetType, targetID, reason string) error {
+	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO main.dismissed_recommendations (user_did, target_type, target_id, reason)
 		VALUES (?, ?, ?, ?)
 		ON CONFLICT(user_did, target_type, target_id) DO UPDATE SET reason = excluded.reason, dismissed_at = CURRENT_TIMESTAMP
@@ -22,20 +28,20 @@ func (e *Engine) Dismiss(ctx context.Context, userDID, targetType, targetID, rea
 	return err
 }
 
-func (e *Engine) DismissFeed(ctx context.Context, userDID, feedURL, reason string) error {
-	return e.Dismiss(ctx, userDID, "feed", feedURL, reason)
+func (s *Service) DismissFeed(ctx context.Context, userDID, feedURL, reason string) error {
+	return s.Dismiss(ctx, userDID, "feed", feedURL, reason)
 }
 
-func (e *Engine) DismissArticle(ctx context.Context, userDID, articleURL, reason string) error {
-	return e.Dismiss(ctx, userDID, "article", articleURL, reason)
+func (s *Service) DismissArticle(ctx context.Context, userDID, articleURL, reason string) error {
+	return s.Dismiss(ctx, userDID, "article", articleURL, reason)
 }
 
-func (e *Engine) DismissPerson(ctx context.Context, userDID, targetDID, reason string) error {
-	return e.Dismiss(ctx, userDID, "person", targetDID, reason)
+func (s *Service) DismissPerson(ctx context.Context, userDID, targetDID, reason string) error {
+	return s.Dismiss(ctx, userDID, "person", targetDID, reason)
 }
 
-func (e *Engine) RecordImpressions(ctx context.Context, userDID string, impressions []Impression) error {
-	tx, err := e.db.BeginTx(ctx, nil)
+func (s *Service) RecordImpressions(ctx context.Context, userDID string, impressions []Impression) error {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -56,21 +62,18 @@ func (e *Engine) RecordImpressions(ctx context.Context, userDID string, impressi
 	return tx.Commit()
 }
 
-func (e *Engine) MarkImpressionActed(ctx context.Context, userDID, targetType, targetID string) error {
-	_, err := e.db.ExecContext(ctx, `
+func (s *Service) MarkImpressionActed(ctx context.Context, userDID, targetType, targetID string) error {
+	_, err := s.db.ExecContext(ctx, `
 		UPDATE main.recommendation_impressions SET acted = 1
 		WHERE user_did = ? AND target_type = ? AND target_id = ?
 	`, userDID, targetType, targetID)
 	return err
 }
 
-// AutoDismissStale marks recommendations as dismissed if they were shown at
-// least minShownCount times over more than maxAgeDays without the user acting
-// on them.
-func (e *Engine) AutoDismissStale(ctx context.Context, minShownCount int, maxAgeDays int) error {
+func (s *Service) AutoDismissStale(ctx context.Context, minShownCount int, maxAgeDays int) error {
 	cutoff := time.Now().AddDate(0, 0, -maxAgeDays).Format(time.RFC3339)
 
-	_, err := e.db.ExecContext(ctx, `
+	_, err := s.db.ExecContext(ctx, `
 		INSERT OR IGNORE INTO main.dismissed_recommendations (user_did, target_type, target_id, reason, dismissed_at)
 		SELECT user_did, target_type, target_id, 'auto_stale', CURRENT_TIMESTAMP
 		FROM main.recommendation_impressions
@@ -81,9 +84,9 @@ func (e *Engine) AutoDismissStale(ctx context.Context, minShownCount int, maxAge
 	return err
 }
 
-func (e *Engine) IsFeedDismissed(ctx context.Context, userDID, feedURL string) (bool, error) {
+func (s *Service) IsFeedDismissed(ctx context.Context, userDID, feedURL string) (bool, error) {
 	var count int
-	err := e.db.QueryRowContext(ctx, `
+	err := s.db.QueryRowContext(ctx, `
 		SELECT COUNT(1) FROM main.dismissed_recommendations
 		WHERE user_did = ? AND target_type = 'feed' AND target_id = ?
 	`, userDID, feedURL).Scan(&count)

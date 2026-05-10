@@ -13,6 +13,7 @@ import (
 	"pkg.rbrt.fr/glean/internal/cluster"
 	"pkg.rbrt.fr/glean/internal/db"
 	"pkg.rbrt.fr/glean/internal/feed"
+	"pkg.rbrt.fr/glean/internal/feedback"
 )
 
 func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
@@ -106,11 +107,11 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 
 	g2.Go(func() error {
 		if len(feedRecs) > 0 {
-			impressions := make([]cluster.Impression, len(feedRecs))
+			impressions := make([]feedback.Impression, len(feedRecs))
 			for i, rec := range feedRecs {
-				impressions[i] = cluster.Impression{TargetType: "feed", TargetID: rec.FeedURL}
+				impressions[i] = feedback.Impression{TargetType: "feed", TargetID: rec.FeedURL}
 			}
-			if err := s.engine.RecordImpressions(gCtx2, user.DID, impressions); err != nil {
+			if err := s.feedback.RecordImpressions(gCtx2, user.DID, impressions); err != nil {
 				s.logger.Warn("failed to record impressions", "error", err)
 			}
 		}
@@ -241,7 +242,7 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 
 	go s.storeFetchResult(context.WithoutCancel(r.Context()), feedURL, result.Feed.SiteURL, result)
 
-	if err := s.engine.MarkImpressionActed(r.Context(), user.DID, "feed", feedURL); err != nil {
+	if err := s.feedback.MarkImpressionActed(r.Context(), user.DID, "feed", feedURL); err != nil {
 		s.logger.Warn("failed to mark impression acted", "error", err)
 	}
 	sig := s.engine.GetDominantSignal(s.engine.GetWeights(r.Context(), user.DID))

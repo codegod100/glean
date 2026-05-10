@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"pkg.rbrt.fr/glean/internal/ai"
 	"pkg.rbrt.fr/glean/internal/db"
 )
 
@@ -384,7 +385,7 @@ func (e *Engine) coldStartFromEmbeddings(ctx context.Context, userDID string, li
 		subSet[u] = true
 	}
 
-	queryBlob, err := avgEmbeddings(blobs, dim)
+	queryBlob, err := ai.AvgEmbeddings(blobs, dim)
 	if err != nil {
 		return nil, fmt.Errorf("serialize query vector: %w", err)
 	}

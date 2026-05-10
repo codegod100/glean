@@ -26,6 +26,7 @@ import (
 	"pkg.rbrt.fr/glean/internal/cluster"
 	"pkg.rbrt.fr/glean/internal/db"
 	"pkg.rbrt.fr/glean/internal/feed"
+	"pkg.rbrt.fr/glean/internal/feedback"
 	"pkg.rbrt.fr/glean/internal/metrics"
 	"pkg.rbrt.fr/glean/internal/sanitize"
 	"pkg.rbrt.fr/glean/internal/scraper"
@@ -67,6 +68,7 @@ type Server struct {
 	fetcher     *feed.Fetcher
 	scheduler   *feed.Scheduler
 	engine      *cluster.Engine
+	feedback    *feedback.Service
 	scraper     *scraper.Scraper
 	clientID    string
 	callbackURL string
@@ -98,6 +100,7 @@ func New(dbs *db.Store, clientID, callbackURL, addr string, scheduler *feed.Sche
 		fetcher:     fetcher,
 		scheduler:   scheduler,
 		engine:      engine,
+		feedback:    feedback.NewService(dbs.SQLDB()),
 		scraper:     scraper.New(logger),
 		clientID:    clientID,
 		callbackURL: callbackURL,

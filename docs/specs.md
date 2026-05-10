@@ -994,17 +994,19 @@ glean/
 │   │   └── scraper.go             # Full article content scraper
 │   ├── metrics/
 │   │   └── metrics.go             # Prometheus metrics definitions
+│   ├── ai/
+│   │   ├── embed.go               # Embedder interface + OpenAI-compatible implementation + vector helpers
+│   │   └── llm.go                 # TextModel interface + OpenAI-compatible LLM implementation
 │   ├── cluster/
 │   │   ├── jaccard.go             # Jaccard similarity computation
-│   │   ├── embed.go               # Embedder interface + OpenAI-compatible implementation
-│   │   ├── llm.go                 # LLM client for language detection and text tasks
 │   │   ├── article.go             # Article + feed embedding computation, vec0 KNN content boost, language detection
 │   │   ├── scoring.go             # Feed + people + article recommendation queries (on-demand)
 │   │   ├── social.go              # Incremental follow-distance computation (1-3 hop, dirty-flag)
-│   │   ├── dismiss.go             # Dismiss + impression tracking
 │   │   ├── weights.go             # Bandit-style signal weight auto-tuning
 │   │   ├── diversity.go           # Post-query domain/category diversity filtering
 │   │   └── cron.go                # Background recomputation scheduler
+│   ├── feedback/
+│   │   └── feedback.go            # Dismiss + impression tracking service
 │   ├── server/
 │   │   ├── server.go              # HTTP server, router setup
 │   │   ├── auth_handler.go        # OAuth login/callback/register

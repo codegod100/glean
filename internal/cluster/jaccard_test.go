@@ -12,6 +12,7 @@ import (
 
 	vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	"pkg.rbrt.fr/glean/internal/db"
+	"pkg.rbrt.fr/glean/internal/feedback"
 
 	"gotest.tools/v3/assert"
 )
@@ -95,7 +96,7 @@ func seedFollowData(t *testing.T, ctx context.Context, dbs *db.Store) {
 }
 
 func newTestEngine(dbs *db.Store) *Engine {
-	return NewEngine(dbs.SQLDB(), dbs.Articles, NewMockEmbedder(8), nil, slog.Default(), time.Hour, DefaultConfig())
+	return NewEngine(dbs.SQLDB(), dbs.Articles, NewMockEmbedder(8), nil, feedback.NewService(dbs.SQLDB()), slog.Default(), time.Hour, DefaultConfig())
 }
 
 func TestComputeFeedSimilarity(t *testing.T) {
@@ -182,7 +183,7 @@ func TestDismissedFeedsExcluded(t *testing.T) {
 	assert.NilError(t, engine.ComputeFeedSimilarity(ctx))
 	assert.NilError(t, engine.ComputeUserSimilarity(ctx))
 
-	assert.NilError(t, engine.DismissFeed(ctx, "did:test:carol", "https://a.com/feed", "not_interested"))
+	assert.NilError(t, engine.feedback.DismissFeed(ctx, "did:test:carol", "https://a.com/feed", "not_interested"))
 
 	recs, err := engine.GetFeedRecommendations(ctx, "did:test:carol", 10)
 	assert.NilError(t, err)
@@ -200,13 +201,13 @@ func TestIsFeedDismissed(t *testing.T) {
 
 	engine := newTestEngine(dbs)
 
-	dismissed, err := engine.IsFeedDismissed(ctx, "did:test:alice", "https://a.com/feed")
+	dismissed, err := engine.feedback.IsFeedDismissed(ctx, "did:test:alice", "https://a.com/feed")
 	assert.NilError(t, err)
 	assert.Assert(t, !dismissed, "feed should not be dismissed initially")
 
-	assert.NilError(t, engine.DismissFeed(ctx, "did:test:alice", "https://a.com/feed", "not_interested"))
+	assert.NilError(t, engine.feedback.DismissFeed(ctx, "did:test:alice", "https://a.com/feed", "not_interested"))
 
-	dismissed, err = engine.IsFeedDismissed(ctx, "did:test:alice", "https://a.com/feed")
+	dismissed, err = engine.feedback.IsFeedDismissed(ctx, "did:test:alice", "https://a.com/feed")
 	assert.NilError(t, err)
 	assert.Assert(t, dismissed, "feed should be dismissed after dismiss call")
 }
@@ -218,18 +219,18 @@ func TestRecordImpressions(t *testing.T) {
 
 	engine := newTestEngine(dbs)
 
-	impressions := []Impression{
+	impressions := []feedback.Impression{
 		{TargetType: "feed", TargetID: "https://a.com/feed"},
 		{TargetType: "feed", TargetID: "https://b.com/feed"},
 	}
-	assert.NilError(t, engine.RecordImpressions(ctx, "did:test:alice", impressions))
+	assert.NilError(t, engine.feedback.RecordImpressions(ctx, "did:test:alice", impressions))
 
 	var count int
 	assert.NilError(t, dbs.SQLDB().QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM main.recommendation_impressions WHERE user_did = 'did:test:alice'`).Scan(&count))
 	assert.Equal(t, count, 2)
 
-	assert.NilError(t, engine.RecordImpressions(ctx, "did:test:alice", impressions))
+	assert.NilError(t, engine.feedback.RecordImpressions(ctx, "did:test:alice", impressions))
 
 	var shownCount int
 	assert.NilError(t, dbs.SQLDB().QueryRowContext(ctx,
@@ -244,10 +245,10 @@ func TestMarkImpressionActed(t *testing.T) {
 
 	engine := newTestEngine(dbs)
 
-	impressions := []Impression{{TargetType: "feed", TargetID: "https://a.com/feed"}}
-	assert.NilError(t, engine.RecordImpressions(ctx, "did:test:alice", impressions))
+	impressions := []feedback.Impression{{TargetType: "feed", TargetID: "https://a.com/feed"}}
+	assert.NilError(t, engine.feedback.RecordImpressions(ctx, "did:test:alice", impressions))
 
-	assert.NilError(t, engine.MarkImpressionActed(ctx, "did:test:alice", "feed", "https://a.com/feed"))
+	assert.NilError(t, engine.feedback.MarkImpressionActed(ctx, "did:test:alice", "feed", "https://a.com/feed"))
 
 	var acted bool
 	assert.NilError(t, dbs.SQLDB().QueryRowContext(ctx,
@@ -313,9 +314,9 @@ func TestAutoDismissStale(t *testing.T) {
 	`)
 	assert.NilError(t, err)
 
-	assert.NilError(t, engine.AutoDismissStale(ctx, 5, 5))
+	assert.NilError(t, engine.feedback.AutoDismissStale(ctx, 5, 5))
 
-	dismissed, err := engine.IsFeedDismissed(ctx, "did:test:alice", "https://stale.com/feed")
+	dismissed, err := engine.feedback.IsFeedDismissed(ctx, "did:test:alice", "https://stale.com/feed")
 	assert.NilError(t, err)
 	assert.Assert(t, dismissed, "stale recommendation should be auto-dismissed")
 }
@@ -333,9 +334,9 @@ func TestAutoDismissStale_DoesNotDismissRecent(t *testing.T) {
 	`)
 	assert.NilError(t, err)
 
-	assert.NilError(t, engine.AutoDismissStale(ctx, 5, 5))
+	assert.NilError(t, engine.feedback.AutoDismissStale(ctx, 5, 5))
 
-	dismissed, err := engine.IsFeedDismissed(ctx, "did:test:alice", "https://recent.com/feed")
+	dismissed, err := engine.feedback.IsFeedDismissed(ctx, "did:test:alice", "https://recent.com/feed")
 	assert.NilError(t, err)
 	assert.Assert(t, !dismissed, "recent impression should not be auto-dismissed")
 }
@@ -353,9 +354,9 @@ func TestAutoDismissStale_DoesNotDismissActed(t *testing.T) {
 	`)
 	assert.NilError(t, err)
 
-	assert.NilError(t, engine.AutoDismissStale(ctx, 5, 5))
+	assert.NilError(t, engine.feedback.AutoDismissStale(ctx, 5, 5))
 
-	dismissed, err := engine.IsFeedDismissed(ctx, "did:test:alice", "https://acted.com/feed")
+	dismissed, err := engine.feedback.IsFeedDismissed(ctx, "did:test:alice", "https://acted.com/feed")
 	assert.NilError(t, err)
 	assert.Assert(t, !dismissed, "acted recommendation should not be auto-dismissed")
 }
@@ -503,7 +504,7 @@ func TestDismissArticle(t *testing.T) {
 
 	engine := newTestEngine(dbs)
 
-	assert.NilError(t, engine.DismissArticle(ctx, "did:test:alice", "https://a.com/article1", "not_interested"))
+	assert.NilError(t, engine.feedback.DismissArticle(ctx, "did:test:alice", "https://a.com/article1", "not_interested"))
 
 	var count int
 	assert.NilError(t, dbs.SQLDB().QueryRowContext(ctx,
@@ -531,8 +532,8 @@ func TestDismissFeed_Idempotent(t *testing.T) {
 
 	engine := newTestEngine(dbs)
 
-	assert.NilError(t, engine.DismissFeed(ctx, "did:test:alice", "https://a.com/feed", "reason1"))
-	assert.NilError(t, engine.DismissFeed(ctx, "did:test:alice", "https://a.com/feed", "reason2"))
+	assert.NilError(t, engine.feedback.DismissFeed(ctx, "did:test:alice", "https://a.com/feed", "reason1"))
+	assert.NilError(t, engine.feedback.DismissFeed(ctx, "did:test:alice", "https://a.com/feed", "reason2"))
 
 	var count int
 	assert.NilError(t, dbs.SQLDB().QueryRowContext(ctx,

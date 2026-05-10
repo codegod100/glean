@@ -10,7 +10,9 @@ import (
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
 
+	"pkg.rbrt.fr/glean/internal/ai"
 	"pkg.rbrt.fr/glean/internal/db"
+	"pkg.rbrt.fr/glean/internal/feedback"
 )
 
 // Config controls weights used during similarity computation (feed similarity
@@ -44,8 +46,9 @@ type Engine struct {
 	mu     sync.Mutex
 	config Config
 
-	embedder Embedder
-	llm      *LLMClient
+	embedder ai.Embedder
+	llm      ai.TextModel
+	feedback *feedback.Service
 
 	feedCache             *expirable.LRU[string, []*FeedRecommendation]
 	peopleCache           *expirable.LRU[string, []*PersonRecommendation]
@@ -57,7 +60,7 @@ type Engine struct {
 // recCacheSize is the maximum number of recommendations to cache per user.
 const recCacheSize = 512
 
-func NewEngine(sqlDB *sql.DB, articles *db.ArticleStore, embedder Embedder, llm *LLMClient, logger *slog.Logger, cacheTTL time.Duration, config Config) *Engine {
+func NewEngine(sqlDB *sql.DB, articles *db.ArticleStore, embedder ai.Embedder, llm ai.TextModel, fb *feedback.Service, logger *slog.Logger, cacheTTL time.Duration, config Config) *Engine {
 	return &Engine{
 		db:                    sqlDB,
 		articles:              articles,
@@ -65,6 +68,7 @@ func NewEngine(sqlDB *sql.DB, articles *db.ArticleStore, embedder Embedder, llm 
 		config:                config,
 		embedder:              embedder,
 		llm:                   llm,
+		feedback:              fb,
 		feedCache:             expirable.NewLRU[string, []*FeedRecommendation](recCacheSize, nil, cacheTTL),
 		peopleCache:           expirable.NewLRU[string, []*PersonRecommendation](recCacheSize, nil, cacheTTL),
 		articleCache:          expirable.NewLRU[string, []*ArticleRecommendation](recCacheSize, nil, cacheTTL),

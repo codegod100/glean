@@ -1,4 +1,4 @@
-package cluster
+package ai
 
 import (
 	"context"
@@ -9,26 +9,25 @@ import (
 	"github.com/openai/openai-go/option"
 )
 
-// Embedder generates vector embeddings for text inputs.
 type Embedder interface {
 	Embed(ctx context.Context, texts []string, instruction string) ([][]float32, error)
 	Dimension() int
 }
 
-type EmbedderClient struct {
+type embedder struct {
 	client    openai.Client
 	model     string
 	dimension int
 }
 
-type EmbedderClientConfig struct {
+type EmbedConfig struct {
 	BaseURL   string
 	APIKey    string
 	Model     string
 	Dimension int
 }
 
-func NewEmbedderClient(cfg EmbedderClientConfig) *EmbedderClient {
+func NewEmbedder(cfg EmbedConfig) Embedder {
 	opts := []option.RequestOption{}
 	if cfg.BaseURL != "" {
 		opts = append(opts, option.WithBaseURL(cfg.BaseURL))
@@ -36,18 +35,18 @@ func NewEmbedderClient(cfg EmbedderClientConfig) *EmbedderClient {
 	if cfg.APIKey != "" {
 		opts = append(opts, option.WithAPIKey(cfg.APIKey))
 	}
-	return &EmbedderClient{
+	return &embedder{
 		client:    openai.NewClient(opts...),
 		model:     cfg.Model,
 		dimension: cfg.Dimension,
 	}
 }
 
-func (e *EmbedderClient) Dimension() int {
+func (e *embedder) Dimension() int {
 	return e.dimension
 }
 
-func (e *EmbedderClient) Embed(ctx context.Context, texts []string, instruction string) ([][]float32, error) {
+func (e *embedder) Embed(ctx context.Context, texts []string, instruction string) ([][]float32, error) {
 	inputs := texts
 	if instruction != "" {
 		inputs = make([]string, len(texts))
@@ -75,11 +74,11 @@ func (e *EmbedderClient) Embed(ctx context.Context, texts []string, instruction 
 	return embeddings, nil
 }
 
-func avgEmbeddings(blobs [][]byte, dim int) ([]byte, error) {
+func AvgEmbeddings(blobs [][]byte, dim int) ([]byte, error) {
 	sum := make([]float32, dim)
 	count := 0
 	for _, blob := range blobs {
-		v := bytesToFloat32s(blob, dim)
+		v := BytesToFloat32s(blob, dim)
 		if v == nil {
 			continue
 		}
@@ -97,7 +96,7 @@ func avgEmbeddings(blobs [][]byte, dim int) ([]byte, error) {
 	return vec.SerializeFloat32(sum)
 }
 
-func bytesToFloat32s(data []byte, expectedDim int) []float32 {
+func BytesToFloat32s(data []byte, expectedDim int) []float32 {
 	if len(data) != expectedDim*4 {
 		return nil
 	}

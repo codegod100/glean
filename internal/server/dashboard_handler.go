@@ -10,6 +10,7 @@ import (
 	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/cluster"
 	"pkg.rbrt.fr/glean/internal/db"
+	"pkg.rbrt.fr/glean/internal/feedback"
 )
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -102,15 +103,15 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	resolvePeopleHandles(ctx, peopleRecs)
 
-	var impressions []cluster.Impression
+	var impressions []feedback.Impression
 	for _, rec := range articleRecs {
-		impressions = append(impressions, cluster.Impression{TargetType: "article", TargetID: rec.URL})
+		impressions = append(impressions, feedback.Impression{TargetType: "article", TargetID: rec.URL})
 	}
 	for _, rec := range feedRecs {
-		impressions = append(impressions, cluster.Impression{TargetType: "feed", TargetID: rec.FeedURL})
+		impressions = append(impressions, feedback.Impression{TargetType: "feed", TargetID: rec.FeedURL})
 	}
 	if len(impressions) > 0 {
-		if err := s.engine.RecordImpressions(ctx, user.DID, impressions); err != nil {
+		if err := s.feedback.RecordImpressions(ctx, user.DID, impressions); err != nil {
 			s.logger.Warn("failed to record impressions", "error", err)
 		}
 	}

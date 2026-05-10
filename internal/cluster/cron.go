@@ -59,7 +59,7 @@ func (c *Cron) Run(ctx context.Context) error {
 			if err := c.engine.ComputeFollowDistances(ctx); err != nil {
 				c.logger.Error("follow distances failed", "error", err)
 			}
-			if err := c.engine.AutoDismissStale(ctx, 5, 5); err != nil {
+			if err := c.engine.feedback.AutoDismissStale(ctx, 5, 5); err != nil {
 				c.engine.logger.Error("auto dismiss failed", "error", err)
 			}
 			c.engine.mu.Unlock()

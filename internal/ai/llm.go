@@ -1,4 +1,4 @@
-package cluster
+package ai
 
 import (
 	"context"
@@ -11,18 +11,22 @@ import (
 	"pkg.rbrt.fr/glean/internal/langdetect"
 )
 
-type LLMClient struct {
+type TextModel interface {
+	DetectLanguages(ctx context.Context, texts []string) ([]string, error)
+}
+
+type llm struct {
 	client openai.Client
 	model  string
 }
 
-type LLMClientConfig struct {
+type LLMConfig struct {
 	BaseURL string
 	APIKey  string
 	Model   string
 }
 
-func NewLLMClient(cfg LLMClientConfig) *LLMClient {
+func NewLLM(cfg LLMConfig) TextModel {
 	opts := []option.RequestOption{}
 	if cfg.BaseURL != "" {
 		opts = append(opts, option.WithBaseURL(cfg.BaseURL))
@@ -30,13 +34,13 @@ func NewLLMClient(cfg LLMClientConfig) *LLMClient {
 	if cfg.APIKey != "" {
 		opts = append(opts, option.WithAPIKey(cfg.APIKey))
 	}
-	return &LLMClient{
+	return &llm{
 		client: openai.NewClient(opts...),
 		model:  cfg.Model,
 	}
 }
 
-func (c *LLMClient) DetectLanguages(ctx context.Context, texts []string) ([]string, error) {
+func (c *llm) DetectLanguages(ctx context.Context, texts []string) ([]string, error) {
 	var b strings.Builder
 	b.WriteString("For each text below, respond with ONLY the ISO 639-1 language code (e.g. en, fr, de, es, pt, it, ru, ja, zh, ko, ar). One code per line, same order as input. If uncertain, respond with 'en'.\n\n")
 	for i, t := range texts {

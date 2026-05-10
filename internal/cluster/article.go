@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
+
+	"pkg.rbrt.fr/glean/internal/ai"
 )
 
 // embedBatchSize caps how many texts are sent in a single embedding API call.
@@ -194,7 +196,7 @@ func (e *Engine) populateContentBoost(ctx context.Context, conn *sql.Conn, userD
 		return nil
 	}
 
-	queryBlob, err := avgEmbeddings(blobs, dim)
+	queryBlob, err := ai.AvgEmbeddings(blobs, dim)
 	if err != nil {
 		return fmt.Errorf("serialize query vector: %w", err)
 	}
