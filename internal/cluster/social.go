@@ -18,7 +18,7 @@ func chunk[T any](s []T, size int) [][]T {
 	return chunks
 }
 
-func (e *Engine) writeFollowDistancesForUser(ctx context.Context, tx *sql.Tx, src string) (int, error) {
+func (e *Engine) writeFollowDistancesForUser(ctx context.Context, stmt *sql.Stmt, src string) (int, error) {
 	reachable, err := e.bfsReachable(ctx, src)
 	if err != nil {
 		return 0, err
@@ -27,10 +27,7 @@ func (e *Engine) writeFollowDistancesForUser(ctx context.Context, tx *sql.Tx, sr
 	written := 0
 	for dst, d := range reachable {
 		if d > 0 {
-			if _, err := tx.ExecContext(ctx,
-				`INSERT INTO recs.follow_distances (user_a, user_b, distance) VALUES (?, ?, ?)`,
-				src, dst, d,
-			); err != nil {
+			if _, err := stmt.ExecContext(ctx, src, dst, d); err != nil {
 				return written, err
 			}
 			written++
@@ -127,8 +124,14 @@ func (e *Engine) ComputeFollowDistances(ctx context.Context) error {
 	}
 
 	var totalPairs int
+	stmt, err := tx.PrepareContext(ctx, `INSERT INTO recs.follow_distances (user_a, user_b, distance) VALUES (?, ?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
 	for _, did := range dirtyUsers {
-		n, err := e.writeFollowDistancesForUser(ctx, tx, did)
+		n, err := e.writeFollowDistancesForUser(ctx, stmt, did)
 		if err != nil {
 			return err
 		}
