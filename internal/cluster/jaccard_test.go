@@ -284,7 +284,7 @@ func TestComputeFollowDistances(t *testing.T) {
 	assert.Assert(t, exists == 1, "alice should reach dave via 3 hops")
 }
 
-func TestComputeFollowDistancesData_SplitReadWrite(t *testing.T) {
+func TestComputeFollowDistances_WritesPairsToDB(t *testing.T) {
 	ctx := context.Background()
 	dbs := setupClusterTestDB(t)
 	seedClusterData(t, ctx, dbs)
@@ -292,16 +292,11 @@ func TestComputeFollowDistancesData_SplitReadWrite(t *testing.T) {
 
 	engine := newTestEngine(dbs)
 
-	sources := []string{"did:test:alice", "did:test:bob", "did:test:carol", "did:test:dave"}
-	distances, err := engine.ComputeFollowDistancesData(ctx, sources)
-	assert.NilError(t, err)
-	assert.Assert(t, len(distances) > 0, "expected follow distance pairs")
-
-	assert.NilError(t, engine.WriteFollowDistances(ctx, distances))
+	assert.NilError(t, engine.ComputeFollowDistances(ctx))
 
 	var count int
 	assert.NilError(t, dbs.SQLDB().QueryRowContext(ctx, `SELECT COUNT(*) FROM recs.follow_distances`).Scan(&count))
-	assert.Equal(t, count, len(distances))
+	assert.Assert(t, count > 0, "expected follow distance pairs")
 }
 
 func TestAutoDismissStale(t *testing.T) {

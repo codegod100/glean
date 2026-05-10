@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 )
 
@@ -17,39 +18,25 @@ func chunk[T any](s []T, size int) [][]T {
 	return chunks
 }
 
-type followDistance struct {
-	userA    string
-	userB    string
-	distance int
-}
-
-func (e *Engine) ComputeFollowDistancesData(ctx context.Context, sources []string) ([]followDistance, error) {
-	if len(sources) == 0 {
-		return nil, nil
+func (e *Engine) writeFollowDistancesForUser(ctx context.Context, tx *sql.Tx, src string) (int, error) {
+	reachable, err := e.bfsReachable(ctx, src)
+	if err != nil {
+		return 0, err
 	}
 
-	type pair struct {
-		src, dst string
-	}
-	distances := make(map[pair]int)
-
-	for _, src := range sources {
-		reachable, err := e.bfsReachable(ctx, src)
-		if err != nil {
-			return nil, err
-		}
-		for other, d := range reachable {
-			if d > 0 {
-				distances[pair{src, other}] = d
+	written := 0
+	for dst, d := range reachable {
+		if d > 0 {
+			if _, err := tx.ExecContext(ctx,
+				`INSERT INTO recs.follow_distances (user_a, user_b, distance) VALUES (?, ?, ?)`,
+				src, dst, d,
+			); err != nil {
+				return written, err
 			}
+			written++
 		}
 	}
-
-	var result []followDistance
-	for k, d := range distances {
-		result = append(result, followDistance{userA: k.src, userB: k.dst, distance: d})
-	}
-	return result, nil
+	return written, nil
 }
 
 func (e *Engine) bfsReachable(ctx context.Context, src string) (map[string]int, error) {
@@ -96,35 +83,6 @@ func (e *Engine) bfsReachable(ctx context.Context, src string) (map[string]int, 
 	return reachable, nil
 }
 
-func (e *Engine) WriteFollowDistances(ctx context.Context, distances []followDistance) error {
-	tx, err := e.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	if _, err := tx.ExecContext(ctx, `DELETE FROM recs.follow_distances`); err != nil {
-		return err
-	}
-
-	stmt, err := tx.PrepareContext(ctx, `INSERT INTO recs.follow_distances (user_a, user_b, distance) VALUES (?, ?, ?)`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	for _, d := range distances {
-		if _, err := stmt.ExecContext(ctx, d.userA, d.userB, d.distance); err != nil {
-			return err
-		}
-	}
-
-	e.logger.Info("follow distances computed", "pairs", len(distances))
-	return tx.Commit()
-}
-
-// ComputeFollowDistances incrementally recomputes follow distances for users
-// whose follows changed since the last run, as tracked by the follows_dirty column.
 func (e *Engine) ComputeFollowDistances(ctx context.Context) error {
 	rows, err := e.db.QueryContext(ctx, `SELECT did FROM main.users WHERE follows_dirty = 1`)
 	if err != nil {
@@ -144,11 +102,6 @@ func (e *Engine) ComputeFollowDistances(ctx context.Context) error {
 
 	if len(dirtyUsers) == 0 {
 		return nil
-	}
-
-	distances, err := e.ComputeFollowDistancesData(ctx, dirtyUsers)
-	if err != nil {
-		return err
 	}
 
 	tx, err := e.db.BeginTx(ctx, nil)
@@ -173,16 +126,13 @@ func (e *Engine) ComputeFollowDistances(ctx context.Context) error {
 		}
 	}
 
-	stmt, err := tx.PrepareContext(ctx, `INSERT INTO recs.follow_distances (user_a, user_b, distance) VALUES (?, ?, ?)`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	for _, d := range distances {
-		if _, err := stmt.ExecContext(ctx, d.userA, d.userB, d.distance); err != nil {
+	var totalPairs int
+	for _, did := range dirtyUsers {
+		n, err := e.writeFollowDistancesForUser(ctx, tx, did)
+		if err != nil {
 			return err
 		}
+		totalPairs += n
 	}
 
 	for _, chunk := range chunk(dirtyUsers, sqliteMaxVars) {
@@ -200,6 +150,6 @@ func (e *Engine) ComputeFollowDistances(ctx context.Context) error {
 		}
 	}
 
-	e.logger.Info("follow distances computed", "users", len(dirtyUsers), "pairs", len(distances))
+	e.logger.Info("follow distances computed", "users", len(dirtyUsers), "pairs", totalPairs)
 	return tx.Commit()
 }
