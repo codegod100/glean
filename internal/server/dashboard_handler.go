@@ -65,7 +65,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	g.Go(func() error {
 		var err error
-		peopleRecs, err = s.engine.GetPeopleRecommendations(gCtx, user.DID, 5)
+		peopleRecs, err = s.engine.GetPeopleRecommendations(gCtx, user.DID, 6)
 		return err
 	})
 

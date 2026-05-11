@@ -69,7 +69,7 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 
 	g.Go(func() error {
 		var err error
-		peopleRecs, err = s.engine.GetPeopleRecommendations(gCtx, user.DID, 5)
+		peopleRecs, err = s.engine.GetPeopleRecommendations(gCtx, user.DID, 6)
 		if err != nil {
 			s.logger.Warn("failed to get people recommendations", "error", err, "did", user.DID)
 		}
