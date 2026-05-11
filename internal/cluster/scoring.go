@@ -87,27 +87,21 @@ func (e *Engine) GetPeopleRecommendations(ctx context.Context, userDID string, l
 		return entry, nil
 	}
 
-	recs, err := e.ComputePeopleRecommendationsOnDemand(ctx, userDID, limit*2)
+	half := max(limit/2, 1)
+
+	inNet, err := e.computePeopleByFollowStatus(ctx, userDID, true, half)
 	if err != nil {
 		return nil, err
 	}
 
-	half := max(limit/2, 1)
-
-	var inNet, outNet []*PersonRecommendation
-	for _, r := range recs {
-		if r.IsFollowed {
-			inNet = append(inNet, r)
-		} else {
-			outNet = append(outNet, r)
-		}
+	outNet, err := e.computePeopleByFollowStatus(ctx, userDID, false, half)
+	if err != nil {
+		return nil, err
 	}
 
-	outTake := min(half, len(outNet))
-	inTake := min(limit-outTake, len(inNet))
-	recs = recs[:0]
-	recs = append(recs, inNet[:inTake]...)
-	recs = append(recs, outNet[:outTake]...)
+	var recs []*PersonRecommendation
+	recs = append(recs, inNet...)
+	recs = append(recs, outNet...)
 
 	normalizePersonScores(recs)
 	e.peopleCache.Add(userDID, recs)
@@ -522,11 +516,17 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 	return recs, rows.Err()
 }
 
-func (e *Engine) ComputePeopleRecommendationsOnDemand(ctx context.Context, userDID string, limit int) ([]*PersonRecommendation, error) {
+func (e *Engine) computePeopleByFollowStatus(ctx context.Context, userDID string, followed bool, limit int) ([]*PersonRecommendation, error) {
+	var followCond string
+	if followed {
+		followCond = "f.target_did IS NOT NULL"
+	} else {
+		followCond = "f.target_did IS NULL"
+	}
+
 	rows, err := e.db.QueryContext(ctx, `
 		SELECT u.did,
-		       sim.jaccard, sim.common_feeds, COALESCE(sim.common_likes, 0), COALESCE(sim.common_tags, 0),
-		       CASE WHEN f.target_did IS NOT NULL THEN 1 ELSE 0 END
+		       sim.jaccard, sim.common_feeds, COALESCE(sim.common_likes, 0), COALESCE(sim.common_tags, 0)
 		FROM (
 			SELECT user_b AS peer_did, jaccard, common_feeds, common_likes, common_tags FROM recs.user_similarity WHERE user_a = ?
 			UNION ALL
@@ -534,7 +534,8 @@ func (e *Engine) ComputePeopleRecommendationsOnDemand(ctx context.Context, userD
 		) sim
 		JOIN main.users u ON u.did = sim.peer_did
 		LEFT JOIN main.follows f ON f.user_did = ? AND f.target_did = u.did
-		WHERE EXISTS (SELECT 1 FROM articles.subscriptions s JOIN articles.feeds f ON s.feed_url = f.feed_url WHERE s.user_did = u.did AND f.subscriber_count > 0)
+		WHERE `+followCond+`
+		  AND EXISTS (SELECT 1 FROM articles.subscriptions s JOIN articles.feeds f2 ON s.feed_url = f2.feed_url WHERE s.user_did = u.did AND f2.subscriber_count > 0)
 		  AND NOT EXISTS (SELECT 1 FROM main.dismissed_recommendations d WHERE d.user_did = ? AND d.target_type = 'person' AND d.target_id = u.did)
 		ORDER BY sim.jaccard DESC
 		LIMIT ?
@@ -547,13 +548,11 @@ func (e *Engine) ComputePeopleRecommendationsOnDemand(ctx context.Context, userD
 	var results []*PersonRecommendation
 	for rows.Next() {
 		rec := &PersonRecommendation{}
-		var isFollowed int
 		if err := rows.Scan(&rec.DID,
-			&rec.Jaccard, &rec.CommonFeeds, &rec.CommonLikes, &rec.CommonTags,
-			&isFollowed); err != nil {
+			&rec.Jaccard, &rec.CommonFeeds, &rec.CommonLikes, &rec.CommonTags); err != nil {
 			return nil, err
 		}
-		rec.IsFollowed = isFollowed == 1
+		rec.IsFollowed = followed
 		results = append(results, rec)
 	}
 	return results, rows.Err()
