@@ -558,3 +558,58 @@ func TestDeleteOrphanedAnnotations_RemovesOrphaned(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Equal(t, exists, false)
 }
+
+func TestAnnotationExistsByContent_FindsExactMatch(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+
+	now := NullTime(time.Now())
+	err := dbs.Articles.CreateAnnotation(ctx, &Annotation{
+		URI: "at://glean:ann1", AuthorDID: "did:test:u1", FeedURL: "https://a.com/feed",
+		ArticleURL: "https://a.com/1", Quote: NullStr("selected text"), Note: NullStr("my note"),
+		CreatedAt: now,
+	})
+	assert.NilError(t, err)
+
+	exists, err := dbs.Articles.AnnotationExistsByContent(ctx, "did:test:u1", "https://a.com/1", "selected text", "my note")
+	assert.NilError(t, err)
+	assert.Equal(t, exists, true)
+}
+
+func TestAnnotationExistsByContent_NoMatch(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+
+	now := NullTime(time.Now())
+	err := dbs.Articles.CreateAnnotation(ctx, &Annotation{
+		URI: "at://glean:ann1", AuthorDID: "did:test:u1", FeedURL: "https://a.com/feed",
+		ArticleURL: "https://a.com/1", Quote: NullStr("selected text"), Note: NullStr("my note"),
+		CreatedAt: now,
+	})
+	assert.NilError(t, err)
+
+	exists, err := dbs.Articles.AnnotationExistsByContent(ctx, "did:test:u1", "https://a.com/1", "different quote", "my note")
+	assert.NilError(t, err)
+	assert.Equal(t, exists, false)
+}
+
+func TestAnnotationExistsByContent_EmptyFields(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+
+	now := NullTime(time.Now())
+	err := dbs.Articles.CreateAnnotation(ctx, &Annotation{
+		URI: "at://glean:ann1", AuthorDID: "did:test:u1", FeedURL: "https://a.com/feed",
+		ArticleURL: "https://a.com/1", Note: NullStr("just a note"),
+		CreatedAt: now,
+	})
+	assert.NilError(t, err)
+
+	exists, err := dbs.Articles.AnnotationExistsByContent(ctx, "did:test:u1", "https://a.com/1", "", "just a note")
+	assert.NilError(t, err)
+	assert.Equal(t, exists, true)
+
+	exists, err = dbs.Articles.AnnotationExistsByContent(ctx, "did:test:u1", "https://a.com/1", "", "")
+	assert.NilError(t, err)
+	assert.Equal(t, exists, false)
+}

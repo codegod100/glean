@@ -195,6 +195,13 @@ func (h *StreamDBHandler) handleMarginNote(ctx context.Context, event *Event) er
 		if err != nil || a == nil {
 			return err
 		}
+		exists, err := h.articles.AnnotationExistsByContent(ctx, a.AuthorDID, a.ArticleURL, a.Quote.String, a.Note.String)
+		if err != nil {
+			return err
+		}
+		if exists {
+			return nil
+		}
 		return h.articles.CreateAnnotation(ctx, a)
 
 	case actionUpdate:

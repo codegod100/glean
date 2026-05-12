@@ -96,6 +96,21 @@ func (s *ArticleStore) AnnotationExists(ctx context.Context, uri string) (bool, 
 	return true, nil
 }
 
+func (s *ArticleStore) AnnotationExistsByContent(ctx context.Context, authorDID, articleURL, quote, note string) (bool, error) {
+	var exists int
+	err := s.db.QueryRowContext(ctx, `
+		SELECT 1 FROM articles.annotations
+		WHERE author_did = ? AND article_url = ? AND COALESCE(quote, '') = COALESCE(?, '') AND COALESCE(note, '') = COALESCE(?, '')
+	`, authorDID, articleURL, quote, note).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (s *ArticleStore) ListAnnotations(ctx context.Context, feedURL, articleURL, authorDID string, limit, offset int) ([]*Annotation, error) {
 	var conds []string
 	var args []any

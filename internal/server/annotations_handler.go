@@ -139,6 +139,17 @@ func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) 
 		}
 		a.URI = uri
 		a.CID = sql.NullString{String: cid, Valid: true}
+
+		marginRec := atproto.NewMarginNoteRecord(
+			a.ArticleURL,
+			a.Quote.String,
+			a.Note.String,
+			tags,
+			time.Now().Format(time.RFC3339),
+		)
+		if _, _, err := client.CreateRecord(ctx, user.DID, atproto.CollectionMarginNote, marginRec); err != nil {
+			s.logger.Error("failed to write margin note to PDS", "error", err)
+		}
 	} else {
 		a.URI = fmt.Sprintf("glean:annotation:%d", time.Now().UnixNano())
 	}

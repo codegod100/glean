@@ -124,7 +124,9 @@ A user likes an article. The liked feed surfaces popular articles and feeds into
 
 Glean also indexes records from the `at.margin.note` lexicon (owned by [margin.at](https://margin.at)). These are displayed in the UI as if they were `at.glean.annotation` records — margin notes appear alongside glean annotations on article detail pages.
 
-The mapping from margin note to glean annotation:
+#### Ingestion (margin.at → Glean)
+
+Margin notes are indexed from both Jetstream and PDS sync, same as glean records. The mapping from margin note to glean annotation:
 
 | Margin note field              | Annotation field | Notes                                                           |
 | ------------------------------ | ---------------- | --------------------------------------------------------------- |
@@ -135,7 +137,26 @@ The mapping from margin note to glean annotation:
 | `createdAt`                    | `created_at`     | Direct mapping                                                  |
 | _(looked up from articles DB)_ | `feed_url`       | Resolved by matching `target.source` against known article URLs |
 
-When no matching article exists in the local DB, the annotation is stored with an empty `feed_url`. Margin notes are indexed from both Jetstream and PDS sync, same as glean records.
+When no matching article exists in the local DB, the annotation is stored with an empty `feed_url`.
+
+#### Mirroring (Glean → margin.at)
+
+When a user creates an annotation through Glean, two records are written to the user's PDS:
+
+1. **`at.glean.annotation`** — the primary record (canonical URI for the annotation)
+2. **`at.margin.note`** — mirror for interoperability with margin.at clients
+
+The conversion from glean annotation to margin note uses `NewMarginNoteRecord`:
+
+| Glean annotation field | Margin note field       | Notes                            |
+| ---------------------- | ----------------------- | -------------------------------- |
+| `articleUrl`           | `target.source`         | Direct mapping                   |
+| `quote`                | `target.selector.exact` | Wrapped in a `TextQuoteSelector` |
+| `note`                 | `body.value`            | `body.format` = `"text/plain"`   |
+| `tags`                 | `tags`                  | Direct mapping                   |
+| _(constant)_           | `motivation`            | Always `"commenting"`            |
+
+The margin note mirror is fire-and-forget — if it fails, the glean annotation still succeeds. The Jetstream consumer will pick up the margin note create event, but `handleMarginNote` skips it via `AnnotationExistsByContent` (checks `author_did` + `article_url` + `quote` + `note`) to prevent duplicate annotations.
 
 ### 3.5 `app.skyreader.feed.subscription` (External)
 
@@ -433,11 +454,12 @@ Glean runs as a single Go binary that fills three roles: **AppView** (indexing `
                      │  └─────────────────┘  │         └──────────────────┘
                      └──────────────────────┘
 
-                       AppView responsibilities:
-                       • Subscribe to Jetstream for at.glean.subscription, at.glean.annotation, at.glean.like, at.margin.note, app.skyreader.feed.subscription
-                       • Index records into SQLite
-                       • Convert at.margin.note records to annotations (displayed alongside glean.at annotations)
-                       • Import app.skyreader.feed.subscription records as Glean subscriptions
+                      AppView responsibilities:
+                        • Subscribe to Jetstream for at.glean.subscription, at.glean.annotation, at.glean.like, at.margin.note, app.skyreader.feed.subscription
+                        • Index records into SQLite
+                        • Convert at.margin.note records to annotations (displayed alongside glean.at annotations), skip if duplicate glean annotation exists
+                        • Mirror glean annotations as at.margin.note records on user PDS for interoperability
+                        • Import app.skyreader.feed.subscription records as Glean subscriptions
                      • Serve XRPC query endpoints (at.glean.listSubscriptions, etc.)
                      • Host the web UI at glean.at
                      • Write to user PDS on behalf of user (when user acts through UI)
@@ -904,42 +926,42 @@ The server renders HTML fragments that htmx swaps into the page. No JSON API nee
 
 ### 8.1 Pages
 
-| Route                          | Method | Description                                                         |
-| ------------------------------ | ------ | ------------------------------------------------------------------- |
-| `/`                            | GET    | Landing page / auth redirect                                        |
+| Route                          | Method | Description                                                            |
+| ------------------------------ | ------ | ---------------------------------------------------------------------- |
+| `/`                            | GET    | Landing page / auth redirect                                           |
 | `/dashboard`                   | GET    | Main dashboard: article recs, unread articles, trending, people, feeds |
-| `/feeds`                       | GET    | Manage RSS subscriptions (OPML import for onboarding)               |
-| `/feeds/list`                  | GET    | Feed list fragment (htmx partial)                                   |
-| `/feeds/opml/upload`           | POST   | Upload OPML file to bulk-import subscriptions (redirects to /feeds) |
-| `/feeds/opml/download`         | GET    | Export subscriptions as OPML (offboarding)                          |
-| `/feeds/add`                   | POST   | Add a single feed URL                                               |
-| `/feeds/remove`                | DELETE | Remove a feed                                                       |
-| `/feeds/refresh`               | POST   | Refresh all subscribed feeds                                        |
-| `/feeds/retry`                 | POST   | Retry a failed feed                                                 |
-| `/feeds/clear`                 | POST   | Clear all subscriptions                                             |
-| `/feeds/dismiss`               | POST   | Dismiss a feed recommendation                                       |
-| `/articles`                    | GET    | Read articles (paginated, filterable by feed)                       |
-| `/articles/new-count`          | GET    | Get count of new articles (for badge updates)                       |
-| `/articles/{id}`               | GET    | Article detail view                                                 |
-| `/articles/{id}/read`          | POST   | Mark article as read                                                |
-| `/articles/{id}/unread`        | POST   | Mark article as unread                                              |
-| `/articles/{id}/like`          | POST   | Like an article                                                     |
-| `/articles/{id}/fetch-content` | POST   | Fetch full article content from original URL                        |
-| `/articles/mark-all-read`      | POST   | Mark all articles as read                                           |
-| `/articles/dismiss`            | POST   | Dismiss an article recommendation                                   |
-| `/trending`                    | GET    | Community feed: articles ranked by likes (public)                   |
-| `/library`                     | GET    | Liked articles and annotations                                      |
-| `/library/create`              | POST   | Create annotation on an article                                     |
-| `/library/{id}/delete`         | POST   | Delete an annotation                                                |
-| `/stats`                       | GET    | Application metrics and performance data (Prometheus, public)       |
-| `/profile/{did}`               | GET    | Public profile: their feeds, likes, annotations                     |
-| `/settings/languages`          | POST   | Save preferred recommendation languages (htmx, requires auth)       |
-| `/auth/login`                  | GET    | Login page                                                          |
-| `/auth/register`               | GET    | Register with Eurosky (OAuth flow with hardcoded PDS)               |
-| `/auth/resolve`                | GET    | Resolve handle to DID                                               |
-| `/auth/start`                  | POST   | Start OAuth authorization flow                                      |
-| `/auth/callback`               | GET    | OAuth callback                                                      |
-| `/terms`                       | GET    | Terms of service                                                    |
+| `/feeds`                       | GET    | Manage RSS subscriptions (OPML import for onboarding)                  |
+| `/feeds/list`                  | GET    | Feed list fragment (htmx partial)                                      |
+| `/feeds/opml/upload`           | POST   | Upload OPML file to bulk-import subscriptions (redirects to /feeds)    |
+| `/feeds/opml/download`         | GET    | Export subscriptions as OPML (offboarding)                             |
+| `/feeds/add`                   | POST   | Add a single feed URL                                                  |
+| `/feeds/remove`                | DELETE | Remove a feed                                                          |
+| `/feeds/refresh`               | POST   | Refresh all subscribed feeds                                           |
+| `/feeds/retry`                 | POST   | Retry a failed feed                                                    |
+| `/feeds/clear`                 | POST   | Clear all subscriptions                                                |
+| `/feeds/dismiss`               | POST   | Dismiss a feed recommendation                                          |
+| `/articles`                    | GET    | Read articles (paginated, filterable by feed)                          |
+| `/articles/new-count`          | GET    | Get count of new articles (for badge updates)                          |
+| `/articles/{id}`               | GET    | Article detail view                                                    |
+| `/articles/{id}/read`          | POST   | Mark article as read                                                   |
+| `/articles/{id}/unread`        | POST   | Mark article as unread                                                 |
+| `/articles/{id}/like`          | POST   | Like an article                                                        |
+| `/articles/{id}/fetch-content` | POST   | Fetch full article content from original URL                           |
+| `/articles/mark-all-read`      | POST   | Mark all articles as read                                              |
+| `/articles/dismiss`            | POST   | Dismiss an article recommendation                                      |
+| `/trending`                    | GET    | Community feed: articles ranked by likes (public)                      |
+| `/library`                     | GET    | Liked articles and annotations                                         |
+| `/library/create`              | POST   | Create annotation on an article                                        |
+| `/library/{id}/delete`         | POST   | Delete an annotation                                                   |
+| `/stats`                       | GET    | Application metrics and performance data (Prometheus, public)          |
+| `/profile/{did}`               | GET    | Public profile: their feeds, likes, annotations                        |
+| `/settings/languages`          | POST   | Save preferred recommendation languages (htmx, requires auth)          |
+| `/auth/login`                  | GET    | Login page                                                             |
+| `/auth/register`               | GET    | Register with Eurosky (OAuth flow with hardcoded PDS)                  |
+| `/auth/resolve`                | GET    | Resolve handle to DID                                                  |
+| `/auth/start`                  | POST   | Start OAuth authorization flow                                         |
+| `/auth/callback`               | GET    | OAuth callback                                                         |
+| `/terms`                       | GET    | Terms of service                                                       |
 
 ### 8.2 htmx Patterns
 

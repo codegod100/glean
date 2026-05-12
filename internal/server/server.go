@@ -43,6 +43,7 @@ var oauthScopes = []string{
 	fmt.Sprintf("repo:%s", atproto.CollectionSubscription),
 	fmt.Sprintf("repo:%s", atproto.CollectionLike),
 	fmt.Sprintf("repo:%s", atproto.CollectionAnnotation),
+	fmt.Sprintf("repo:%s", atproto.CollectionMarginNote),
 
 	"rpc:at.glean.listSubscriptions?aud=*",
 	"rpc:at.glean.listLikes?aud=*",

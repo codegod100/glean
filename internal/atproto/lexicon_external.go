@@ -78,6 +78,34 @@ type MarginNoteTimeState struct {
 	SourceDate string `json:"sourceDate,omitempty"`
 }
 
+func NewMarginNoteRecord(articleURL, quote, note string, tags []string, createdAt string) MarginNoteRecord {
+	rec := MarginNoteRecord{
+		Body:       nil,
+		CreatedAt:  createdAt,
+		Motivation: "commenting",
+		Tags:       tags,
+		Target: MarginNoteTarget{
+			Source: articleURL,
+		},
+	}
+
+	if quote != "" {
+		rec.Target.Selector = &MarginNoteSelector{
+			Type:  "TextQuoteSelector",
+			Exact: quote,
+		}
+	}
+
+	if note != "" {
+		rec.Body = &MarginNoteBody{
+			Format: "text/plain",
+			Value:  note,
+		}
+	}
+
+	return rec
+}
+
 func (r MarginNoteRecord) ToAnnotation() (articleURL, quote, note string, tags []string) {
 	articleURL = r.Target.Source
 	if r.Body != nil {
