@@ -95,16 +95,23 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 		a.NavSuffix = navSuffix
 	}
 
+	settings, _ := s.dbs.Users.GetSettings(ctx, user.DID)
+	expandedView := false
+	if settings != nil {
+		expandedView = settings.ExpandedView
+	}
+
 	data := map[string]any{
-		"User":        user,
-		"Articles":    articles,
-		"FeedURL":     feedURL,
-		"Status":      status,
-		"SearchQuery": searchQuery,
-		"Page":        page,
-		"BaseURL":     "/articles",
-		"QueryParams": buildQueryParams(map[string]string{"feed": feedURL, "status": status, "q": searchQuery}),
-		"Now":         time.Now(),
+		"User":         user,
+		"Articles":     articles,
+		"FeedURL":      feedURL,
+		"Status":       status,
+		"SearchQuery":  searchQuery,
+		"Page":         page,
+		"BaseURL":      "/articles",
+		"QueryParams":  buildQueryParams(map[string]string{"feed": feedURL, "status": status, "q": searchQuery}),
+		"Now":          time.Now(),
+		"ExpandedView": expandedView,
 	}
 
 	if feedURL != "" {
@@ -286,7 +293,7 @@ func (s *Server) handleMarkRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html")
-	_, _ = fmt.Fprintf(w, `<span id="read-btn-%d" class="text-xs text-spot-green uppercase tracking-button">Read</span>`, id)
+	fmt.Fprintf(w, `<button id="read-btn-%[1]d" hx-post="/articles/%[1]d/unread" hx-target="#read-btn-%[1]d" hx-swap="outerHTML" title="Mark as Unread" class="group inline-flex items-center gap-1 text-[10px] text-spot-text uppercase tracking-button px-2 py-0.5 rounded-pill bg-spot-hover hover:text-spot-green hover:bg-spot-green/15 transition"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span>Unread</span></button>`, id)
 }
 
 func (s *Server) handleMarkUnread(w http.ResponseWriter, r *http.Request) {
@@ -301,7 +308,7 @@ func (s *Server) handleMarkUnread(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html")
-	_, _ = fmt.Fprintf(w, `<span id="read-btn-%d" class="text-xs text-spot-muted uppercase tracking-button"></span>`, id)
+	fmt.Fprintf(w, `<button id="read-btn-%[1]d" hx-post="/articles/%[1]d/read" hx-target="#read-btn-%[1]d" hx-swap="outerHTML" title="Mark as Read" class="group inline-flex items-center gap-1 text-[10px] text-spot-text uppercase tracking-button px-2 py-0.5 rounded-pill bg-spot-hover hover:text-spot-green hover:bg-spot-green/15 transition"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span>Read</span></button>`, id)
 }
 
 func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {

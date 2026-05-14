@@ -7,20 +7,22 @@ import (
 )
 
 type UserSettings struct {
-	DID       string
-	Languages []string
+	DID          string
+	Languages    []string
+	ExpandedView bool
 }
 
 func (s *UserStore) GetSettings(ctx context.Context, did string) (*UserSettings, error) {
 	var langs sql.NullString
-	err := s.db.QueryRowContext(ctx, `SELECT languages FROM user_settings WHERE did = ?`, did).Scan(&langs)
+	var expandedView bool
+	err := s.db.QueryRowContext(ctx, `SELECT languages, COALESCE(expanded_view, 0) FROM user_settings WHERE did = ?`, did).Scan(&langs, &expandedView)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return &UserSettings{DID: did}, nil
 		}
 		return nil, err
 	}
-	us := &UserSettings{DID: did}
+	us := &UserSettings{DID: did, ExpandedView: expandedView}
 	if langs.Valid && langs.String != "" {
 		us.Languages = strings.Split(langs.String, ",")
 	}
@@ -45,4 +47,12 @@ func (s *UserStore) GetLanguages(ctx context.Context, did string) ([]string, err
 		return nil, nil
 	}
 	return us.Languages, nil
+}
+
+func (s *UserStore) SetExpandedView(ctx context.Context, did string, enabled bool) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO user_settings (did, expanded_view, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(did) DO UPDATE SET expanded_view = excluded.expanded_view, updated_at = CURRENT_TIMESTAMP
+	`, did, enabled)
+	return err
 }

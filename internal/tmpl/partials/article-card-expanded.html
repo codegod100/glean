@@ -1,0 +1,47 @@
+{{define "article-card-expanded.html"}}
+<article data-article-id="{{.ID}}" data-feed-url="{{.FeedURL}}" data-article-url="{{if .URL.Valid}}{{.URL.String}}{{end}}" data-expanded="true" class="bg-spot-surface rounded-xl px-5 py-4 shadow-spot relative">
+    <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0 flex-1">
+            <div class="flex items-start gap-2.5">
+                <span class="w-2 h-2 rounded-full shrink-0 mt-2 {{if .IsRead.Bool}}bg-spot-muted{{else}}bg-spot-green{{end}}"></span>
+                <a href="/articles/{{.ID}}{{.NavSuffix}}" class="font-semibold text-spot-text hover:text-spot-green transition leading-snug {{if .IsRead.Bool}}text-[15px]{{else}}text-[17px]{{end}}">{{.Title}}</a>
+            </div>
+            <div class="text-xs text-spot-secondary mt-2 flex items-center gap-1.5 flex-wrap pl-[18px]">
+                {{template "favicon" dict "src" .FeedFaviconURL.String "size" "w-3.5 h-3.5"}}
+                <a href="/articles?feed={{.FeedURL}}" class="hover:text-spot-text transition font-medium">{{if .FeedTitle}}{{.FeedTitle}}{{else}}{{.FeedURL}}{{end}}</a>
+                {{if .Author.Valid}}{{if .Author.String}}<span class="text-spot-muted">&middot;</span><span>{{.Author.String}}</span>{{end}}{{end}}
+                {{if .Published.Valid}}<span class="text-spot-muted">&middot;</span><span>{{.Published.Time.Format "Jan 2, 2006 15:04"}}</span>{{end}}
+            </div>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0 pt-0.5">
+            <div>{{template "like-button.html" .}}</div>
+        </div>
+    </div>
+
+    {{if .URL.Valid}}
+    {{with youtubeID .URL.String}}
+    <div class="mt-4 aspect-video w-full rounded-xl overflow-hidden shadow-spot-heavy">
+        <iframe class="w-full h-full" src="https://www.youtube.com/embed/{{.}}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+    </div>
+    {{end}}
+    {{end}}
+
+    {{if or .Content.Valid .FullContent.Valid .Summary.Valid}}
+    <div class="mt-4 pt-4 border-t border-spot-divider">
+        <div class="article-body text-sm">
+            {{if .Content.Valid}}{{sanitizeHTML .Content.String}}
+            {{else if .FullContent.Valid}}{{sanitizeHTML .FullContent.String}}
+            {{else if .Summary.Valid}}{{sanitizeHTML .Summary.String}}{{end}}
+        </div>
+    </div>
+    {{else}}
+    <div class="mt-4 pt-4 border-t border-spot-divider">
+        <a href="/articles/{{.ID}}{{.NavSuffix}}" class="text-spot-green hover:underline text-sm">Read full article &rarr;</a>
+    </div>
+    {{end}}
+
+    <div class="mt-4 pt-4 border-t border-spot-divider flex items-center justify-end gap-1.5">
+        <div>{{template "like-button.html" .}}</div>
+    </div>
+</article>
+{{end}}

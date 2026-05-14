@@ -118,6 +118,42 @@
             if (rbtn) rbtn.click();
         }
     });
+
+    {{if .ExpandedView}}
+    // Wait 3s before marking read so fast scrolling doesn't mark everything.
+    // Cancel the timer if the article leaves the viewport before it fires.
+    function markRead(el) {
+        var id = el.getAttribute('data-article-id');
+        if (!id || el.getAttribute('data-marked-read')) return;
+        el.setAttribute('data-marked-read', '1');
+        fetch('/articles/' + id + '/read', {
+            method: 'POST',
+            headers: {'X-CSRF-Token': document.querySelector('input[name="csrf_token"]') ? document.querySelector('input[name="csrf_token"]').value : ''}
+        }).then(function() {
+            var dot = el.querySelector('.bg-spot-green.rounded-full');
+            if (dot) { dot.classList.remove('bg-spot-green'); dot.classList.add('bg-spot-muted'); }
+        }).catch(function() {});
+    }
+    var readTimers = {};
+    var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+            var id = entry.target.getAttribute('data-article-id');
+            if (!id) return;
+            if (entry.isIntersecting) {
+                readTimers[id] = setTimeout(function() { markRead(entry.target); }, 3000);
+            } else {
+                clearTimeout(readTimers[id]);
+                delete readTimers[id];
+            }
+        });
+    }, {rootMargin: '0px 0px -50% 0px', threshold: 0});
+
+    articles.forEach(function(a) {
+        if (a.getAttribute('data-expanded') === 'true') {
+            observer.observe(a);
+        }
+    });
+    {{end}}
 })();
 </script>
 {{end}}

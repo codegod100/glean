@@ -41,8 +41,8 @@
             </button>
 
             <button hx-post="/articles/{{.Article.ID}}/{{if .ReadState.IsRead}}unread{{else}}read{{end}}"
-                    hx-target="#read-btn" hx-swap="outerHTML"
-                    id="read-btn"
+                    hx-target="#read-btn-{{.Article.ID}}" hx-swap="outerHTML"
+                    id="read-btn-{{.Article.ID}}"
                     title="{{if .ReadState.IsRead}}Mark as Unread{{else}}Mark as Read{{end}}"
                     class="group inline-flex items-center gap-1.5 text-[10px] uppercase tracking-button px-2.5 py-1 rounded-pill transition {{if .ReadState.IsRead}}text-spot-text bg-spot-hover hover:text-spot-green hover:bg-spot-green/15{{else}}text-spot-text bg-spot-hover hover:text-spot-green hover:bg-spot-green/15{{end}}">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
@@ -274,7 +274,7 @@
             var btn = document.querySelector('[hx-post*="/like"]');
             if (btn) btn.click();
         } else if (e.key === 'm') {
-            var rbtn = document.getElementById('read-btn');
+            var rbtn = document.getElementById('read-btn-{{.Article.ID}}');
             if (rbtn) rbtn.click();
         } else if (e.key === 'Escape') {
             history.back();

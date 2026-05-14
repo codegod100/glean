@@ -86,6 +86,16 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 
+	userSettings := &db.UserSettings{}
+	g.Go(func() error {
+		var err error
+		userSettings, err = s.dbs.Users.GetSettings(gCtx, user.DID)
+		if err != nil {
+			s.logger.Warn("failed to get user settings", "error", err, "did", user.DID)
+		}
+		return nil
+	})
+
 	if err := g.Wait(); err != nil {
 		s.logger.Warn("profile error", "error", err, "did", did)
 	}
@@ -100,5 +110,6 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		"AnnotationCount":    len(annotations),
 		"UserLanguages":      userLangs,
 		"AvailableLanguages": langdetect.KnownLanguages(),
+		"ExpandedView":       userSettings.ExpandedView,
 	})
 }

@@ -13,7 +13,7 @@ func init() {
 }
 
 // SchemaVersion must be incremented each time a migration is added to the migrations slice (used so that fresh dbs skip running migrations).
-const SchemaVersion = 4
+const SchemaVersion = 5
 
 type migration struct {
 	id   int
@@ -41,6 +41,11 @@ var migrations = []migration{
 		id:   4,
 		name: "jetstream_cursor",
 		run:  migrateJetstreamCursor,
+	},
+	{
+		id:   5,
+		name: "user_settings_expanded_view",
+		run:  migrateUserSettingsExpandedView,
 	},
 }
 
@@ -226,6 +231,20 @@ func migrateJetstreamCursor(db *DB) error {
 	)`)
 	if err != nil {
 		return fmt.Errorf("create jetstream_cursor: %w", err)
+	}
+	return nil
+}
+
+func migrateUserSettingsExpandedView(db *DB) error {
+	var colCount int
+	err := db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('user_settings') WHERE name='expanded_view'").Scan(&colCount)
+	if err != nil {
+		return fmt.Errorf("check user_settings.expanded_view column: %w", err)
+	}
+	if colCount == 0 {
+		if _, err := db.Exec("ALTER TABLE user_settings ADD COLUMN expanded_view BOOLEAN NOT NULL DEFAULT 0"); err != nil {
+			return fmt.Errorf("add user_settings.expanded_view: %w", err)
+		}
 	}
 	return nil
 }

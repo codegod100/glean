@@ -116,7 +116,7 @@ func TestHandleMarginNote_SkipsWhenSameContentDifferentURI(t *testing.T) {
 	err := dbs.Articles.CreateAnnotation(ctx, &db.Annotation{
 		URI: "at://did:test:u1/at.glean.annotation/rkey3", AuthorDID: "did:test:u1",
 		FeedURL: "https://a.com/feed", ArticleURL: "https://a.com/1",
-		Note: db.NullStr("identical note"),
+		Note:      db.NullStr("identical note"),
 		CreatedAt: db.NullTime(time.Now()),
 	})
 	assert.NilError(t, err)

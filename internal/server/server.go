@@ -211,6 +211,7 @@ func (s *Server) setupRoutes() {
 	s.router.Route("/settings", func(r chi.Router) {
 		r.Use(s.requireAuth)
 		r.Post("/languages", s.handleUpdateLanguages)
+		r.Post("/expanded-view", s.handleToggleExpandedView)
 	})
 
 	s.router.Get("/auth/login", s.handleAuthLogin)

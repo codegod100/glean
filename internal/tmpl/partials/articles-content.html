@@ -1,6 +1,6 @@
 {{define "articles-content.html"}}
 {{range .Articles}}
-{{template "article-card.html" .}}
+{{if $.ExpandedView}}{{template "article-card-expanded.html" .}}{{else}}{{template "article-card.html" .}}{{end}}
 {{else}}
 <div class="bg-spot-surface rounded-2xl py-12 px-6 text-center">
     <div class="w-14 h-14 rounded-2xl bg-spot-green/15 flex items-center justify-center mb-5 mx-auto">

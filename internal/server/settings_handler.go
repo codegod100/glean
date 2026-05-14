@@ -37,3 +37,23 @@ func (s *Server) handleUpdateLanguages(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("HX-Redirect", "/profile/"+user.DID)
 	w.WriteHeader(http.StatusOK)
 }
+
+func (s *Server) handleToggleExpandedView(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	enabled := r.FormValue("expanded_view") == "1"
+
+	if err := s.dbs.Users.SetExpandedView(r.Context(), user.DID, enabled); err != nil {
+		s.logger.Error("failed to update expanded view", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("HX-Redirect", "/profile/"+user.DID)
+	w.WriteHeader(http.StatusOK)
+}

@@ -412,6 +412,7 @@ The `/articles` page is the main reading view:
 - **Open original**: Title links to the source article
 - **Share**: Share to Bluesky
 - **Keyboard navigation**: `j`/`k` to navigate, `l` to like, `m` to mark read (progressive enhancement via a small `<script>` block)
+- **Expanded view**: User setting that shows full article content inline on the articles page. Articles are automatically marked as read via `IntersectionObserver` after being visible for 3 seconds. YouTube videos are embedded inline. A duplicate like button appears at the bottom of each article. Configurable in profile settings.
 
 ### 4.7 Feed Discovery from Content
 
@@ -488,8 +489,14 @@ CREATE TABLE users (
     did            TEXT PRIMARY KEY,
     indexed_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    follows_dirty  BOOLEAN NOT NULL DEFAULT 1,
-    languages      TEXT
+    follows_dirty  BOOLEAN NOT NULL DEFAULT 1
+);
+
+CREATE TABLE user_settings (
+    did            TEXT PRIMARY KEY,
+    languages      TEXT,
+    expanded_view  BOOLEAN NOT NULL DEFAULT 0,
+    updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
@@ -956,6 +963,7 @@ The server renders HTML fragments that htmx swaps into the page. No JSON API nee
 | `/stats`                       | GET    | Application metrics and performance data (Prometheus, public)          |
 | `/profile/{did}`               | GET    | Public profile: their feeds, likes, annotations                        |
 | `/settings/languages`          | POST   | Save preferred recommendation languages (htmx, requires auth)          |
+| `/settings/expanded-view`      | POST   | Toggle expanded article view setting (htmx, requires auth)              |
 | `/auth/login`                  | GET    | Login page                                                             |
 | `/auth/register`               | GET    | Register with Eurosky (OAuth flow with hardcoded PDS)                  |
 | `/auth/resolve`                | GET    | Resolve handle to DID                                                  |
