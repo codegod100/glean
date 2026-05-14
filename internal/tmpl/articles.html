@@ -130,8 +130,9 @@
             method: 'POST',
             headers: {'X-CSRF-Token': document.querySelector('input[name="csrf_token"]') ? document.querySelector('input[name="csrf_token"]').value : ''}
         }).then(function() {
-            var dot = el.querySelector('.bg-spot-green.rounded-full');
-            if (dot) { dot.classList.remove('bg-spot-green'); dot.classList.add('bg-spot-muted'); }
+            el.classList.remove('border-l', 'border-spot-green/80');
+            var title = el.querySelector('a[href^="/articles/"]');
+            if (title) { title.classList.remove('font-bold', 'text-[17px]'); title.classList.add('font-semibold', 'text-[15px]'); }
         }).catch(function() {});
     }
     var readTimers = {};

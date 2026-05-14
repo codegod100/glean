@@ -293,7 +293,7 @@ func (s *Server) handleMarkRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html")
-	fmt.Fprintf(w, `<button id="read-btn-%[1]d" hx-post="/articles/%[1]d/unread" hx-target="#read-btn-%[1]d" hx-swap="outerHTML" title="Mark as Unread" class="group inline-flex items-center gap-1 text-[10px] text-spot-text uppercase tracking-button px-2 py-0.5 rounded-pill bg-spot-hover hover:text-spot-green hover:bg-spot-green/15 transition"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span>Unread</span></button>`, id)
+	fmt.Fprintf(w, `<button id="read-btn-%[1]d" hx-post="/articles/%[1]d/unread" hx-target="#read-btn-%[1]d" hx-swap="outerHTML" title="Mark as Unread" class="group inline-flex items-center gap-1 text-[10px] text-spot-secondary uppercase tracking-button px-2 py-0.5 rounded-pill bg-spot-hover hover:text-spot-green hover:bg-spot-green/15 transition"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span>Unread</span></button>`, id)
 }
 
 func (s *Server) handleMarkUnread(w http.ResponseWriter, r *http.Request) {
