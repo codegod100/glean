@@ -48,6 +48,7 @@ func Open(basePath string) (*Store, error) {
 				`PRAGMA cache = shared`,
 				`PRAGMA temp_store = FILE`,
 				`PRAGMA mmap_size = 268435456`,
+				`PRAGMA auto_vacuum = INCREMENTAL`,
 			} {
 				if _, err := conn.Exec(p, nil); err != nil {
 					return err
@@ -123,6 +124,20 @@ func Open(basePath string) (*Store, error) {
 		Articles: NewArticleStore(d),
 		db:       d,
 	}, nil
+}
+
+func (s *Store) RunMaintenance(ctx context.Context, impressionMaxAgeDays int) error {
+	cutoff := time.Now().AddDate(0, 0, -impressionMaxAgeDays).Format(time.RFC3339)
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM main.recommendation_impressions WHERE first_shown_at < ?`, cutoff); err != nil {
+		return fmt.Errorf("prune impressions: %w", err)
+	}
+
+	for _, schema := range []string{"main", "articles", "recs"} {
+		if _, err := s.db.ExecContext(ctx, fmt.Sprintf("PRAGMA %s.incremental_vacuum", schema)); err != nil {
+			return fmt.Errorf("incremental_vacuum %s: %w", schema, err)
+		}
+	}
+	return nil
 }
 
 func (s *Store) Close() error {
@@ -235,7 +250,6 @@ var usersSchema = []string{
 		PRIMARY KEY (account_did, session_id)
 	)`,
 
-	`CREATE INDEX IF NOT EXISTS idx_follows_user ON follows(user_did)`,
 	`CREATE INDEX IF NOT EXISTS idx_follows_target ON follows(target_did)`,
 	`CREATE INDEX IF NOT EXISTS idx_follows_uri ON follows(uri)`,
 	`CREATE INDEX IF NOT EXISTS idx_follows_followed_at ON follows(followed_at)`,

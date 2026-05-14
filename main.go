@@ -106,7 +106,7 @@ func main() {
 	fetcher := feed.NewFetcher(siteFetcher)
 	srv := server.New(dbs, clientID, callbackURL, *addr, scheduler, fetcher, engine, logger, []byte(sessionKey))
 
-	cron := cluster.NewCron(engine, *clusterInterval, logger)
+	cron := cluster.NewCron(engine, *clusterInterval, logger, dbs)
 
 	handler := atproto.NewStreamDBHandler(dbs.Articles, dbs.Users, logger)
 	jetstream := atproto.NewJetstreamConsumer(*jetstreamURL, handler.Handle, logger, dbs.CursorStore())

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"pkg.rbrt.fr/glean/internal/db"
 	"pkg.rbrt.fr/glean/internal/metrics"
 )
 
@@ -14,11 +15,17 @@ type Cron struct {
 	engine   *Engine
 	interval time.Duration
 	logger   *slog.Logger
+	dbs      *db.Store
 }
 
 // NewCron creates a new cron runner with the given engine and interval.
-func NewCron(engine *Engine, interval time.Duration, logger *slog.Logger) *Cron {
-	return &Cron{engine: engine, interval: interval, logger: logger}
+func NewCron(engine *Engine, interval time.Duration, logger *slog.Logger, dbs *db.Store) *Cron {
+	return &Cron{
+		engine:   engine,
+		interval: interval,
+		logger:   logger,
+		dbs:      dbs,
+	}
 }
 
 // Run starts the cron loop. It blocks until ctx is cancelled. Each tick runs
@@ -63,6 +70,10 @@ func (c *Cron) Run(ctx context.Context) error {
 				c.engine.logger.Error("auto dismiss failed", "error", err)
 			}
 			c.engine.mu.Unlock()
+		}
+
+		if err := c.dbs.RunMaintenance(ctx, 90); err != nil {
+			c.logger.Error("db maintenance failed", "error", err)
 		}
 
 		metrics.ClusterRuns.Inc()

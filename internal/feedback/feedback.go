@@ -92,3 +92,16 @@ func (s *Service) IsFeedDismissed(ctx context.Context, userDID, feedURL string) 
 	`, userDID, feedURL).Scan(&count)
 	return count > 0, err
 }
+
+func (s *Service) PruneOldImpressions(ctx context.Context, maxAgeDays int) (int64, error) {
+	cutoff := time.Now().AddDate(0, 0, -maxAgeDays).Format(time.RFC3339)
+
+	res, err := s.db.ExecContext(ctx, `
+		DELETE FROM main.recommendation_impressions
+		WHERE first_shown_at < ?
+	`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}

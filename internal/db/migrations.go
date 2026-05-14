@@ -13,7 +13,7 @@ func init() {
 }
 
 // SchemaVersion must be incremented each time a migration is added to the migrations slice (used so that fresh dbs skip running migrations).
-const SchemaVersion = 5
+const SchemaVersion = 6
 
 type migration struct {
 	id   int
@@ -46,6 +46,11 @@ var migrations = []migration{
 		id:   5,
 		name: "user_settings_expanded_view",
 		run:  migrateUserSettingsExpandedView,
+	},
+	{
+		id:   6,
+		name: "drop_redundant_follows_user_index",
+		run:  migrateDropFollowsUserIndex,
 	},
 }
 
@@ -247,4 +252,17 @@ func migrateUserSettingsExpandedView(db *DB) error {
 		}
 	}
 	return nil
+}
+
+func migrateDropFollowsUserIndex(db *DB) error {
+	var name string
+	err := db.QueryRow("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_follows_user'").Scan(&name)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("check idx_follows_user: %w", err)
+	}
+	_, err = db.Exec("DROP INDEX IF EXISTS idx_follows_user")
+	return err
 }

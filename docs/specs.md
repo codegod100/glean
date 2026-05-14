@@ -654,8 +654,9 @@ CREATE TABLE follows (
     PRIMARY KEY (user_did, target_did)
 );
 
-CREATE INDEX idx_follows_user ON follows(user_did);
 CREATE INDEX idx_follows_target ON follows(target_did);
+CREATE INDEX idx_follows_uri ON follows(uri);
+CREATE INDEX idx_follows_followed_at ON follows(followed_at);
 ```
 
 ### 6.9 OAuth Storage (`<base>_users`)
@@ -804,6 +805,8 @@ A background goroutine runs on a configurable schedule (`GLEAN_CLUSTER_INTERVAL`
 6. **Compute follow distances**: Incremental BFS for dirty users (1-hop through 3-hop from `follows` table)
 7. **Compute signal profiles**: Per-user category/tag/like summaries
 8. **Auto-dismiss stale**: Dismiss items shown >=5 times over >5 days without action
+9. **Prune old impressions**: Delete `recommendation_impressions` older than 90 days
+10. **DB maintenance**: Run `PRAGMA incremental_vacuum` on all 3 databases (users, articles, recs) to reclaim freed pages. Incremental auto-vacuum is enabled via `PRAGMA auto_vacuum = INCREMENTAL` at connection time, so pages freed by impression pruning and other deletions are reclaimed each cycle.
 
 Jetstream ingestion and record indexing happen in a separate persistent goroutine (the Jetstream consumer), not in the cron.
 
