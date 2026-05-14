@@ -377,13 +377,8 @@ CREATE TABLE articles (
     UNIQUE(feed_url, guid)
 );
 
-CREATE INDEX idx_articles_feed ON articles(feed_url);
-CREATE INDEX idx_articles_published ON articles(published DESC);
+CREATE INDEX idx_articles_language ON articles(language);
 ```
-
-Content is stored as raw HTML from the feed's `<content:encoded>`, `<summary>`, or JSON Feed `content_html`. `full_content` stores scraped article content fetched from the original URL. The server renders it in a sanitized view (strip `<script>`, `<iframe>`, etc.).
-
-The `language` column stores the ISO 639-1 code detected by the LLM (e.g. `en`, `fr`, `ja`). It defaults to empty (`''`) and is populated by the cron job when `GLEAN_LLM_BASE_URL` is configured.
 
 ### 4.5 Read State
 
@@ -516,9 +511,6 @@ CREATE TABLE subscriptions (
     cid         TEXT,
     UNIQUE(user_did, feed_url)
 );
-
-CREATE INDEX idx_subscriptions_feed ON subscriptions(feed_url);
-CREATE INDEX idx_subscriptions_user ON subscriptions(user_did);
 ```
 
 ### 6.3 Feeds (`<base>_articles`)
@@ -563,8 +555,6 @@ CREATE TABLE articles (
     UNIQUE(feed_url, guid)
 );
 
-CREATE INDEX idx_articles_feed ON articles(feed_url);
-CREATE INDEX idx_articles_published ON articles(published DESC);
 CREATE INDEX idx_articles_language ON articles(language);
 ```
 
@@ -656,7 +646,6 @@ CREATE TABLE follows (
 
 CREATE INDEX idx_follows_target ON follows(target_did);
 CREATE INDEX idx_follows_uri ON follows(uri);
-CREATE INDEX idx_follows_followed_at ON follows(followed_at);
 ```
 
 ### 6.9 OAuth Storage (`<base>_users`)

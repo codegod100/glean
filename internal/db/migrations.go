@@ -255,14 +255,45 @@ func migrateUserSettingsExpandedView(db *DB) error {
 }
 
 func migrateDropFollowsUserIndex(db *DB) error {
-	var name string
-	err := db.QueryRow("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_follows_user'").Scan(&name)
-	if err == sql.ErrNoRows {
-		return nil
+	for _, idx := range []string{
+		"idx_follows_user",
+		"idx_follows_followed_at",
+		"idx_dismissed_user_type",
+		"idx_impressions_last_shown",
+		"idx_subscriptions_feed",
+		"idx_subscriptions_user",
+		"idx_subscriptions_user_feed",
+		"idx_articles_feed",
+		"idx_articles_published",
+		"idx_likes_article",
+		"idx_likes_author",
+		"idx_follow_distances_b",
+		"idx_user_similarity_a",
+	} {
+		var schema string
+		if strings.HasPrefix(idx, "idx_subscriptions_") || strings.HasPrefix(idx, "idx_articles_") || strings.HasPrefix(idx, "idx_likes_") {
+			_ = db.QueryRow("SELECT name FROM articles.sqlite_master WHERE type='index' AND name=?", idx).Scan(&schema)
+		} else if strings.HasPrefix(idx, "idx_follow_distances_") || strings.HasPrefix(idx, "idx_user_similarity_") {
+			_ = db.QueryRow("SELECT name FROM recs.sqlite_master WHERE type='index' AND name=?", idx).Scan(&schema)
+		} else {
+			_ = db.QueryRow("SELECT name FROM sqlite_master WHERE type='index' AND name=?", idx).Scan(&schema)
+		}
+		if schema == "" {
+			continue
+		}
+		if strings.HasPrefix(idx, "idx_subscriptions_") || strings.HasPrefix(idx, "idx_articles_") || strings.HasPrefix(idx, "idx_likes_") {
+			if _, err := db.Exec(fmt.Sprintf("DROP INDEX IF EXISTS articles.%s", idx)); err != nil {
+				return fmt.Errorf("drop %s: %w", idx, err)
+			}
+		} else if strings.HasPrefix(idx, "idx_follow_distances_") || strings.HasPrefix(idx, "idx_user_similarity_") {
+			if _, err := db.Exec(fmt.Sprintf("DROP INDEX IF EXISTS recs.%s", idx)); err != nil {
+				return fmt.Errorf("drop %s: %w", idx, err)
+			}
+		} else {
+			if _, err := db.Exec(fmt.Sprintf("DROP INDEX IF EXISTS %s", idx)); err != nil {
+				return fmt.Errorf("drop %s: %w", idx, err)
+			}
+		}
 	}
-	if err != nil {
-		return fmt.Errorf("check idx_follows_user: %w", err)
-	}
-	_, err = db.Exec("DROP INDEX IF EXISTS idx_follows_user")
-	return err
+	return nil
 }

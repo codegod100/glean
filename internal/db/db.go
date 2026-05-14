@@ -252,7 +252,6 @@ var usersSchema = []string{
 
 	`CREATE INDEX IF NOT EXISTS idx_follows_target ON follows(target_did)`,
 	`CREATE INDEX IF NOT EXISTS idx_follows_uri ON follows(uri)`,
-	`CREATE INDEX IF NOT EXISTS idx_follows_followed_at ON follows(followed_at)`,
 
 	`CREATE TABLE IF NOT EXISTS user_settings (
 		did TEXT PRIMARY KEY,
@@ -281,9 +280,7 @@ var usersSchema = []string{
 		PRIMARY KEY (user_did, target_type, target_id)
 	)`,
 
-	`CREATE INDEX IF NOT EXISTS idx_dismissed_user_type ON dismissed_recommendations(user_did, target_type)`,
 	`CREATE INDEX IF NOT EXISTS idx_impressions_user_unacted ON recommendation_impressions(user_did, acted, shown_count)`,
-	`CREATE INDEX IF NOT EXISTS idx_impressions_last_shown ON recommendation_impressions(last_shown_at)`,
 
 	`CREATE TABLE IF NOT EXISTS jetstream_cursor (
 		id INTEGER PRIMARY KEY CHECK(id = 1),
@@ -368,21 +365,14 @@ var articlesSchema = []string{
 		UNIQUE(author_did, feed_url, article_url)
 	)`,
 
-	`CREATE INDEX IF NOT EXISTS articles.idx_subscriptions_feed ON subscriptions(feed_url)`,
 	`CREATE INDEX IF NOT EXISTS articles.idx_subscriptions_feed_user ON subscriptions(feed_url, user_did)`,
-	`CREATE INDEX IF NOT EXISTS articles.idx_subscriptions_user ON subscriptions(user_did)`,
-	`CREATE INDEX IF NOT EXISTS articles.idx_subscriptions_user_feed ON subscriptions(user_did, feed_url)`,
 	`CREATE INDEX IF NOT EXISTS articles.idx_subscriptions_uri ON subscriptions(uri)`,
 	`CREATE INDEX IF NOT EXISTS articles.idx_likes_author_feed ON likes(author_did, feed_url, created_at)`,
-	`CREATE INDEX IF NOT EXISTS articles.idx_articles_feed ON articles(feed_url)`,
-	`CREATE INDEX IF NOT EXISTS articles.idx_articles_published ON articles(published DESC)`,
 	`CREATE INDEX IF NOT EXISTS articles.idx_articles_url ON articles(url)`,
 	`CREATE INDEX IF NOT EXISTS articles.idx_read_state_unread ON read_state(user_did, is_read) WHERE is_read = 0`,
 	`CREATE INDEX IF NOT EXISTS articles.idx_annotations_article ON annotations(article_url)`,
 	`CREATE INDEX IF NOT EXISTS articles.idx_annotations_author ON annotations(author_did)`,
 	`CREATE INDEX IF NOT EXISTS articles.idx_annotations_created_at ON annotations(created_at DESC)`,
-	`CREATE INDEX IF NOT EXISTS articles.idx_likes_article ON likes(feed_url, article_url)`,
-	`CREATE INDEX IF NOT EXISTS articles.idx_likes_author ON likes(author_did)`,
 	`CREATE INDEX IF NOT EXISTS articles.idx_likes_created_at ON likes(created_at DESC)`,
 	`CREATE INDEX IF NOT EXISTS articles.idx_articles_language ON articles(language)`,
 	`CREATE INDEX IF NOT EXISTS articles.idx_likes_article_created ON likes(feed_url, article_url, created_at)`,
@@ -456,10 +446,8 @@ var recsSchema = []string{
 		source_text TEXT NOT NULL DEFAULT ''
 	)`,
 
-	`CREATE INDEX IF NOT EXISTS recs.idx_follow_distances_b ON follow_distances(user_b)`,
 	`CREATE INDEX IF NOT EXISTS recs.idx_follow_distances_a_dist ON follow_distances(user_a, distance)`,
 	`CREATE INDEX IF NOT EXISTS recs.idx_user_similarity_b ON user_similarity(user_b)`,
-	`CREATE INDEX IF NOT EXISTS recs.idx_user_similarity_a ON user_similarity(user_a)`,
 }
 
 func NullStr(s string) sql.NullString {
