@@ -472,7 +472,7 @@ func (s *ArticleStore) SearchArticles(ctx context.Context, userDID, query string
 			COALESCE(lc.cnt, 0),
 			COALESCE(ul.liked, 0)
 		FROM (
-			SELECT rowid, rank FROM articles.articles_fts WHERE articles.articles_fts MATCH ?
+			SELECT rowid, rank FROM articles.articles_fts WHERE articles_fts MATCH ?
 		) ft
 		JOIN articles.articles a ON a.id = ft.rowid
 		JOIN articles.subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?

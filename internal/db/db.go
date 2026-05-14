@@ -243,6 +243,7 @@ var usersSchema = []string{
 	`CREATE TABLE IF NOT EXISTS user_settings (
 		did TEXT PRIMARY KEY,
 		languages TEXT,
+		expanded_view BOOLEAN NOT NULL DEFAULT 0,
 		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`,
 
