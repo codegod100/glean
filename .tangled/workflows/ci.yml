@@ -18,12 +18,11 @@ dependencies:
     - gnumake
     - gnugrep
     - gawk
-    - nodejs
-    - curl
+    - bun
 
 steps:
-  - name: "Install node dependencies"
-    command: "npm install"
+  - name: "Install dependencies"
+    command: "bun install"
 
   - name: "Build glean"
     command: "make build"

@@ -31,7 +31,7 @@ build: css htmx
 
 .PHONY: css
 css:
-	npx tailwindcss -i ./static/input.css -o ./static/output.css --minify
+	bunx tailwindcss -i ./static/input.css -o ./static/output.css --minify
 
 .PHONY: htmx
 htmx:
@@ -39,7 +39,7 @@ htmx:
 
 .PHONY: css-watch
 css-watch:
-	npx tailwindcss -i ./static/input.css -o ./static/output.css --watch
+	bunx tailwindcss -i ./static/input.css -o ./static/output.css --watch
 
 .PHONY: icons
 icons:
