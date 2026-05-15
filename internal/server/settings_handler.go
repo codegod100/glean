@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"pkg.rbrt.fr/glean/internal/langdetect"
+	"pkg.rbrt.fr/glean/internal/ml"
 )
 
 func (s *Server) handleUpdateLanguages(w http.ResponseWriter, r *http.Request) {
@@ -16,7 +16,7 @@ func (s *Server) handleUpdateLanguages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	valid := make(map[string]bool)
-	for _, known := range langdetect.KnownLanguages() {
+	for _, known := range ml.KnownLanguages() {
 		valid[known.Code] = true
 	}
 

@@ -1,4 +1,4 @@
-package langdetect
+package ml
 
 type Language struct {
 	Code string
@@ -54,7 +54,7 @@ func init() {
 	}
 }
 
-func IsKnown(code string) bool {
+func IsKnownLanguage(code string) bool {
 	return knownSet[code]
 }
 

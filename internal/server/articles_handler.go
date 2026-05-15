@@ -14,7 +14,6 @@ import (
 
 	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/db"
-	"pkg.rbrt.fr/glean/internal/sanitize"
 )
 
 func writeLikeButton(w http.ResponseWriter, articleID int64, liked bool, count int, bordered bool) {
@@ -468,7 +467,7 @@ func (s *Server) handleFetchContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cleaned := sanitize.HTML(content)
+	cleaned := sanitizeHTML(content)
 
 	if err := s.dbs.Articles.UpdateArticleFullContent(ctx, id, cleaned); err != nil {
 		s.logger.Error("failed to save full content", "error", err, "id", id)

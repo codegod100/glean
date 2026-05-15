@@ -1,4 +1,4 @@
-package sanitize
+package server
 
 import (
 	"regexp"
@@ -52,7 +52,7 @@ func isAllowedIframe(tag string) bool {
 	return false
 }
 
-func HTML(input string) string {
+func sanitizeHTML(input string) string {
 	s := input
 	s = scriptRe.ReplaceAllString(s, "")
 
@@ -97,7 +97,7 @@ var htmlEntities = map[string]string{
 	"&lsquo;": "'", "&rdquo;": "\"", "&ldquo;": "\"",
 }
 
-func PlainText(input string) string {
+func plainText(input string) string {
 	s := tagRe.ReplaceAllString(input, " ")
 	for entity, replacement := range htmlEntities {
 		s = strings.ReplaceAll(s, entity, replacement)

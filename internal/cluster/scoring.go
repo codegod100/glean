@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"pkg.rbrt.fr/glean/internal/ai"
 	"pkg.rbrt.fr/glean/internal/db"
+	"pkg.rbrt.fr/glean/internal/ml"
 )
 
 type FeedRecommendation struct {
@@ -391,7 +391,7 @@ func (e *Engine) coldStartFromEmbeddings(ctx context.Context, userDID string, li
 		subSet[u] = true
 	}
 
-	queryBlob, err := ai.AvgEmbeddings(blobs, dim)
+	queryBlob, err := ml.AvgEmbeddings(blobs, dim)
 	if err != nil {
 		return nil, fmt.Errorf("serialize query vector: %w", err)
 	}

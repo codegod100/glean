@@ -9,7 +9,7 @@ import (
 
 	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/db"
-	"pkg.rbrt.fr/glean/internal/langdetect"
+	"pkg.rbrt.fr/glean/internal/ml"
 )
 
 func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +109,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		"SubscriptionCount":  subCount,
 		"AnnotationCount":    len(annotations),
 		"UserLanguages":      userLangs,
-		"AvailableLanguages": langdetect.KnownLanguages(),
+		"AvailableLanguages": ml.KnownLanguages(),
 		"ExpandedView":       userSettings.ExpandedView,
 	})
 }

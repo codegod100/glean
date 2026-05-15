@@ -13,12 +13,12 @@ import (
 	"syscall"
 	"time"
 
-	"pkg.rbrt.fr/glean/internal/ai"
 	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/cluster"
 	"pkg.rbrt.fr/glean/internal/db"
 	"pkg.rbrt.fr/glean/internal/feed"
 	"pkg.rbrt.fr/glean/internal/feedback"
+	"pkg.rbrt.fr/glean/internal/ml"
 	"pkg.rbrt.fr/glean/internal/server"
 
 	vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
@@ -75,9 +75,9 @@ func main() {
 	siteFetcher := atproto.NewStandardSiteFetcher(logger)
 	scheduler := feed.NewScheduler(storeAdapter, siteFetcher, logger, *fetchInterval, 30*time.Minute)
 
-	var embedder ai.Embedder
+	var embedder ml.Embedder
 	if embedURL := envOr("GLEAN_EMBED_BASE_URL", ""); embedURL != "" {
-		embedder = ai.NewEmbedder(ai.EmbedConfig{
+		embedder = ml.NewEmbedder(ml.EmbedConfig{
 			BaseURL:   embedURL,
 			APIKey:    envOr("GLEAN_EMBED_API_KEY", ""),
 			Model:     envOr("GLEAN_EMBED_MODEL", "text-embedding-3-small"),
@@ -92,9 +92,9 @@ func main() {
 		}
 	}
 
-	var llm ai.TextModel
+	var llm ml.TextModel
 	if llmURL := envOr("GLEAN_LLM_BASE_URL", ""); llmURL != "" {
-		llm = ai.NewLLM(ai.LLMConfig{
+		llm = ml.NewLLM(ml.LLMConfig{
 			BaseURL: llmURL,
 			APIKey:  envOr("GLEAN_LLM_API_KEY", ""),
 			Model:   envOr("GLEAN_LLM_MODEL", "gpt-4o-mini"),

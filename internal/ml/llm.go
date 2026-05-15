@@ -1,4 +1,4 @@
-package ai
+package ml
 
 import (
 	"context"
@@ -7,8 +7,6 @@ import (
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
-
-	"pkg.rbrt.fr/glean/internal/langdetect"
 )
 
 type TextModel interface {
@@ -72,7 +70,7 @@ func (c *llm) DetectLanguages(ctx context.Context, texts []string) ([]string, er
 		code := strings.TrimSpace(line)
 		code = strings.TrimPrefix(code, fmt.Sprintf("%d.", i+1))
 		code = strings.TrimSpace(code)
-		if langdetect.IsKnown(code) {
+		if IsKnownLanguage(code) {
 			result[i] = code
 		}
 	}

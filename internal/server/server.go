@@ -28,7 +28,6 @@ import (
 	"pkg.rbrt.fr/glean/internal/feed"
 	"pkg.rbrt.fr/glean/internal/feedback"
 	"pkg.rbrt.fr/glean/internal/metrics"
-	"pkg.rbrt.fr/glean/internal/sanitize"
 	"pkg.rbrt.fr/glean/internal/scraper"
 	"pkg.rbrt.fr/glean/internal/tmpl"
 	"pkg.rbrt.fr/glean/static"
@@ -334,9 +333,9 @@ func (s *Server) loadTemplates() {
 			}, host)
 		},
 		"sanitizeHTML": func(input string) template.HTML {
-			return template.HTML(sanitize.HTML(input))
+			return template.HTML(sanitizeHTML(input))
 		},
-		"plainText": sanitize.PlainText,
+		"plainText": plainText,
 		"now":       time.Now,
 		"activeClass": func(activePath, linkPath string) string {
 			if activePath == linkPath || (len(activePath) > len(linkPath) && activePath[:len(linkPath)+1] == linkPath+"/") {
