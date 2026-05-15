@@ -47,7 +47,7 @@
         <form method="GET" action="/articles" class="flex-1" id="search-form">
             <div class="relative">
                 <input type="text" name="q" value="{{.SearchQuery}}" placeholder="Search articles..."
-                       class="w-full bg-spot-hover text-spot-text rounded-pill pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder"
+                       class="w-full bg-spot-hover text-spot-text rounded-pill pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-secondary"
                        hx-get="/articles" hx-trigger="keyup changed delay:300ms, search" hx-target="#article-list" hx-swap="innerHTML" hx-include="[name='q']">
                 <svg class="w-4 h-4 text-spot-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                 {{if .FeedURL}}<input type="hidden" name="feed" value="{{.FeedURL}}">{{end}}
