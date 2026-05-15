@@ -242,6 +242,7 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 
 	go s.storeFetchResult(context.WithoutCancel(r.Context()), feedURL, result.Feed.SiteURL, result)
 
+	s.engine.InvalidateFeedCache(user.DID)
 	if err := s.feedback.MarkImpressionActed(r.Context(), user.DID, "feed", feedURL); err != nil {
 		s.logger.Warn("failed to mark impression acted", "error", err)
 	}
