@@ -47,6 +47,18 @@ type ArticleRecommendation struct {
 	Score      float64
 }
 
+func (e *Engine) InvalidateFeedCache(userDID string) {
+	e.feedCache.Remove(userDID)
+}
+
+func (e *Engine) InvalidateArticleCache(userDID string) {
+	e.articleCache.Remove(userDID)
+}
+
+func (e *Engine) InvalidatePeopleCache(userDID string) {
+	e.peopleCache.Remove(userDID)
+}
+
 // GetFeedRecommendations returns feed recommendations for a user. Users with
 // fewer than 5 subscriptions get cold-start recommendations (embedding-based
 // KNN or graph+popular fallback). Results are min-max normalized and
