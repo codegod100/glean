@@ -41,7 +41,7 @@ func NewLLM(cfg LLMConfig) TextModel {
 
 func (c *llm) DetectLanguages(ctx context.Context, texts []string) ([]string, error) {
 	var b strings.Builder
-	b.WriteString("For each text below, respond with ONLY the ISO 639-1 language code (e.g. en, fr, de, es, pt, it, ru, ja, zh, ko, ar). One code per line, same order as input. If uncertain, respond with 'en'.\n\n")
+	b.WriteString("For each text below, respond with ONLY the ISO 639-1 language code (e.g. en, fr, de, es, pt, it, ru, ja, zh, ko, ar). One code per line, same order as input. If uncertain, respond with 'unknown'.\n\n")
 	for i, t := range texts {
 		truncated := t
 		if len(truncated) > 500 {
@@ -71,7 +71,7 @@ func (c *llm) DetectLanguages(ctx context.Context, texts []string) ([]string, er
 		code := strings.TrimSpace(line)
 		code = strings.TrimPrefix(code, fmt.Sprintf("%d.", i+1))
 		code = strings.TrimSpace(code)
-		if IsKnownLanguage(code) {
+		if IsKnownLanguage(code) || code == "unknown" {
 			result[i] = code
 		}
 	}
