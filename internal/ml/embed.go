@@ -1,10 +1,11 @@
 package ml
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"unsafe"
 
-	vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 )
@@ -93,7 +94,11 @@ func AvgEmbeddings(blobs [][]byte, dim int) ([]byte, error) {
 	for j := range sum {
 		sum[j] /= float32(count)
 	}
-	return vec.SerializeFloat32(sum)
+	buf := new(bytes.Buffer)
+	if err := binary.Write(buf, binary.LittleEndian, sum); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 func BytesToFloat32s(data []byte, expectedDim int) []float32 {
