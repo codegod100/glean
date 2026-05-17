@@ -57,3 +57,23 @@ func (s *Server) handleToggleExpandedView(w http.ResponseWriter, r *http.Request
 	w.Header().Set("HX-Redirect", "/profile/"+user.DID)
 	w.WriteHeader(http.StatusOK)
 }
+
+func (s *Server) handleToggleDigestEnabled(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	enabled := r.FormValue("digest_enabled") == "1"
+
+	if err := s.dbs.Users.SetDigestEnabled(r.Context(), user.DID, enabled); err != nil {
+		s.logger.Error("failed to update digest enabled", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("HX-Redirect", "/profile/"+user.DID)
+	w.WriteHeader(http.StatusOK)
+}

@@ -318,6 +318,33 @@ func (s *ArticleStore) MarkAllSubscribedRead(ctx context.Context, userDID string
 	return err
 }
 
+func (s *ArticleStore) MarkArticlesRead(ctx context.Context, userDID string, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO articles.read_state (user_did, article_id, is_read, read_at)
+		VALUES (?, ?, 1, CURRENT_TIMESTAMP)
+		ON CONFLICT(user_did, article_id) DO UPDATE SET
+			is_read = 1, read_at = CURRENT_TIMESTAMP
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for _, id := range ids {
+		if _, err := stmt.ExecContext(ctx, userDID, id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 func (s *ArticleStore) GetReadState(ctx context.Context, userDID string, articleID int64) (*ReadState, error) {
 	rs := &ReadState{}
 	err := s.db.QueryRowContext(ctx, `

@@ -104,7 +104,7 @@ func main() {
 	engine := cluster.NewEngine(dbs.SQLDB(), dbs.Articles, embedder, llm, feedback.NewService(dbs.SQLDB()), logger, *clusterInterval, cluster.DefaultConfig())
 
 	fetcher := feed.NewFetcher(siteFetcher)
-	srv := server.New(dbs, clientID, callbackURL, *addr, scheduler, fetcher, engine, logger, []byte(sessionKey))
+	srv := server.New(dbs, clientID, callbackURL, *addr, scheduler, fetcher, engine, logger, []byte(sessionKey), llm)
 
 	cron := cluster.NewCron(engine, *clusterInterval, logger, dbs)
 

@@ -7,22 +7,24 @@ import (
 )
 
 type UserSettings struct {
-	DID          string
-	Languages    []string
-	ExpandedView bool
+	DID           string
+	Languages     []string
+	ExpandedView  bool
+	DigestEnabled bool
 }
 
 func (s *UserStore) GetSettings(ctx context.Context, did string) (*UserSettings, error) {
 	var langs sql.NullString
 	var expandedView bool
-	err := s.db.QueryRowContext(ctx, `SELECT languages, COALESCE(expanded_view, 0) FROM user_settings WHERE did = ?`, did).Scan(&langs, &expandedView)
+	var digestEnabled bool
+	err := s.db.QueryRowContext(ctx, `SELECT languages, COALESCE(expanded_view, 0), COALESCE(digest_enabled, 1) FROM user_settings WHERE did = ?`, did).Scan(&langs, &expandedView, &digestEnabled)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return &UserSettings{DID: did}, nil
+			return &UserSettings{DID: did, DigestEnabled: false}, nil
 		}
 		return nil, err
 	}
-	us := &UserSettings{DID: did, ExpandedView: expandedView}
+	us := &UserSettings{DID: did, ExpandedView: expandedView, DigestEnabled: digestEnabled}
 	if langs.Valid && langs.String != "" {
 		us.Languages = strings.Split(langs.String, ",")
 	}
@@ -53,6 +55,14 @@ func (s *UserStore) SetExpandedView(ctx context.Context, did string, enabled boo
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO user_settings (did, expanded_view, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(did) DO UPDATE SET expanded_view = excluded.expanded_view, updated_at = CURRENT_TIMESTAMP
+	`, did, enabled)
+	return err
+}
+
+func (s *UserStore) SetDigestEnabled(ctx context.Context, did string, enabled bool) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO user_settings (did, digest_enabled, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(did) DO UPDATE SET digest_enabled = excluded.digest_enabled, updated_at = CURRENT_TIMESTAMP
 	`, did, enabled)
 	return err
 }

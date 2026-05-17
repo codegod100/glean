@@ -125,6 +125,9 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	settings, _ := s.dbs.Users.GetSettings(ctx, user.DID)
+	digestEnabled := settings != nil && settings.DigestEnabled
+
 	s.render(w, r, "dashboard.html", map[string]any{
 		"User":                   user,
 		"SubscriptionCount":      subCount,
@@ -137,6 +140,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"PersonalTrending":       personalTrending,
 		"GlobalTrending":         globalTrending,
 		"Now":                    time.Now(),
+		"DigestEnabled":          digestEnabled,
 	})
 }
 

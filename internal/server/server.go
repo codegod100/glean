@@ -28,6 +28,7 @@ import (
 	"pkg.rbrt.fr/glean/internal/feed"
 	"pkg.rbrt.fr/glean/internal/feedback"
 	"pkg.rbrt.fr/glean/internal/metrics"
+	"pkg.rbrt.fr/glean/internal/ml"
 	"pkg.rbrt.fr/glean/internal/scraper"
 	"pkg.rbrt.fr/glean/internal/tmpl"
 	"pkg.rbrt.fr/glean/static"
@@ -70,12 +71,22 @@ type Server struct {
 	engine      *cluster.Engine
 	feedback    *feedback.Service
 	scraper     *scraper.Scraper
+	llm         ml.TextModel
 	clientID    string
 	callbackURL string
 	sessionKey  []byte
 }
 
-func New(dbs *db.Store, clientID, callbackURL, addr string, scheduler *feed.Scheduler, fetcher *feed.Fetcher, engine *cluster.Engine, logger *slog.Logger, sessionKey []byte) *Server {
+func New(
+	dbs *db.Store,
+	clientID, callbackURL, addr string,
+	scheduler *feed.Scheduler,
+	fetcher *feed.Fetcher,
+	engine *cluster.Engine,
+	logger *slog.Logger,
+	sessionKey []byte,
+	textModel ml.TextModel,
+) *Server {
 	oauthStore := db.NewOAuthStore(dbs)
 
 	var config oauth.ClientConfig
@@ -102,6 +113,7 @@ func New(dbs *db.Store, clientID, callbackURL, addr string, scheduler *feed.Sche
 		engine:      engine,
 		feedback:    feedback.NewService(dbs.SQLDB()),
 		scraper:     scraper.New(logger),
+		llm:         textModel,
 		clientID:    clientID,
 		callbackURL: callbackURL,
 		sessionKey:  sessionKey,
@@ -211,7 +223,11 @@ func (s *Server) setupRoutes() {
 		r.Use(s.requireAuth)
 		r.Post("/languages", s.handleUpdateLanguages)
 		r.Post("/expanded-view", s.handleToggleExpandedView)
+		r.Post("/digest-enabled", s.handleToggleDigestEnabled)
 	})
+
+	s.router.With(s.requireAuth).Get("/digest", s.handleDigest)
+	s.router.With(s.requireAuth).Post("/digest/mark-read", s.handleDigestMarkRead)
 
 	s.router.Get("/auth/login", s.handleAuthLogin)
 	s.router.Get("/auth/register", s.handleAuthRegister)

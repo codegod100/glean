@@ -13,7 +13,7 @@ func init() {
 }
 
 // SchemaVersion must be incremented each time a migration is added to the migrations slice (used so that fresh dbs skip running migrations).
-const SchemaVersion = 6
+const SchemaVersion = 7
 
 type migration struct {
 	id   int
@@ -51,6 +51,11 @@ var migrations = []migration{
 		id:   6,
 		name: "drop_redundant_follows_user_index",
 		run:  migrateDropFollowsUserIndex,
+	},
+	{
+		id:   7,
+		name: "user_settings_digest_enabled",
+		run:  migrateUserSettingsDigestEnabled,
 	},
 }
 
@@ -249,6 +254,20 @@ func migrateUserSettingsExpandedView(db *DB) error {
 	if colCount == 0 {
 		if _, err := db.Exec("ALTER TABLE user_settings ADD COLUMN expanded_view BOOLEAN NOT NULL DEFAULT 0"); err != nil {
 			return fmt.Errorf("add user_settings.expanded_view: %w", err)
+		}
+	}
+	return nil
+}
+
+func migrateUserSettingsDigestEnabled(db *DB) error {
+	var colCount int
+	err := db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('user_settings') WHERE name='digest_enabled'").Scan(&colCount)
+	if err != nil {
+		return fmt.Errorf("check user_settings.digest_enabled column: %w", err)
+	}
+	if colCount == 0 {
+		if _, err := db.Exec("ALTER TABLE user_settings ADD COLUMN digest_enabled BOOLEAN NOT NULL DEFAULT 0"); err != nil {
+			return fmt.Errorf("add user_settings.digest_enabled: %w", err)
 		}
 	}
 	return nil

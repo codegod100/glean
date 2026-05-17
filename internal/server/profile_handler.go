@@ -111,5 +111,6 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		"UserLanguages":      userLangs,
 		"AvailableLanguages": ml.KnownLanguages(),
 		"ExpandedView":       userSettings.ExpandedView,
+		"DigestEnabled":      userSettings.DigestEnabled,
 	})
 }

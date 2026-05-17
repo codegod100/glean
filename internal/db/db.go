@@ -257,6 +257,7 @@ var usersSchema = []string{
 		did TEXT PRIMARY KEY,
 		languages TEXT,
 		expanded_view BOOLEAN NOT NULL DEFAULT 0,
+		digest_enabled BOOLEAN NOT NULL DEFAULT 0,
 		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	)`,
 

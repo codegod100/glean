@@ -38,6 +38,24 @@
 </div>
 {{end}}
 
+{{if .DigestEnabled}}
+<div id="digest" hx-get="/digest" hx-trigger="load" hx-swap="innerHTML" hx-indicator="#digest">
+    <div class="mb-6">
+        <h2 class="text-lg font-semibold text-spot-text mb-4">Daily digest</h2>
+        <div class="animate-pulse bg-spot-surface rounded-xl px-5 py-4">
+            <div class="flex items-start gap-2.5">
+                <div class="w-4 h-4 bg-spot-hover rounded shrink-0 mt-0.5"></div>
+                <div class="flex-1 space-y-2">
+                    <div class="h-4 bg-spot-hover rounded w-2/3"></div>
+                    <div class="h-3 bg-spot-hover rounded w-full"></div>
+                    <div class="h-3 bg-spot-hover rounded w-4/5"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+
 <div class="mb-8">
     <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold text-spot-text">Unread articles</h2>
@@ -60,6 +78,24 @@
         {{range .ArticleRecommendations}}
         {{template "recommendation-article-card.html" .}}
         {{end}}
+    </div>
+</div>
+{{end}}
+
+{{if .DigestEnabled}}
+<div id="digest" hx-get="/digest" hx-trigger="load" hx-swap="innerHTML" hx-indicator="#digest">
+    <div class="mb-6">
+        <h2 class="text-lg font-semibold text-spot-text mb-4">Daily digest</h2>
+        <div class="animate-pulse bg-spot-surface rounded-xl px-5 py-4">
+            <div class="flex items-start gap-2.5">
+                <div class="w-4 h-4 bg-spot-hover rounded shrink-0 mt-0.5"></div>
+                <div class="flex-1 space-y-2">
+                    <div class="h-4 bg-spot-hover rounded w-2/3"></div>
+                    <div class="h-3 bg-spot-hover rounded w-full"></div>
+                    <div class="h-3 bg-spot-hover rounded w-4/5"></div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 {{end}}
