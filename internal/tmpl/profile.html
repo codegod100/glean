@@ -51,34 +51,18 @@
             </div>
         </form>
         <hr class="border-spot-divider">
-        <form id="lang-form" hx-post="/settings/languages" hx-swap="none" hx-on::after-request="location.reload()">
+        <div>
             <p class="text-sm font-semibold text-spot-text mb-1">Recommendation languages</p>
             <p class="text-xs text-spot-secondary mb-4">Filter article recommendations to specific languages. Leave empty to show all.</p>
-            <div class="flex flex-wrap gap-1.5 mb-4">
+            <div class="flex flex-wrap gap-1.5">
                 {{range .AvailableLanguages}}
-                <label class="lang-pill cursor-pointer text-sm px-4 py-1.5 rounded-pill font-bold transition {{if containsString $.UserLanguages .Code}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
-                    <input type="checkbox" name="languages" value="{{.Code}}" {{if containsString $.UserLanguages .Code}}checked{{end}} class="hidden">
-                    {{.Name}}
-                </label>
+                <form hx-post="/settings/languages/{{.Code}}" hx-swap="none" hx-on::after-request="location.reload()" class="inline">
+                    <button type="submit" class="cursor-pointer text-sm px-4 py-1.5 rounded-pill font-bold transition border-0 {{if containsString $.UserLanguages .Code}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">{{.Name}}</button>
+                </form>
                 {{end}}
             </div>
-            <button type="submit" class="bg-spot-green text-white rounded-pill px-5 py-1.5 text-xs font-bold uppercase tracking-button hover:brightness-110 transition">Save</button>
-        </form>
+        </div>
     </div>
-    <script>
-    document.querySelectorAll('#lang-form .lang-pill input[type=checkbox]').forEach(function(cb) {
-        cb.addEventListener('change', function() {
-            var pill = this.closest('.lang-pill');
-            if (this.checked) {
-                pill.classList.remove('bg-spot-hover', 'text-spot-secondary', 'hover:text-spot-text');
-                pill.classList.add('bg-spot-active-pill-bg', 'text-spot-active-pill-text');
-            } else {
-                pill.classList.remove('bg-spot-active-pill-bg', 'text-spot-active-pill-text');
-                pill.classList.add('bg-spot-hover', 'text-spot-secondary', 'hover:text-spot-text');
-            }
-        });
-    });
-    </script>
     {{end}}
 
     <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide mb-3">Feeds</h2>

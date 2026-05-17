@@ -408,6 +408,7 @@ The `/articles` page is the main reading view:
 - **Share**: Share to Bluesky
 - **Keyboard navigation**: `j`/`k` to navigate, `l` to like, `m` to mark read (progressive enhancement via a small `<script>` block)
 - **Expanded view**: User setting that shows full article content inline on the articles page. Articles are automatically marked as read via `IntersectionObserver` after being visible for 3 seconds. YouTube videos are embedded inline. A duplicate like button appears at the bottom of each article. Configurable in profile settings.
+- **Daily digest**: An AI-generated summary of unread articles, shown on the dashboard when enabled in profile settings. The LLM receives the titles and summaries of up to 50 unread articles and produces a grouped overview with linked references. A "Read" button marks all digest articles as read. Digests are cached per user for 24 hours and generated via singleflight to avoid duplicate LLM calls.
 
 ### 4.7 Feed Discovery from Content
 
@@ -745,7 +746,7 @@ Users can dismiss recommendations they don't want to see again:
 - Dismissed items are excluded from all future recommendation queries
 - Auto-dismiss: items shown ≥5 times over >5 days without action are auto-dismissed
 
-Impression tracking (`recommendation_impressions`) records how many times each recommendation was shown and whether the user acted on it.
+Recommended articles use the same card template as regular articles, with an additional "Hide" button that dismisses the recommendation. Dismissing only removes that specific article from recommendations — it does not affect the user's likes or signal weights, and similar articles may still be recommended.
 
 ### 7.6 Auto-Tuned Signal Weights
 
@@ -888,11 +889,11 @@ The embedder uses the official `github.com/openai/openai-go` SDK with `option.Wi
 
 ### 7.14 LLM Client (optional)
 
-When `GLEAN_LLM_BASE_URL` is configured, an LLM client is available for text classification tasks. It uses the same `github.com/openai/openai-go` SDK pointed at any OpenAI-compatible `/v1/chat/completions` endpoint.
+When `GLEAN_LLM_BASE_URL` is configured, an LLM client is available for text classification and summarization tasks. It uses the same `github.com/openai/openai-go` SDK pointed at any OpenAI-compatible `/v1/chat/completions` endpoint.
 
-**Language detection**: The cron job calls `DetectLanguages` in batches of up to 100 articles per request. For each article, the title and summary (truncated to 500 characters) are sent with a prompt asking for ISO 639-1 codes. Results are written to `articles.language`. Articles that are already classified (non-empty `language`) are skipped. An empty response from the LLM defaults to English (`en`).
+**Language detection**: The cron job calls `DetectLanguages` in batches of up to 100 articles per request. For each article, the title and summary (truncated to 500 characters) are sent with a prompt asking for ISO 639-1 codes. Results are written to `articles.language`. Articles that are already classified (non-empty `language`) are skipped. An empty response from the LLM defaults to `'unknown'` rather than a specific language, ensuring unclassifiable articles aren't miscategorized.
 
-Without an LLM, all articles remain at the default empty language value and language-based filtering is unavailable.
+Without an LLM, all articles remain at the default empty language value and language-based filtering is unavailable. The daily digest feature also requires an LLM to generate summaries — without it, the digest is unavailable.
 
 vec0 tables are created dynamically at startup with the configured dimension (`GLEAN_EMBED_DIMENSION`, default 1536):
 
@@ -954,8 +955,11 @@ The server renders HTML fragments that htmx swaps into the page. No JSON API nee
 | `/library/{id}/delete`         | POST   | Delete an annotation                                                   |
 | `/stats`                       | GET    | Application metrics and performance data (Prometheus, public)          |
 | `/profile/{did}`               | GET    | Public profile: their feeds, likes, annotations                        |
-| `/settings/languages`          | POST   | Save preferred recommendation languages (htmx, requires auth)          |
-| `/settings/expanded-view`      | POST   | Toggle expanded article view setting (htmx, requires auth)              |
+| `/settings/languages/{code}`   | POST   | Toggle a preferred recommendation language (htmx, requires auth)       |
+| `/settings/expanded-view`      | POST   | Toggle expanded article view setting (htmx, requires auth)             |
+| `/settings/digest-enabled`     | POST   | Toggle daily digest setting (htmx, requires auth)                      |
+| `/digest`                      | GET    | Daily digest fragment (LLM summary of unread articles, htmx partial)   |
+| `/digest/mark-read`            | POST   | Mark digest articles as read                                           |
 | `/auth/login`                  | GET    | Login page                                                             |
 | `/auth/register`               | GET    | Register with Eurosky (OAuth flow with hardcoded PDS)                  |
 | `/auth/resolve`                | GET    | Resolve handle to DID                                                  |
@@ -1004,7 +1008,8 @@ glean/
 │   │   ├── social.go              # Like, annotation queries
 │   │   ├── follow.go              # Follow queries
 │   │   ├── oauth_store.go         # OAuth session storage
-│   │   └── store.go               # FeedStore adapter for scheduler
+│   │   ├── user_settings.go       # User settings queries
+│   │   ├── store.go               # FeedStore adapter for scheduler
 │   ├── feed/
 │   │   ├── parser.go              # RSS/Atom/RDF/JSON feed parser
 │   │   ├── fetcher.go             # Scheduler with dedup + Fetcher
@@ -1016,7 +1021,7 @@ glean/
 │   │   └── scraper.go             # Full article content scraper
 │   ├── metrics/
 │   │   └── metrics.go             # Prometheus metrics definitions
-│   ├── ai/
+│   ├── ml/
 │   │   ├── embed.go               # Embedder interface + OpenAI-compatible implementation + vector helpers
 │   │   └── llm.go                 # TextModel interface + OpenAI-compatible LLM implementation
 │   ├── cluster/
@@ -1040,7 +1045,9 @@ glean/
 │   │   ├── stats_handler.go       # Stats handler (Prometheus metrics display)
 │   │   ├── index_handler.go       # Landing page handler
 │   │   ├── profile_handler.go     # Public profile handler
-│   │   ├── settings_handler.go    # User settings (language preferences)
+│   │   ├── settings_handler.go    # User settings (language preferences, digest toggle)
+│   │   ├── digest_handler.go      # Daily digest handler (LLM summary, mark-read)
+│   │   ├── recs_handler.go        # Recommendation dismiss handlers
 │   │   ├── terms_handler.go       # Terms of service handler
 │   │   ├── pagination.go          # Pagination helpers
 │   │   ├── middleware.go          # Auth, logging, CSRF middleware
@@ -1189,3 +1196,4 @@ All PDS records are public. There is no notion of private data on the AT Protoco
 ## 13. Future Considerations
 
 - **Email digest**: Periodic email with top articles from subscribed feeds
+- **Digest personalization**: Feed the user's liked topics and reading patterns into the digest prompt for more targeted summaries

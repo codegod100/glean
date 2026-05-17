@@ -82,7 +82,7 @@
 </div>
 {{end}}
 
-{{if .DigestEnabled}}
+{{if and .DigestEnabled (gt .UnreadCount 0)}}
 <div id="digest" hx-get="/digest" hx-trigger="load" hx-swap="innerHTML" hx-indicator="#digest">
     <div class="mb-6">
         <h2 class="text-lg font-semibold text-spot-text mb-4">Daily digest</h2>

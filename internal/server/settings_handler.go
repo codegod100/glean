@@ -2,16 +2,16 @@ package server
 
 import (
 	"net/http"
-	"strings"
 
 	"pkg.rbrt.fr/glean/internal/ml"
 )
 
-func (s *Server) handleUpdateLanguages(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleToggleLanguage(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	lang := r.PathValue("code")
+	if lang == "" {
+		http.Error(w, "missing language code", http.StatusBadRequest)
 		return
 	}
 
@@ -19,16 +19,32 @@ func (s *Server) handleUpdateLanguages(w http.ResponseWriter, r *http.Request) {
 	for _, known := range ml.KnownLanguages() {
 		valid[known.Code] = true
 	}
-
-	var filtered []string
-	for _, l := range r.Form["languages"] {
-		l = strings.TrimSpace(l)
-		if valid[l] {
-			filtered = append(filtered, l)
-		}
+	if !valid[lang] {
+		http.Error(w, "unknown language", http.StatusBadRequest)
+		return
 	}
 
-	if err := s.dbs.Users.UpdateLanguages(r.Context(), user.DID, filtered); err != nil {
+	current, err := s.dbs.Users.GetLanguages(r.Context(), user.DID)
+	if err != nil {
+		s.logger.Error("failed to get languages", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var updated []string
+	found := false
+	for _, l := range current {
+		if l == lang {
+			found = true
+			continue
+		}
+		updated = append(updated, l)
+	}
+	if !found {
+		updated = append(updated, lang)
+	}
+
+	if err := s.dbs.Users.UpdateLanguages(r.Context(), user.DID, updated); err != nil {
 		s.logger.Error("failed to update languages", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
