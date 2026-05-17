@@ -587,6 +587,8 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		data = map[string]any{}
 	}
 
+	data["HasLLM"] = s.llm != nil
+
 	if cookie, err := r.Cookie("glean_csrf"); err == nil {
 		data["CSRFToken"] = cookie.Value
 	}
@@ -620,6 +622,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		}
 		if csrf, ok := data["CSRFToken"]; ok {
 			baseData["CSRFToken"] = csrf
+		}
+		if hasLLM, ok := data["HasLLM"]; ok {
+			baseData["HasLLM"] = hasLLM
 		}
 	}
 

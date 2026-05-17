@@ -23,6 +23,7 @@
     </div>
 
     {{if eq .ProfileUser.DID .CurrentUserDID}}
+    {{if .HasLLM}}
     <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide mb-3">Settings</h2>
     <div class="bg-spot-surface rounded-xl p-5 mb-6 space-y-5">
         <form hx-post="/settings/digest-enabled" hx-swap="none" hx-on::after-request="location.reload()">
@@ -63,6 +64,7 @@
             </div>
         </div>
     </div>
+    {{end}}
     {{end}}
 
     <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide mb-3">Feeds</h2>
