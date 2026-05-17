@@ -42,6 +42,10 @@ type Article struct {
 	// NavSuffix holds the query string appended to article detail links to preserve
 	// listing context (feed scope, liked) for next-article navigation.
 	NavSuffix string
+	// DismissURL, when non-empty, shows a dismiss button that POSTs to this URL.
+	DismissURL   string
+	DismissField string
+	DismissValue string
 }
 
 type ReadState struct {

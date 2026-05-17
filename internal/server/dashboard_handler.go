@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"time"
 
@@ -103,6 +104,25 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	resolvePeopleHandles(ctx, peopleRecs)
 
+	articleRecArticles := make([]*db.Article, len(articleRecs))
+	for i, rec := range articleRecs {
+		articleRecArticles[i] = &db.Article{
+			ID:             rec.ArticleID,
+			FeedURL:        rec.FeedURL,
+			FeedTitle:      rec.FeedTitle,
+			FeedFaviconURL: sql.NullString{String: rec.FaviconURL, Valid: rec.FaviconURL != ""},
+			Title:          rec.Title,
+			URL:            sql.NullString{String: rec.URL, Valid: rec.URL != ""},
+			Author:         sql.NullString{String: rec.Author, Valid: rec.Author != ""},
+			Summary:        sql.NullString{String: rec.Summary, Valid: rec.Summary != ""},
+			Published:      rec.Published,
+			IsRead:         sql.NullBool{Bool: false, Valid: true},
+			DismissURL:     "/recs/dismiss-article",
+			DismissField:   "article_url",
+			DismissValue:   rec.URL,
+		}
+	}
+
 	var impressions []feedback.Impression
 	for _, rec := range articleRecs {
 		impressions = append(impressions, feedback.Impression{TargetType: "article", TargetID: rec.URL})
@@ -133,7 +153,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"SubscriptionCount":      subCount,
 		"UnreadCount":            unreadCount,
 		"Articles":               articles,
-		"ArticleRecommendations": articleRecs,
+		"ArticleRecommendations": articleRecArticles,
 		"FeedRecommendations":    feedRecs,
 		"FollowedPeople":         followedPeople,
 		"DiscoverPeople":         discoverPeople,

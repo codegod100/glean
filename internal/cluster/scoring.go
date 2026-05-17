@@ -43,7 +43,6 @@ type ArticleRecommendation struct {
 	Author     string
 	Summary    string
 	Published  sql.NullTime
-	IsRead     bool
 	Score      float64
 }
 
@@ -488,7 +487,6 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 		SELECT a.id, a.title, COALESCE(a.url, ''), la.feed_url, COALESCE(f.title, ''),
 		       COALESCE(f.favicon_url, ''),
 		       COALESCE(a.author, ''), COALESCE(a.summary, ''), a.published,
-		       COALESCE(rs.is_read, 0),
 		       COALESCE(la.like_signal, 0) * ?
 		     + COALESCE(sl.social, 0) * ?
 		     + COALESCE(cb.score, 0) * ?
@@ -520,7 +518,7 @@ func (e *Engine) ComputeArticleRecommendationsOnDemand(ctx context.Context, user
 	for rows.Next() {
 		rec := &ArticleRecommendation{}
 		if err := rows.Scan(&rec.ArticleID, &rec.Title, &rec.URL, &rec.FeedURL, &rec.FeedTitle,
-			&rec.FaviconURL, &rec.Author, &rec.Summary, &rec.Published, &rec.IsRead, &rec.Score); err != nil {
+			&rec.FaviconURL, &rec.Author, &rec.Summary, &rec.Published, &rec.Score); err != nil {
 			return nil, err
 		}
 		recs = append(recs, rec)
