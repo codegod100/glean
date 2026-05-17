@@ -76,26 +76,22 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 
-	if subCount == 0 {
-		g.Go(func() error {
-			var err error
-			globalTrending, err = s.engine.GetGlobalTrending(gCtx, user.DID, 5, 0)
-			return err
-		})
-	} else {
-		g.Go(func() error {
-			var err error
-			personalTrending, err = s.engine.GetPersonalTrending(gCtx, user.DID, userLangs, 5, 0)
-			return err
-		})
-	}
-
 	if err := g.Wait(); err != nil {
 		s.logger.Warn("dashboard error", "error", err, "did", user.DID)
 	}
 
-	if subCount > 0 {
-		var err error
+	var err error
+	if subCount == 0 {
+		globalTrending, err = s.engine.GetGlobalTrending(gCtx, user.DID, 5, 0)
+		if err != nil {
+			s.logger.Warn("failed to get global trending", "error", err, "did", user.DID)
+		}
+	} else {
+		personalTrending, err = s.engine.GetPersonalTrending(gCtx, user.DID, userLangs, 5, 0)
+		if err != nil {
+			s.logger.Warn("failed to get personal trending", "error", err, "did", user.DID)
+		}
+
 		articleRecs, err = s.engine.GetArticleRecommendations(ctx, user.DID, userLangs, 5)
 		if err != nil {
 			s.logger.Warn("failed to get article recommendations", "error", err, "did", user.DID)
