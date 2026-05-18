@@ -89,7 +89,7 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 		articles = articles[:page.PageSize]
 	}
 
-	navSuffix := buildNavSuffix(feedURL, false)
+	navSuffix := buildNavSuffix(feedURL, false, status)
 	for _, a := range articles {
 		a.NavSuffix = navSuffix
 	}
@@ -192,6 +192,7 @@ func (s *Server) handleArticleDetail(w http.ResponseWriter, r *http.Request) {
 
 	fromFeedURL := r.URL.Query().Get("from_feed")
 	navLiked := r.URL.Query().Get("liked") == "1"
+	navStatus := r.URL.Query().Get("status")
 
 	g, gCtx := errgroup.WithContext(ctx)
 
@@ -255,7 +256,7 @@ func (s *Server) handleArticleDetail(w http.ResponseWriter, r *http.Request) {
 
 	g.Go(func() error {
 		var err error
-		nextID, err = s.dbs.Articles.GetNextArticleID(gCtx, user.DID, id, fromFeedURL, navLiked)
+		nextID, err = s.dbs.Articles.GetNextArticleID(gCtx, user.DID, id, fromFeedURL, navLiked, navStatus)
 		if err != nil {
 			s.logger.Warn("failed to get next article", "error", err, "id", id)
 		}
@@ -276,7 +277,7 @@ func (s *Server) handleArticleDetail(w http.ResponseWriter, r *http.Request) {
 		"HasLiked":       liked,
 		"Annotations":    annotations,
 		"NextID":         nextID,
-		"NextSuffix":     buildNavSuffix(fromFeedURL, navLiked),
+		"NextSuffix":     buildNavSuffix(fromFeedURL, navLiked, navStatus),
 	})
 }
 
@@ -478,13 +479,16 @@ func (s *Server) handleFetchContent(w http.ResponseWriter, r *http.Request) {
 	s.logger.Info("scraped article content", "id", id, "url", article.URL.String, "content_len", len(cleaned))
 }
 
-func buildNavSuffix(feedURL string, liked bool) string {
+func buildNavSuffix(feedURL string, liked bool, status string) string {
 	v := url.Values{}
 	if feedURL != "" {
 		v.Set("from_feed", feedURL)
 	}
 	if liked {
 		v.Set("liked", "1")
+	}
+	if status != "" {
+		v.Set("status", status)
 	}
 	if len(v) == 0 {
 		return ""

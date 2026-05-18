@@ -421,7 +421,7 @@ func (s *ArticleStore) CountNewArticles(ctx context.Context, userDID string, sin
 	return count, err
 }
 
-func (s *ArticleStore) GetNextArticleID(ctx context.Context, userDID string, articleID int64, feedURL string, liked bool) (*int64, error) {
+func (s *ArticleStore) GetNextArticleID(ctx context.Context, userDID string, articleID int64, feedURL string, liked bool, status string) (*int64, error) {
 	var fromParts []string
 	var whereParts []string
 
@@ -435,6 +435,15 @@ func (s *ArticleStore) GetNextArticleID(ctx context.Context, userDID string, art
 
 	if liked {
 		fromParts = append(fromParts, "JOIN articles.likes l ON l.author_did = ? AND l.article_url = a.url")
+	}
+
+	switch status {
+	case "unread":
+		fromParts = append(fromParts, "LEFT JOIN articles.read_state rs ON rs.user_did = ? AND rs.article_id = a.id")
+		whereParts = append(whereParts, "(rs.is_read = 0 OR rs.is_read IS NULL)")
+	case "read":
+		fromParts = append(fromParts, "JOIN articles.read_state rs ON rs.user_did = ? AND rs.article_id = a.id")
+		whereParts = append(whereParts, "rs.is_read = 1")
 	}
 
 	whereParts = append(whereParts, "a.id != ?")
@@ -462,6 +471,9 @@ func (s *ArticleStore) GetNextArticleID(ctx context.Context, userDID string, art
 		args = append(args, userDID)
 	}
 	if liked {
+		args = append(args, userDID)
+	}
+	if status == "unread" || status == "read" {
 		args = append(args, userDID)
 	}
 	args = append(args, articleID, articleID)

@@ -57,7 +57,7 @@ func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 			likedPage.HasNext = true
 			likedPage.NextPage = likedPage.Page + 1
 		}
-		navSuffix := buildNavSuffix("", true)
+		navSuffix := buildNavSuffix("", true, "")
 		for _, a := range articles {
 			a.NavSuffix = navSuffix
 		}
