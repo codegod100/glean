@@ -966,6 +966,7 @@ The server renders HTML fragments that htmx swaps into the page. No JSON API nee
 | `/auth/start`                  | POST   | Start OAuth authorization flow                                         |
 | `/auth/callback`               | GET    | OAuth callback                                                         |
 | `/terms`                       | GET    | Terms of service                                                       |
+| `/sitemap.xml`                 | GET    | XML sitemap for search engines                                         |
 
 ### 8.2 htmx Patterns
 
@@ -1048,6 +1049,7 @@ glean/
 │   │   ├── settings_handler.go    # User settings (language preferences, digest toggle)
 │   │   ├── digest_handler.go      # Daily digest handler (LLM summary, mark-read)
 │   │   ├── recs_handler.go        # Recommendation dismiss handlers
+│   │   ├── sitemap_handler.go   # XML sitemap handler (public pages)
 │   │   ├── terms_handler.go       # Terms of service handler
 │   │   ├── pagination.go          # Pagination helpers
 │   │   ├── middleware.go          # Auth, logging, CSRF middleware

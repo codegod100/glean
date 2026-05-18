@@ -246,6 +246,7 @@ func (s *Server) setupRoutes() {
 	s.router.Get("/xrpc/at.glean.listFeedLists", xrpc.ListFeedLists)
 
 	s.router.Get("/terms", s.handleTerms)
+	s.router.Get("/sitemap.xml", s.handleSitemap)
 	s.router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(static.Files))))
 	s.router.Handle("/metrics", promhttp.Handler())
 	s.router.Get("/stats", s.handleStats)
