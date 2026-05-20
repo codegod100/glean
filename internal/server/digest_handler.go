@@ -282,5 +282,6 @@ func (s *Server) handleDigestMarkRead(w http.ResponseWriter, r *http.Request) {
 		consumed: true,
 	})
 
+	w.Header().Set("HX-Refresh", "true")
 	s.renderDigest(w, &digestCtx{Consumed: true})
 }
