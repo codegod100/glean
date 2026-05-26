@@ -2,7 +2,7 @@
     <div id="new-articles-poll" hx-get="/articles/new-count?since={{.Now.Unix}}&return={{if .FeedURL}}/articles?feed={{.FeedURL}}{{else}}/articles{{end}}" hx-trigger="every 30s" hx-swap="innerHTML"></div>
 
     {{if .Feed}}
-    <div class="mb-8">
+    <div class="mb-6">
         <div class="flex items-center gap-2 mb-4">
             <a href="/articles" class="text-xs text-spot-secondary hover:text-spot-text transition">&larr; All articles</a>
         </div>
@@ -32,46 +32,97 @@
         </div>
         {{if .Feed.Description.Valid}}<p class="text-sm text-spot-secondary mt-3 leading-relaxed">{{.Feed.Description.String}}</p>{{end}}
     </div>
-    {{else}}
-    <div class="flex items-center justify-between mb-2">
-        <h1 class="text-2xl font-bold text-spot-text" style="letter-spacing: -0.02em;">Articles</h1>
-        <form hx-post="/articles/mark-all-read" hx-confirm="Mark all articles as read?">
-            {{csrfInput .CSRFToken}}
-            <button type="submit" class="border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:border-spot-text transition">Mark all read</button>
-        </form>
-    </div>
-    <p class="text-sm text-spot-secondary mb-6">All your subscribed articles, newest first.</p>
-    {{end}}
 
     <div class="flex items-center gap-3 mb-6 flex-wrap">
-        <form method="GET" action="/articles" class="flex-1" id="search-form">
-            <div class="relative">
-                <input type="text" name="q" value="{{.SearchQuery}}" placeholder="Search articles..."
-                       class="w-full bg-spot-hover text-spot-text rounded-pill pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-secondary"
-                       hx-get="/articles" hx-trigger="keyup changed delay:300ms, search" hx-target="#article-list" hx-swap="innerHTML" hx-include="[name='q']">
-                <svg class="w-4 h-4 text-spot-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                {{if .FeedURL}}<input type="hidden" name="feed" value="{{.FeedURL}}">{{end}}
-                {{if .Status}}<input type="hidden" name="status" value="{{.Status}}">{{end}}
-            </div>
+        <form method="GET" action="/articles" class="relative flex-1 min-w-[200px]">
+            <input type="text" name="q" value="{{.SearchQuery}}" placeholder="Search articles..."
+                   class="w-full bg-spot-hover text-spot-text rounded-pill pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-secondary"
+                   hx-get="/articles" hx-trigger="keyup changed delay:300ms, search" hx-target="#article-list" hx-swap="innerHTML" hx-include="[name='q']">
+            <svg class="w-4 h-4 text-spot-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="hidden" name="feed" value="{{.FeedURL}}">
+            {{if .Status}}<input type="hidden" name="status" value="{{.Status}}">{{end}}
+            {{if .SortOldest}}<input type="hidden" name="sort" value="oldest">{{end}}
         </form>
         <div class="flex items-center gap-1.5 shrink-0">
-             <a href="/articles?status=all{{if .FeedURL}}&feed={{.FeedURL}}{{end}}"
-                class="px-3.5 py-1.5 rounded-pill text-xs font-bold uppercase tracking-button transition
-                        {{if eq .Status "all"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
-                  All
-             </a>
-             <a href="/articles?status=unread{{if .FeedURL}}&feed={{.FeedURL}}{{end}}"
-                class="px-3.5 py-1.5 rounded-pill text-xs font-bold uppercase tracking-button transition
-                       {{if or (eq .Status "unread") (eq .Status "")}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
-                 Unread
-             </a>
-            <a href="/articles?status=read{{if .FeedURL}}&feed={{.FeedURL}}{{end}}"
+            <a href="/articles?status=all&feed={{.FeedURL}}{{if .SortOldest}}&sort=oldest{{end}}"
+               class="px-3.5 py-1.5 rounded-pill text-xs font-bold uppercase tracking-button transition
+                      {{if eq .Status "all"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
+                All
+            </a>
+            <a href="/articles?status=unread&feed={{.FeedURL}}{{if .SortOldest}}&sort=oldest{{end}}"
+               class="px-3.5 py-1.5 rounded-pill text-xs font-bold uppercase tracking-button transition
+                      {{if or (eq .Status "unread") (eq .Status "")}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
+                Unread
+            </a>
+            <a href="/articles?status=read&feed={{.FeedURL}}{{if .SortOldest}}&sort=oldest{{end}}"
+               class="px-3.5 py-1.5 rounded-pill text-xs font-bold uppercase tracking-button transition
+                      {{if eq .Status "read"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
+                Read
+            </a>
+            <a href="/articles?{{if not .SortOldest}}sort=oldest{{end}}&feed={{.FeedURL}}{{if .Status}}&status={{.Status}}{{end}}"
+               class="px-2.5 py-1.5 rounded-pill text-xs transition
+                      {{if .SortOldest}}bg-spot-active-pill-bg text-spot-active-pill-text font-bold{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}"
+               title="{{if .SortOldest}}Newest first{{else}}Oldest first{{end}}">
+                {{if .SortOldest}}<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7"/></svg>{{else}}<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>{{end}}
+            </a>
+        </div>
+    </div>
+    {{else}}
+    <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div class="flex items-center gap-3">
+            <h1 class="text-2xl font-bold text-spot-text" style="letter-spacing: -0.02em;">Articles</h1>
+            <form hx-post="/articles/mark-all-read" hx-confirm="Mark all articles as read?">
+                {{csrfInput .CSRFToken}}
+                <button type="submit" class="border border-spot-outline text-spot-text rounded-pill px-3 py-1 text-[10px] font-bold uppercase tracking-button hover:border-spot-text transition">Mark all read</button>
+            </form>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <a href="/articles?status=all{{if .SortOldest}}&sort=oldest{{end}}{{if .Category}}&category={{.Category}}{{end}}"
+               class="px-3.5 py-1.5 rounded-pill text-xs font-bold uppercase tracking-button transition
+                      {{if eq .Status "all"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
+                All
+            </a>
+            <a href="/articles?status=unread{{if .SortOldest}}&sort=oldest{{end}}{{if .Category}}&category={{.Category}}{{end}}"
+               class="px-3.5 py-1.5 rounded-pill text-xs font-bold uppercase tracking-button transition
+                      {{if or (eq .Status "unread") (eq .Status "")}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
+                Unread
+            </a>
+            <a href="/articles?status=read{{if .SortOldest}}&sort=oldest{{end}}{{if .Category}}&category={{.Category}}{{end}}"
                class="px-3.5 py-1.5 rounded-pill text-xs font-bold uppercase tracking-button transition
                       {{if eq .Status "read"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}">
                 Read
             </a>
         </div>
     </div>
+
+    <div class="flex items-center gap-3 mb-6 flex-wrap">
+        <div class="flex items-center gap-1.5">
+            <a href="/articles?{{if not .SortOldest}}sort=oldest{{end}}{{if .Status}}&status={{.Status}}{{end}}"
+               class="px-2.5 py-1.5 rounded-pill text-xs transition
+                      {{if .SortOldest}}bg-spot-active-pill-bg text-spot-active-pill-text font-bold{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}"
+               title="{{if .SortOldest}}Newest first{{else}}Oldest first{{end}}">
+                {{if .SortOldest}}<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7"/></svg>{{else}}<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>{{end}}
+            </a>
+            {{if .Categories}}
+            <span class="text-spot-divider">|</span>
+            <a href="/articles?{{if .Status}}status={{.Status}}&{{end}}{{if .SortOldest}}sort=oldest{{end}}" class="text-sm px-3 py-1 rounded-pill font-bold {{if not .Category}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}} transition">All</a>
+            {{range .Categories}}
+            <a href="/articles?{{if $.Status}}status={{$.Status}}&{{end}}category={{.}}{{if $.SortOldest}}&sort=oldest{{end}}" class="text-sm px-3 py-1 rounded-pill font-bold {{if eq $.Category .}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}} transition">{{.}}</a>
+            {{end}}
+            <a href="/articles?{{if .Status}}status={{.Status}}&{{end}}category=__none__{{if .SortOldest}}&sort=oldest{{end}}" class="text-sm px-3 py-1 rounded-pill font-bold {{if eq .Category "__none__"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}} transition">Uncategorized</a>
+            {{end}}
+        </div>
+        <form method="GET" action="/articles" class="relative flex-1 min-w-[180px]">
+            <input type="text" name="q" value="{{.SearchQuery}}" placeholder="Search articles..."
+                   class="w-full bg-spot-hover text-spot-text rounded-pill pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-secondary"
+                   hx-get="/articles" hx-trigger="keyup changed delay:300ms, search" hx-target="#article-list" hx-swap="innerHTML" hx-include="[name='q']">
+            <svg class="w-3 h-3 text-spot-muted absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            {{if .Status}}<input type="hidden" name="status" value="{{.Status}}">{{end}}
+            {{if .SortOldest}}<input type="hidden" name="sort" value="oldest">{{end}}
+            {{if .Category}}<input type="hidden" name="category" value="{{.Category}}">{{end}}
+        </form>
+    </div>
+    {{end}}
 
 <div id="article-list" class="space-y-3">
     {{template "articles-content.html" .}}

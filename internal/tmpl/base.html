@@ -150,6 +150,12 @@
                 <a href="/profile/{{.User.DID}}" class="shrink-0 ml-1" title="@{{.User.Handle}}">
                     {{if .User.AvatarURL}}<img src="{{.User.AvatarURL}}" class="w-7 h-7 rounded-full ring-2 ring-spot-divider">{{end}}
                 </a>
+                <form method="POST" action="/auth/logout" class="shrink-0">
+                    {{csrfInput .CSRFToken}}
+                    <button type="submit" class="text-spot-muted hover:text-spot-red p-1.5 rounded-md hover:bg-spot-hover-50 transition" title="Sign out">
+                        <svg class="w-[1.15rem] h-[1.15rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                    </button>
+                </form>
                 {{else}}
                 <a href="/auth/login" class="bg-spot-green text-white rounded-pill px-3 py-1 text-xs font-bold uppercase tracking-button hover:brightness-110 transition shrink-0 ml-1">Sign in</a>
                 {{end}}

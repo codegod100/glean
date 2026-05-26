@@ -63,7 +63,7 @@ func (s *Server) buildDigestData(ctx context.Context, user *db.User) *digestCtx 
 
 	g.Go(func() error {
 		var err error
-		articles, err = s.dbs.Articles.ListUnreadArticles(gCtx, user.DID, "", 50, 0)
+		articles, err = s.dbs.Articles.ListUnreadArticles(gCtx, user.DID, "", "", 50, 0, false)
 		return err
 	})
 
@@ -182,7 +182,7 @@ func (s *Server) handleDigest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	unreadCount, _ := s.dbs.Articles.GetUnreadCount(ctx, user.DID, "")
+	unreadCount, _ := s.dbs.Articles.GetUnreadCount(ctx, user.DID, "", "")
 	if unreadCount == 0 {
 		w.WriteHeader(http.StatusNoContent)
 		return

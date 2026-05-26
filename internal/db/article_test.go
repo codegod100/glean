@@ -63,7 +63,7 @@ func TestListReadArticles_ReturnsOnlyRead(t *testing.T) {
 	dbs := setupTestDB(t)
 	userDID, feedURL, readID, unreadID := seedArticleReadState(t, ctx, dbs)
 
-	results, err := dbs.Articles.ListReadArticles(ctx, userDID, feedURL, 10, 0)
+	results, err := dbs.Articles.ListReadArticles(ctx, userDID, feedURL, "", 10, 0, false)
 	assert.NilError(t, err)
 	assert.Equal(t, len(results), 1)
 	assert.Equal(t, results[0].ID, readID)
@@ -77,7 +77,7 @@ func TestListReadArticles_ExcludesUnread(t *testing.T) {
 	dbs := setupTestDB(t)
 	userDID, feedURL, _, unreadID := seedArticleReadState(t, ctx, dbs)
 
-	results, err := dbs.Articles.ListReadArticles(ctx, userDID, feedURL, 10, 0)
+	results, err := dbs.Articles.ListReadArticles(ctx, userDID, feedURL, "", 10, 0, false)
 	assert.NilError(t, err)
 	for _, a := range results {
 		assert.Assert(t, a.ID != unreadID, "unread article should not appear in read list")
@@ -89,7 +89,7 @@ func TestListUnreadArticles_ReturnsOnlyUnread(t *testing.T) {
 	dbs := setupTestDB(t)
 	userDID, feedURL, readID, unreadID := seedArticleReadState(t, ctx, dbs)
 
-	results, err := dbs.Articles.ListUnreadArticles(ctx, userDID, feedURL, 10, 0)
+	results, err := dbs.Articles.ListUnreadArticles(ctx, userDID, feedURL, "", 10, 0, false)
 	assert.NilError(t, err)
 	assert.Equal(t, len(results), 1)
 	assert.Equal(t, results[0].ID, unreadID)
@@ -103,7 +103,7 @@ func TestListArticles_ReturnsAll(t *testing.T) {
 	dbs := setupTestDB(t)
 	userDID, feedURL, _, _ := seedArticleReadState(t, ctx, dbs)
 
-	results, err := dbs.Articles.ListArticles(ctx, userDID, feedURL, 10, 0)
+	results, err := dbs.Articles.ListArticles(ctx, userDID, feedURL, "", 10, 0, false)
 	assert.NilError(t, err)
 	assert.Equal(t, len(results), 2)
 }
@@ -133,7 +133,7 @@ func TestListReadArticles_EmptyWhenNoneRead(t *testing.T) {
 	dbs := setupTestDB(t)
 	userDID, feedURL, _, _ := seedArticleReadState(t, ctx, dbs)
 
-	results, err := dbs.Articles.ListUnreadArticles(ctx, userDID, feedURL, 10, 0)
+	results, err := dbs.Articles.ListUnreadArticles(ctx, userDID, feedURL, "", 10, 0, false)
 	assert.NilError(t, err)
 	assert.Equal(t, len(results), 1)
 }
@@ -143,11 +143,11 @@ func TestListReadArticles_WithFeedURLFilter(t *testing.T) {
 	dbs := setupTestDB(t)
 	userDID, feedURL, _, _ := seedArticleReadState(t, ctx, dbs)
 
-	results, err := dbs.Articles.ListReadArticles(ctx, userDID, feedURL, 10, 0)
+	results, err := dbs.Articles.ListReadArticles(ctx, userDID, feedURL, "", 10, 0, false)
 	assert.NilError(t, err)
 	assert.Equal(t, len(results), 1)
 
-	results, err = dbs.Articles.ListReadArticles(ctx, userDID, "https://other.com/feed", 10, 0)
+	results, err = dbs.Articles.ListReadArticles(ctx, userDID, "https://other.com/feed", "", 10, 0, false)
 	assert.NilError(t, err)
 	assert.Equal(t, len(results), 0)
 }
@@ -157,11 +157,11 @@ func TestGetUnreadCount(t *testing.T) {
 	dbs := setupTestDB(t)
 	userDID, feedURL, _, _ := seedArticleReadState(t, ctx, dbs)
 
-	count, err := dbs.Articles.GetUnreadCount(ctx, userDID, feedURL)
+	count, err := dbs.Articles.GetUnreadCount(ctx, userDID, feedURL, "")
 	assert.NilError(t, err)
 	assert.Equal(t, count, 1)
 
-	count, err = dbs.Articles.GetUnreadCount(ctx, userDID, "")
+	count, err = dbs.Articles.GetUnreadCount(ctx, userDID, "", "")
 	assert.NilError(t, err)
 	assert.Equal(t, count, 1)
 }

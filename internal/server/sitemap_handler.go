@@ -8,8 +8,8 @@ import (
 )
 
 type urlset struct {
-	XMLName xml.Name    `xml:"urlset"`
-	Xmlns   string      `xml:"xmlns,attr"`
+	XMLName xml.Name     `xml:"urlset"`
+	Xmlns   string       `xml:"xmlns,attr"`
 	URLs    []sitemapURL `xml:"url"`
 }
 

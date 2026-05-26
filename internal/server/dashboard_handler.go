@@ -34,7 +34,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	g.Go(func() error {
 		var err error
-		unreadCount, err = s.dbs.Articles.GetUnreadCount(gCtx, user.DID, "")
+		unreadCount, err = s.dbs.Articles.GetUnreadCount(gCtx, user.DID, "", "")
 		if err != nil {
 			s.logger.Warn("failed to get unread count", "error", err, "did", user.DID)
 		}
@@ -52,7 +52,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	g.Go(func() error {
 		var err error
-		articles, err = s.dbs.Articles.ListUnreadArticles(gCtx, user.DID, "", 5, 0)
+		articles, err = s.dbs.Articles.ListUnreadArticles(gCtx, user.DID, "", "", 5, 0, false)
 		if err != nil {
 			s.logger.Warn("failed to list unread articles", "error", err, "did", user.DID)
 		}

@@ -11,7 +11,8 @@ import (
 	"pkg.rbrt.fr/glean/internal/feed"
 )
 
-const articlesOrderBy = ` ORDER BY (CASE WHEN a.published > 'now' THEN 1 ELSE 0 END), a.published DESC LIMIT ? OFFSET ?`
+const articlesOrderByDesc = ` ORDER BY (CASE WHEN a.published > 'now' THEN 1 ELSE 0 END), a.published DESC LIMIT ? OFFSET ?`
+const articlesOrderByAsc = ` ORDER BY (CASE WHEN a.published > 'now' THEN 1 ELSE 0 END), a.published ASC LIMIT ? OFFSET ?`
 
 type ArticleStore struct {
 	db *DB
@@ -110,9 +111,16 @@ func (s *ArticleStore) GetArticle(ctx context.Context, id int64) (*Article, erro
 	return a, nil
 }
 
-func (s *ArticleStore) ListArticles(ctx context.Context, userDID, feedURL string, limit, offset int) ([]*Article, error) {
-	var query string
-	var args []any
+func (s *ArticleStore) ListArticles(
+	ctx context.Context,
+	userDID, feedURL, category string,
+	limit, offset int,
+	sortOldest bool,
+) ([]*Article, error) {
+	var (
+		query string
+		args  []any
+	)
 
 	if feedURL != "" {
 		query = `
@@ -141,10 +149,14 @@ func (s *ArticleStore) ListArticles(ctx context.Context, userDID, feedURL string
 			WHERE 1=1
 		`
 		args = []any{userDID, userDID, userDID}
+		query, args = addCategoryWhere(query, args, category)
 	}
 
-	// Future-published articles (e.g., scheduled) sort last
-	query += articlesOrderBy
+	orderBy := articlesOrderByDesc
+	if sortOldest {
+		orderBy = articlesOrderByAsc
+	}
+	query += orderBy
 	args = append(args, limit, offset)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -166,7 +178,26 @@ func (s *ArticleStore) ListArticles(ctx context.Context, userDID, feedURL string
 	return articles, rows.Err()
 }
 
-func (s *ArticleStore) ListUnreadArticles(ctx context.Context, userDID, feedURL string, limit, offset int) ([]*Article, error) {
+func addCategoryWhere(query string, args []any, category string) (string, []any) {
+	switch category {
+	case "__none__":
+		query += ` AND (s.category IS NULL OR s.category = '')`
+	case "":
+		// no-op
+	default:
+		query += ` AND s.category = ?`
+		args = append(args, category)
+	}
+
+	return query, args
+}
+
+func (s *ArticleStore) ListUnreadArticles(
+	ctx context.Context,
+	userDID, feedURL, category string,
+	limit, offset int,
+	sortOldest bool,
+) ([]*Article, error) {
 	var query string
 	var args []any
 
@@ -197,10 +228,14 @@ func (s *ArticleStore) ListUnreadArticles(ctx context.Context, userDID, feedURL 
 			WHERE (r.is_read = 0 OR r.is_read IS NULL)
 		`
 		args = []any{userDID, userDID, userDID}
+		query, args = addCategoryWhere(query, args, category)
 	}
 
-	// Future-published articles (e.g., scheduled) sort last
-	query += articlesOrderBy
+	orderBy := articlesOrderByDesc
+	if sortOldest {
+		orderBy = articlesOrderByAsc
+	}
+	query += orderBy
 	args = append(args, limit, offset)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -222,7 +257,12 @@ func (s *ArticleStore) ListUnreadArticles(ctx context.Context, userDID, feedURL 
 	return articles, rows.Err()
 }
 
-func (s *ArticleStore) ListReadArticles(ctx context.Context, userDID, feedURL string, limit, offset int) ([]*Article, error) {
+func (s *ArticleStore) ListReadArticles(
+	ctx context.Context,
+	userDID, feedURL, category string,
+	limit, offset int,
+	sortOldest bool,
+) ([]*Article, error) {
 	var query string
 	var args []any
 
@@ -253,10 +293,14 @@ func (s *ArticleStore) ListReadArticles(ctx context.Context, userDID, feedURL st
 			WHERE r.is_read = 1
 		`
 		args = []any{userDID, userDID, userDID}
+		query, args = addCategoryWhere(query, args, category)
 	}
 
-	// Future-published articles (e.g., scheduled) sort last
-	query += articlesOrderBy
+	orderBy := articlesOrderByDesc
+	if sortOldest {
+		orderBy = articlesOrderByAsc
+	}
+	query += orderBy
 	args = append(args, limit, offset)
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
@@ -363,7 +407,7 @@ func (s *ArticleStore) GetReadState(ctx context.Context, userDID string, article
 	return rs, nil
 }
 
-func (s *ArticleStore) GetUnreadCount(ctx context.Context, userDID, feedURL string) (int, error) {
+func (s *ArticleStore) GetUnreadCount(ctx context.Context, userDID, feedURL, category string) (int, error) {
 	var count int
 	if feedURL != "" {
 		err := s.db.QueryRowContext(ctx, `
@@ -374,13 +418,16 @@ func (s *ArticleStore) GetUnreadCount(ctx context.Context, userDID, feedURL stri
 		`, userDID, feedURL).Scan(&count)
 		return count, err
 	}
-	err := s.db.QueryRowContext(ctx, `
+	query := `
 		SELECT COUNT(*)
 		FROM articles.articles a
 		JOIN articles.subscriptions s ON a.feed_url = s.feed_url AND s.user_did = ?
 		LEFT JOIN articles.read_state r ON r.user_did = ? AND r.article_id = a.id
-		WHERE r.is_read = 0 OR r.is_read IS NULL
-	`, userDID, userDID).Scan(&count)
+		WHERE (r.is_read = 0 OR r.is_read IS NULL)
+	`
+	args := []any{userDID, userDID}
+	query, args = addCategoryWhere(query, args, category)
+	err := s.db.QueryRowContext(ctx, query, args...).Scan(&count)
 	return count, err
 }
 

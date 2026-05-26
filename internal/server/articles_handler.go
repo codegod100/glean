@@ -46,11 +46,13 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 	feedURL := r.URL.Query().Get("feed")
 	status := r.URL.Query().Get("status")
 	searchQuery := r.URL.Query().Get("q")
+	sortOldest := r.URL.Query().Get("sort") == "oldest"
+	category := r.URL.Query().Get("category")
 
 	page := pageFromRequest(r, 50)
 
 	if status == "" && searchQuery == "" {
-		unreadCount, err := s.dbs.Articles.GetUnreadCount(ctx, user.DID, feedURL)
+		unreadCount, err := s.dbs.Articles.GetUnreadCount(ctx, user.DID, feedURL, category)
 		if err != nil {
 			s.logger.Warn("failed to get unread count", "error", err, "did", user.DID)
 		}
@@ -69,11 +71,11 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 	} else {
 		switch status {
 		case "unread":
-			articles, err = s.dbs.Articles.ListUnreadArticles(ctx, user.DID, feedURL, page.Limit()+1, page.Offset())
+			articles, err = s.dbs.Articles.ListUnreadArticles(ctx, user.DID, feedURL, category, page.Limit()+1, page.Offset(), sortOldest)
 		case "read":
-			articles, err = s.dbs.Articles.ListReadArticles(ctx, user.DID, feedURL, page.Limit()+1, page.Offset())
+			articles, err = s.dbs.Articles.ListReadArticles(ctx, user.DID, feedURL, category, page.Limit()+1, page.Offset(), sortOldest)
 		default:
-			articles, err = s.dbs.Articles.ListArticles(ctx, user.DID, feedURL, page.Limit()+1, page.Offset())
+			articles, err = s.dbs.Articles.ListArticles(ctx, user.DID, feedURL, category, page.Limit()+1, page.Offset(), sortOldest)
 		}
 	}
 
@@ -100,6 +102,13 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 		expandedView = settings.ExpandedView
 	}
 
+	sortParam := ""
+	if sortOldest {
+		sortParam = "oldest"
+	}
+
+	categories, _ := s.dbs.Articles.GetCategories(ctx, user.DID)
+
 	data := map[string]any{
 		"User":         user,
 		"Articles":     articles,
@@ -108,9 +117,12 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 		"SearchQuery":  searchQuery,
 		"Page":         page,
 		"BaseURL":      "/articles",
-		"QueryParams":  buildQueryParams(map[string]string{"feed": feedURL, "status": status, "q": searchQuery}),
+		"QueryParams":  buildQueryParams(map[string]string{"feed": feedURL, "status": status, "q": searchQuery, "sort": sortParam, "category": category}),
 		"Now":          time.Now(),
 		"ExpandedView": expandedView,
+		"SortOldest":   sortOldest,
+		"Category":     category,
+		"Categories":   categories,
 	}
 
 	if feedURL != "" {
