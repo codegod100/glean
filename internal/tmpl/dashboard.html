@@ -36,11 +36,6 @@
         {{end}}
     </div>
 </div>
-{{else}}
-<div class="mb-8">
-    <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended for you</h2>
-    {{template "empty-state.html" (dict "icon" "icon-sparkles" "title" "No recommendations yet" "subtitle" "Read and like more articles to get personalized picks.")}}
-</div>
 {{end}}
 
 {{if and .DigestEnabled .HasLLM}}
@@ -85,11 +80,6 @@
         {{end}}
     </div>
 </div>
-{{else}}
-<div class="mb-8">
-    <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended for you</h2>
-    {{template "empty-state.html" (dict "icon" "icon-sparkles" "title" "No recommendations yet" "subtitle" "Read and like more articles to get personalized picks.")}}
-</div>
 {{end}}
 
 <div class="mb-8">
@@ -114,14 +104,6 @@
         {{range .GlobalTrending}}{{template "trending-card.html" .}}{{end}}
         {{range .PersonalTrending}}{{template "trending-card.html" .}}{{end}}
     </div>
-</div>
-{{else}}
-<div class="mb-8">
-    <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold text-spot-text">Trending</h2>
-        <a href="/trending" class="text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition">See all</a>
-    </div>
-    {{template "empty-state.html" (dict "icon" "icon-trending" "title" "No trending articles yet" "subtitle" "Articles will appear here as the community grows.")}}
 </div>
 {{end}}
 
