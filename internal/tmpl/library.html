@@ -12,13 +12,7 @@
             {{range .Articles}}
             {{template "article-card.html" .}}
             {{else}}
-            <div class="bg-spot-surface rounded-2xl py-12 px-6 text-center">
-                <div class="w-14 h-14 rounded-2xl bg-spot-red/15 flex items-center justify-center mb-5 mx-auto">
-                    <svg class="w-7 h-7 text-spot-red" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">{{template "icon-heart"}}</svg>
-                </div>
-                <p class="text-sm text-spot-text font-semibold mb-1">No liked articles yet</p>
-                <p class="text-xs text-spot-muted">Like articles to save them here.</p>
-            </div>
+            {{template "empty-state.html" (dict "icon" "icon-heart" "color" "red" "title" "No liked articles yet" "subtitle" "Like articles to save them here.")}}
             {{end}}
         </div>
 
@@ -47,13 +41,7 @@
             {{range .Annotations}}
             {{template "annotation-card.html" dict "annotation" . "userDID" $.CurrentUserDID}}
             {{else}}
-            <div class="bg-spot-surface rounded-2xl py-12 px-6 text-center">
-                <div class="w-14 h-14 rounded-2xl bg-spot-green/15 flex items-center justify-center mb-5 mx-auto">
-                    <svg class="w-7 h-7 text-spot-green" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>
-                </div>
-                <p class="text-sm text-spot-text font-semibold mb-1">No annotations yet</p>
-                <p class="text-xs text-spot-muted">Highlight and annotate articles as you read.</p>
-            </div>
+            {{template "empty-state.html" (dict "icon" "icon-annotation" "title" "No annotations yet" "subtitle" "Highlight and annotate articles as you read.")}}
             {{end}}
         </div>
 

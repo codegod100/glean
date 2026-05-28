@@ -36,6 +36,11 @@
         {{end}}
     </div>
 </div>
+{{else}}
+<div class="mb-8">
+    <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended for you</h2>
+    {{template "empty-state.html" (dict "icon" "icon-sparkles" "title" "No recommendations yet" "subtitle" "Read and like more articles to get personalized picks.")}}
+</div>
 {{end}}
 
 {{if and .DigestEnabled .HasLLM}}
@@ -80,6 +85,11 @@
         {{end}}
     </div>
 </div>
+{{else}}
+<div class="mb-8">
+    <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended for you</h2>
+    {{template "empty-state.html" (dict "icon" "icon-sparkles" "title" "No recommendations yet" "subtitle" "Read and like more articles to get personalized picks.")}}
+</div>
 {{end}}
 
 <div class="mb-8">
@@ -104,6 +114,14 @@
         {{range .GlobalTrending}}{{template "trending-card.html" .}}{{end}}
         {{range .PersonalTrending}}{{template "trending-card.html" .}}{{end}}
     </div>
+</div>
+{{else}}
+<div class="mb-8">
+    <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold text-spot-text">Trending</h2>
+        <a href="/trending" class="text-xs text-spot-secondary hover:text-spot-green uppercase tracking-button transition">See all</a>
+    </div>
+    {{template "empty-state.html" (dict "icon" "icon-trending" "title" "No trending articles yet" "subtitle" "Articles will appear here as the community grows.")}}
 </div>
 {{end}}
 
@@ -142,6 +160,11 @@
         {{template "recommendation-feed-card.html" (dict "title" .Title "feed_url" .FeedURL "description" .Description "favicon_url" .FaviconURL "subscriber_count" .SubscriberCount "CSRFToken" $.CSRFToken)}}
         {{end}}
     </div>
+</div>
+{{else}}
+<div class="mb-8">
+    <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended feeds</h2>
+    {{template "empty-state.html" (dict "icon" "icon-rss" "title" "No feed suggestions yet" "subtitle" "Subscribe to a few feeds and we'll suggest more based on your reading.")}}
 </div>
 {{end}}
 {{end}}

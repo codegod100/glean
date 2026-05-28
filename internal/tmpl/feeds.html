@@ -30,6 +30,11 @@ function gleanToggleEdit(id){var i=document.getElementById('feed-edit-'+id);if(i
         {{end}}
     </div>
 </div>
+{{else if .SubscriptionCount}}
+<div class="mb-6">
+    <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide mb-3">Recommended feeds</h2>
+    {{template "empty-state.html" (dict "icon" "icon-rss" "size" "compact" "title" "No feed suggestions yet" "subtitle" "We'll suggest feeds as you read more.")}}
+</div>
 {{end}}
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -48,13 +53,7 @@ function gleanToggleEdit(id){var i=document.getElementById('feed-edit-'+id);if(i
             {{range .Subscriptions}}
             {{template "feed-item.html" dict "ID" .ID "FeedURL" .FeedURL "FeedTitle" .FeedTitle "Category" .Category "FaviconURL" .FaviconURL "UnreadCount" .UnreadCount "CSRFToken" $.CSRFToken}}
             {{else}}
-            <div class="flex flex-col items-center justify-center py-12 px-6 text-center">
-                <div class="w-14 h-14 rounded-2xl bg-spot-green/15 flex items-center justify-center mb-4 mx-auto">
-                    <svg class="w-7 h-7 text-spot-green" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 5c7.18 0 13 5.82 13 13M6 11a7 7 0 017 7m-7-1a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
-                </div>
-                <p class="text-sm text-spot-text font-semibold mb-1">No feeds yet</p>
-                <p class="text-xs text-spot-muted">Add one using the form on the right to get started.</p>
-            </div>
+            {{template "empty-state.html" (dict "icon" "icon-rss" "title" "No feeds yet" "subtitle" "Add one using the form on the right to get started.")}}
             {{end}}
         </div>
 
@@ -107,6 +106,8 @@ function gleanToggleEdit(id){var i=document.getElementById('feed-edit-'+id);if(i
             </div>
             {{end}}
         </div>
+        {{else}}
+        {{template "empty-state.html" (dict "icon" "icon-people" "size" "compact" "title" "No connections yet" "subtitle" "Follow readers on the network to see them here.")}}
         {{end}}
 
         {{if .Subscriptions}}

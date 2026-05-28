@@ -23,13 +23,7 @@
     {{range .Trending}}
     {{template "trending-card.html" .}}
     {{else}}
-    <div class="bg-spot-surface rounded-2xl py-12 px-6 text-center">
-        <div class="w-14 h-14 rounded-2xl bg-spot-green/15 flex items-center justify-center mb-5 mx-auto">
-            <svg class="w-7 h-7 text-spot-green" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
-        </div>
-        <p class="text-sm text-spot-text font-semibold mb-1">No trending articles yet</p>
-        <p class="text-xs text-spot-muted">Start liking and annotating to see trends.</p>
-    </div>
+    {{template "empty-state.html" (dict "icon" "icon-trending" "title" "No trending articles yet" "subtitle" "Start liking and annotating to see trends.")}}
     {{end}}
 </div>
 

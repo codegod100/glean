@@ -46,13 +46,7 @@
         </div>
     </div>
     {{else}}
-    <div class="bg-spot-surface rounded-2xl py-14 px-6 text-center">
-        <div class="w-14 h-14 rounded-2xl bg-spot-green/15 flex items-center justify-center mb-5 mx-auto">
-            <svg class="w-7 h-7 text-spot-green" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19.5v-15m0 0l-6.75 6.75M12.75 4.5l6.75 6.75"/></svg>
-        </div>
-        <p class="text-sm text-spot-text font-semibold mb-1">No metrics available</p>
-        <p class="text-xs text-spot-muted">Metrics will appear here once the application has been running for a while.</p>
-    </div>
+    {{template "empty-state.html" (dict "icon" "icon-chart" "title" "No metrics available" "subtitle" "Metrics will appear here once the application has been running for a while.")}}
     {{end}}
 </div>
 {{end}}
