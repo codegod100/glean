@@ -1,0 +1,17 @@
+{{define "partials/feed-recommendations.html"}}
+{{if .FeedRecommendations}}
+<div class="mb-8">
+    <h2 class="text-lg font-semibold text-spot-text mb-4">{{if eq .SubscriptionCount 0}}Popular feeds to get started{{else}}Recommended feeds{{end}}</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {{range .FeedRecommendations}}
+        {{template "recommendation-feed-card.html" (dict "title" .Title "feed_url" .FeedURL "description" .Description "favicon_url" .FaviconURL "subscriber_count" .SubscriberCount "CSRFToken" $.CSRFToken)}}
+        {{end}}
+    </div>
+</div>
+{{else}}
+<div class="mb-8">
+    <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended feeds</h2>
+    {{template "empty-state.html" (dict "icon" "icon-rss" "title" "No feed suggestions yet" "subtitle" "Subscribe to a few feeds and we'll suggest more based on your reading.")}}
+</div>
+{{end}}
+{{end}}

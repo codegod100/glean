@@ -1,0 +1,10 @@
+{{define "partials/article-recommendations.html"}}
+<div class="mb-8">
+    <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended for you</h2>
+    <div class="space-y-3">
+        {{range .ArticleRecommendations}}
+        {{template "article-card.html" .}}
+        {{end}}
+    </div>
+</div>
+{{end}}

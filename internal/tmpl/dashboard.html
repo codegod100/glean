@@ -27,13 +27,31 @@
     </a>
 </div>
 {{else if .Articles}}
-{{if .ArticleRecommendations}}
-<div class="mb-8">
-    <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended for you</h2>
-    <div class="space-y-3">
-        {{range .ArticleRecommendations}}
-        {{template "article-card.html" .}}
-        {{end}}
+{{if gt .SubscriptionCount 0}}
+<div id="article-recommendations" hx-get="/dashboard/article-recommendations" hx-trigger="load" hx-swap="innerHTML" hx-indicator="#article-recommendations">
+    <div class="mb-8">
+        <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended for you</h2>
+        <div class="animate-pulse space-y-3">
+            <div class="bg-spot-surface rounded-xl px-5 py-4">
+                <div class="flex items-start gap-2.5">
+                    <div class="w-4 h-4 bg-spot-hover rounded shrink-0 mt-0.5"></div>
+                    <div class="flex-1 space-y-2">
+                        <div class="h-4 bg-spot-hover rounded w-2/3"></div>
+                        <div class="h-3 bg-spot-hover rounded w-full"></div>
+                        <div class="h-3 bg-spot-hover rounded w-4/5"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-spot-surface rounded-xl px-5 py-4">
+                <div class="flex items-start gap-2.5">
+                    <div class="w-4 h-4 bg-spot-hover rounded shrink-0 mt-0.5"></div>
+                    <div class="flex-1 space-y-2">
+                        <div class="h-4 bg-spot-hover rounded w-1/2"></div>
+                        <div class="h-3 bg-spot-hover rounded w-full"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 {{end}}
@@ -71,13 +89,22 @@
     {{end}}
 </div>
 {{else}}
-{{if .ArticleRecommendations}}
-<div class="mb-8">
-    <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended for you</h2>
-    <div class="space-y-3">
-        {{range .ArticleRecommendations}}
-        {{template "article-card.html" .}}
-        {{end}}
+{{if gt .SubscriptionCount 0}}
+<div id="article-recommendations" hx-get="/dashboard/article-recommendations" hx-trigger="load" hx-swap="innerHTML" hx-indicator="#article-recommendations">
+    <div class="mb-8">
+        <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended for you</h2>
+        <div class="animate-pulse space-y-3">
+            <div class="bg-spot-surface rounded-xl px-5 py-4">
+                <div class="flex items-start gap-2.5">
+                    <div class="w-4 h-4 bg-spot-hover rounded shrink-0 mt-0.5"></div>
+                    <div class="flex-1 space-y-2">
+                        <div class="h-4 bg-spot-hover rounded w-2/3"></div>
+                        <div class="h-3 bg-spot-hover rounded w-full"></div>
+                        <div class="h-3 bg-spot-hover rounded w-4/5"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 {{end}}
@@ -107,46 +134,76 @@
 </div>
 {{end}}
 
-{{if or .FollowedPeople .DiscoverPeople}}
-<div class="mb-8">
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {{if .FollowedPeople}}
-        <div>
-            <h2 class="text-lg font-semibold text-spot-text mb-4">Your network</h2>
-            <div class="space-y-3">
-                {{range .FollowedPeople}}
-                {{template "profile-card.html" .}}
-                {{end}}
+<div id="people-recommendations" hx-get="/dashboard/people-recommendations" hx-trigger="load" hx-swap="innerHTML" hx-indicator="#people-recommendations">
+    <div class="mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <h2 class="text-lg font-semibold text-spot-text mb-4">Your network</h2>
+                <div class="space-y-3">
+                    <div class="animate-pulse bg-spot-surface rounded-xl p-4 flex items-center gap-3.5">
+                        <div class="w-10 h-10 bg-spot-hover rounded-full"></div>
+                        <div class="flex-1 space-y-2">
+                            <div class="h-4 bg-spot-hover rounded w-1/3"></div>
+                            <div class="h-3 bg-spot-hover rounded w-1/2"></div>
+                        </div>
+                    </div>
+                    <div class="animate-pulse bg-spot-surface rounded-xl p-4 flex items-center gap-3.5">
+                        <div class="w-10 h-10 bg-spot-hover rounded-full"></div>
+                        <div class="flex-1 space-y-2">
+                            <div class="h-4 bg-spot-hover rounded w-1/4"></div>
+                            <div class="h-3 bg-spot-hover rounded w-2/5"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <h2 class="text-lg font-semibold text-spot-text mb-4">Discover new readers</h2>
+                <div class="space-y-3">
+                    <div class="animate-pulse bg-spot-surface rounded-xl p-4 flex items-center gap-3.5">
+                        <div class="w-10 h-10 bg-spot-hover rounded-full"></div>
+                        <div class="flex-1 space-y-2">
+                            <div class="h-4 bg-spot-hover rounded w-1/3"></div>
+                            <div class="h-3 bg-spot-hover rounded w-1/2"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        {{end}}
-        {{if .DiscoverPeople}}
-        <div>
-            <h2 class="text-lg font-semibold text-spot-text mb-4">Discover new readers</h2>
-            <div class="space-y-3">
-                {{range .DiscoverPeople}}
-                {{template "profile-card.html" .}}
-                {{end}}
-            </div>
-        </div>
-        {{end}}
     </div>
 </div>
-{{end}}
 
-{{if .FeedRecommendations}}
-<div class="mb-8">
-    <h2 class="text-lg font-semibold text-spot-text mb-4">{{if eq .SubscriptionCount 0}}Popular feeds to get started{{else}}Recommended feeds{{end}}</h2>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {{range .FeedRecommendations}}
-        {{template "recommendation-feed-card.html" (dict "title" .Title "feed_url" .FeedURL "description" .Description "favicon_url" .FaviconURL "subscriber_count" .SubscriberCount "CSRFToken" $.CSRFToken)}}
-        {{end}}
+<div id="feed-recommendations" hx-get="/dashboard/feed-recommendations" hx-trigger="load" hx-swap="innerHTML" hx-indicator="#feed-recommendations">
+    <div class="mb-8">
+        <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended feeds</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div class="animate-pulse bg-spot-surface rounded-xl p-3.5">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-5 h-5 bg-spot-hover rounded"></div>
+                    <div class="flex-1 space-y-2">
+                        <div class="h-4 bg-spot-hover rounded w-2/3"></div>
+                        <div class="h-3 bg-spot-hover rounded w-full"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="animate-pulse bg-spot-surface rounded-xl p-3.5">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-5 h-5 bg-spot-hover rounded"></div>
+                    <div class="flex-1 space-y-2">
+                        <div class="h-4 bg-spot-hover rounded w-1/2"></div>
+                        <div class="h-3 bg-spot-hover rounded w-4/5"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="animate-pulse bg-spot-surface rounded-xl p-3.5">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-5 h-5 bg-spot-hover rounded"></div>
+                    <div class="flex-1 space-y-2">
+                        <div class="h-4 bg-spot-hover rounded w-3/5"></div>
+                        <div class="h-3 bg-spot-hover rounded w-full"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
-{{else}}
-<div class="mb-8">
-    <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended feeds</h2>
-    {{template "empty-state.html" (dict "icon" "icon-rss" "title" "No feed suggestions yet" "subtitle" "Subscribe to a few feeds and we'll suggest more based on your reading.")}}
-</div>
-{{end}}
 {{end}}

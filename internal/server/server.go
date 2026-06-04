@@ -168,6 +168,9 @@ func (s *Server) setupRoutes() {
 	s.router.Route("/dashboard", func(r chi.Router) {
 		r.Use(s.requireAuth)
 		r.Get("/", s.handleDashboard)
+		r.Get("/article-recommendations", s.handleArticleRecommendations)
+		r.Get("/feed-recommendations", s.handleFeedRecommendations)
+		r.Get("/people-recommendations", s.handlePeopleRecommendations)
 	})
 
 	s.router.Route("/feeds", func(r chi.Router) {
