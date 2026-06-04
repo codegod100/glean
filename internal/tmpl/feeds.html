@@ -65,7 +65,7 @@ function gleanToggleEdit(id){var i=document.getElementById('feed-edit-'+id);if(i
             <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide">Add feed</h2>
             <form hx-post="/feeds/add" hx-target="#feed-list" hx-swap="beforeend"
                   hx-on::before-request="document.getElementById('add-feed-error').textContent=''"
-                  hx-on::after-request="if(event.detail.successful)this.reset();else document.getElementById('add-feed-error').textContent=event.detail.xhr.responseText"
+                  hx-on::after-request="if(event.detail.successful){this.reset();location.reload()}else{document.getElementById('add-feed-error').textContent=event.detail.xhr.responseText}"
                   class="space-y-3">
                 {{csrfInput .CSRFToken}}
                 <input type="text" name="feed_url" placeholder="https://example.com/feed.xml or at://did:plc:.../site.standard.publication/..."
