@@ -68,6 +68,7 @@
 }
 
 @layer components {
+  .article-body { max-width: 100%; overflow-wrap: break-word; word-wrap: break-word; }
   .article-body h1 { @apply text-2xl font-bold mt-8 mb-3 text-spot-text }
   .article-body h2 { @apply text-xl font-semibold mt-6 mb-2 text-spot-text }
   .article-body h3 { @apply text-lg font-semibold mt-5 mb-2 text-spot-text }
@@ -84,7 +85,7 @@
   .article-body figure { @apply my-4 }
   .article-body figcaption { @apply text-sm text-spot-secondary text-center mt-2 }
   .article-body a { @apply text-spot-green underline hover:brightness-110 }
-  .article-body table { @apply w-full border-collapse my-4 }
+  .article-body table { @apply w-full border-collapse my-4 text-sm }
   .article-body th { @apply border border-spot-divider px-3 py-2 bg-spot-surface font-semibold text-left text-spot-text }
   .article-body td { @apply border border-spot-divider px-3 py-2 text-spot-body }
   .article-body hr { @apply border-spot-divider my-6 }
@@ -94,6 +95,8 @@
   .article-body mark { @apply bg-spot-orange/30 px-1 rounded }
   .article-body .annotation-highlight { @apply bg-spot-green/25 border-b-2 border-spot-green/50 px-0.5 rounded-sm transition-colors }
   .article-body .annotation-highlight:hover { @apply bg-spot-green/40 }
+  .article-body div, .article-body section, .article-body article, .article-body main, .article-body aside, .article-body nav, .article-body header, .article-body footer, .article-body span { max-width: 100%; overflow-wrap: break-word; }
+  .article-body table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
 
 @layer utilities {
