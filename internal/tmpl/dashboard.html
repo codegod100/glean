@@ -28,7 +28,7 @@
 </div>
 {{else if .Articles}}
 {{if gt .SubscriptionCount 0}}
-<div id="article-recommendations" hx-get="/dashboard/article-recommendations" hx-trigger="load" hx-swap="innerHTML" hx-indicator="#article-recommendations">
+<div id="article-recommendations" hx-get="/recs/articles" hx-trigger="load" hx-swap="innerHTML" hx-indicator="#article-recommendations">
     <div class="mb-8">
         <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended for you</h2>
         <div class="animate-pulse space-y-3">
@@ -90,7 +90,7 @@
 </div>
 {{else}}
 {{if gt .SubscriptionCount 0}}
-<div id="article-recommendations" hx-get="/dashboard/article-recommendations" hx-trigger="load" hx-swap="innerHTML" hx-indicator="#article-recommendations">
+<div id="article-recommendations" hx-get="/recs/articles" hx-trigger="load" hx-swap="innerHTML" hx-indicator="#article-recommendations">
     <div class="mb-8">
         <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended for you</h2>
         <div class="animate-pulse space-y-3">
@@ -134,7 +134,7 @@
 </div>
 {{end}}
 
-<div id="people-recommendations" hx-get="/dashboard/people-recommendations" hx-trigger="load" hx-swap="innerHTML" hx-indicator="#people-recommendations">
+<div id="people-recommendations" hx-get="/recs/people" hx-trigger="load" hx-swap="innerHTML" hx-indicator="#people-recommendations">
     <div class="mb-8">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
@@ -172,7 +172,7 @@
     </div>
 </div>
 
-<div id="feed-recommendations" hx-get="/dashboard/feed-recommendations" hx-trigger="load" hx-swap="innerHTML" hx-indicator="#feed-recommendations">
+<div id="feed-recommendations" hx-get="/recs/feeds" hx-trigger="load" hx-swap="innerHTML" hx-indicator="#feed-recommendations">
     <div class="mb-8">
         <h2 class="text-lg font-semibold text-spot-text mb-4">Recommended feeds</h2>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">

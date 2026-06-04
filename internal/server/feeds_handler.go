@@ -10,10 +10,8 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"pkg.rbrt.fr/glean/internal/atproto"
-	"pkg.rbrt.fr/glean/internal/cluster"
 	"pkg.rbrt.fr/glean/internal/db"
 	"pkg.rbrt.fr/glean/internal/feed"
-	"pkg.rbrt.fr/glean/internal/feedback"
 )
 
 func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
@@ -26,8 +24,6 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 	var (
 		subs       []*db.Subscription
 		subCount   int
-		feedRecs   []*cluster.FeedRecommendation
-		peopleRecs []*cluster.PersonRecommendation
 		deadFeeds  []*db.Feed
 		categories []string
 	)
@@ -60,24 +56,6 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 
 	g.Go(func() error {
 		var err error
-		feedRecs, err = s.engine.GetFeedRecommendations(gCtx, user.DID, 6)
-		if err != nil {
-			s.logger.Warn("failed to get feed recommendations", "error", err, "did", user.DID)
-		}
-		return nil
-	})
-
-	g.Go(func() error {
-		var err error
-		peopleRecs, err = s.engine.GetPeopleRecommendations(gCtx, user.DID, 6)
-		if err != nil {
-			s.logger.Warn("failed to get people recommendations", "error", err, "did", user.DID)
-		}
-		return nil
-	})
-
-	g.Go(func() error {
-		var err error
 		deadFeeds, err = s.dbs.Articles.ListDeadFeeds(gCtx, user.DID, 7)
 		if err != nil {
 			s.logger.Warn("failed to list dead feeds", "error", err, "did", user.DID)
@@ -95,55 +73,19 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err := g.Wait(); err != nil {
-		s.logger.Warn("feeds phase 1 error", "error", err, "did", user.DID)
-	}
-
-	g2, gCtx2 := errgroup.WithContext(ctx)
-
-	g2.Go(func() error {
-		resolvePeopleHandles(gCtx2, peopleRecs)
-		return nil
-	})
-
-	g2.Go(func() error {
-		if len(feedRecs) > 0 {
-			impressions := make([]feedback.Impression, len(feedRecs))
-			for i, rec := range feedRecs {
-				impressions[i] = feedback.Impression{TargetType: "feed", TargetID: rec.FeedURL}
-			}
-			if err := s.feedback.RecordImpressions(gCtx2, user.DID, impressions); err != nil {
-				s.logger.Warn("failed to record impressions", "error", err)
-			}
-		}
-		return nil
-	})
-
-	if err := g2.Wait(); err != nil {
-		s.logger.Warn("feeds phase 2 error", "error", err, "did", user.DID)
-	}
-
-	var followedPeople, discoverPeople []*cluster.PersonRecommendation
-	for _, p := range peopleRecs {
-		if p.IsFollowed {
-			followedPeople = append(followedPeople, p)
-		} else {
-			discoverPeople = append(discoverPeople, p)
-		}
+		s.logger.Warn("feeds error", "error", err, "did", user.DID)
 	}
 
 	s.render(w, r, "feeds.html", map[string]any{
-		"User":                user,
-		"Subscriptions":       subs,
-		"SubscriptionCount":   subCount,
-		"Categories":          categories,
-		"Category":            category,
-		"FeedRecommendations": feedRecs,
-		"FollowedPeople":      followedPeople,
-		"DiscoverPeople":      discoverPeople,
-		"DeadFeeds":           deadFeeds,
-		"Page":                page,
-		"BaseURL":             "/feeds",
-		"QueryParams":         buildQueryParams(map[string]string{"category": category}),
+		"User":              user,
+		"Subscriptions":     subs,
+		"SubscriptionCount": subCount,
+		"Categories":        categories,
+		"Category":          category,
+		"DeadFeeds":         deadFeeds,
+		"Page":              page,
+		"BaseURL":           "/feeds",
+		"QueryParams":       buildQueryParams(map[string]string{"category": category}),
 	})
 }
 

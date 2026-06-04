@@ -21,21 +21,31 @@ function gleanToggleEdit(id){var i=document.getElementById('feed-edit-'+id);if(i
 
 {{template "dead-feeds.html" (dict "DeadFeeds" .DeadFeeds "CSRFToken" .CSRFToken)}}
 
-{{if .FeedRecommendations}}
-<div class="mb-6">
-    <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide mb-3">Recommended feeds</h2>
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {{range .FeedRecommendations}}
-        {{template "recommendation-feed-card.html" (dict "title" .Title "feed_url" .FeedURL "description" .Description "favicon_url" .FaviconURL "subscriber_count" .SubscriberCount "CSRFToken" $.CSRFToken)}}
-        {{end}}
+<div id="feed-recommendations" hx-get="/recs/feeds" hx-trigger="load" hx-swap="innerHTML" hx-indicator="#feed-recommendations">
+    <div class="mb-6">
+        <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide mb-3">Recommended feeds</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div class="animate-pulse bg-spot-surface rounded-xl p-3.5">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-5 h-5 bg-spot-hover rounded"></div>
+                    <div class="flex-1 space-y-2">
+                        <div class="h-4 bg-spot-hover rounded w-2/3"></div>
+                        <div class="h-3 bg-spot-hover rounded w-full"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="animate-pulse bg-spot-surface rounded-xl p-3.5">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-5 h-5 bg-spot-hover rounded"></div>
+                    <div class="flex-1 space-y-2">
+                        <div class="h-4 bg-spot-hover rounded w-1/2"></div>
+                        <div class="h-3 bg-spot-hover rounded w-4/5"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
-{{else if .SubscriptionCount}}
-<div class="mb-6">
-    <h2 class="text-sm font-bold text-spot-text uppercase tracking-wide mb-3">Recommended feeds</h2>
-    {{template "empty-state.html" (dict "icon" "icon-rss" "size" "compact" "title" "No feed suggestions yet" "subtitle" "We'll suggest feeds as you read more.")}}
-</div>
-{{end}}
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="lg:col-span-2">
@@ -86,29 +96,6 @@ function gleanToggleEdit(id){var i=document.getElementById('feed-edit-'+id);if(i
                 {{if .Subscriptions}}<a href="/feeds/opml/download" class="block w-full text-center border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-sm font-bold uppercase tracking-button hover:border-spot-text transition">Export OPML</a>{{end}}
             </div>
         </div>
-
-        {{if or .FollowedPeople .DiscoverPeople}}
-        <div>
-            {{if .FollowedPeople}}
-            <h2 class="text-lg font-semibold text-spot-text mb-4">Your network</h2>
-            <div class="space-y-3">
-                {{range .FollowedPeople}}
-                {{template "profile-card.html" .}}
-                {{end}}
-            </div>
-            {{end}}
-            {{if .DiscoverPeople}}
-            <h2 class="text-lg font-semibold text-spot-text mb-4 {{if .FollowedPeople}}mt-8{{end}}">Discover new readers</h2>
-            <div class="space-y-3">
-                {{range .DiscoverPeople}}
-                {{template "profile-card.html" .}}
-                {{end}}
-            </div>
-            {{end}}
-        </div>
-        {{else}}
-        {{template "empty-state.html" (dict "icon" "icon-people" "size" "compact" "title" "No connections yet" "subtitle" "Follow readers on the network to see them here.")}}
-        {{end}}
 
         {{if .Subscriptions}}
         <form hx-post="/feeds/clear" hx-confirm="Are you sure you want to unsubscribe from ALL feeds? This cannot be undone.">
