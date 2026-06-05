@@ -47,15 +47,15 @@ type ArticleRecommendation struct {
 }
 
 func (e *Engine) InvalidateFeedCache(userDID string) {
-	go e.recomputeForUser(context.Background(), userDID, "feed")
+	go e.precomputeForUser(context.Background(), userDID)
 }
 
 func (e *Engine) InvalidateArticleCache(userDID string) {
-	go e.recomputeForUser(context.Background(), userDID, "article")
+	go e.precomputeForUser(context.Background(), userDID)
 }
 
 func (e *Engine) InvalidatePeopleCache(userDID string) {
-	go e.recomputeForUser(context.Background(), userDID, "person")
+	go e.precomputeForUser(context.Background(), userDID)
 }
 
 // GetFeedRecommendations returns feed recommendations for a user. Users with
@@ -70,6 +70,9 @@ func (e *Engine) GetFeedRecommendations(ctx context.Context, userDID string, lim
 		}
 	}
 
+	start := time.Now()
+	e.logger.Info("feed recommendations cache miss, computing on-demand", "did", userDID)
+
 	subCount := 0
 	_ = e.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM articles.subscriptions WHERE user_did = ?`, userDID).Scan(&subCount)
 
@@ -77,7 +80,10 @@ func (e *Engine) GetFeedRecommendations(ctx context.Context, userDID string, lim
 		recs, err := e.ColdStartRecommendations(ctx, userDID, limit*2)
 		if err == nil && len(recs) > 0 {
 			normalizeFeedScores(recs)
-			return ApplyDiversity(recs, limit), nil
+			result := ApplyDiversity(recs, limit)
+			e.storePrecomputed(ctx, userDID, "feed", mustJSON(result))
+			e.logger.Info("feed recommendations computed (cold-start)", "did", userDID, "count", len(result), "duration", time.Since(start))
+			return result, nil
 		}
 	}
 
@@ -87,7 +93,10 @@ func (e *Engine) GetFeedRecommendations(ctx context.Context, userDID string, lim
 	}
 
 	normalizeFeedScores(recs)
-	return ApplyDiversity(recs, limit), nil
+	result := ApplyDiversity(recs, limit)
+	e.storePrecomputed(ctx, userDID, "feed", mustJSON(result))
+	e.logger.Info("feed recommendations computed (on-demand)", "did", userDID, "count", len(result), "duration", time.Since(start))
+	return result, nil
 }
 
 // GetPeopleRecommendations returns similar users based on subscription overlap,
@@ -101,6 +110,9 @@ func (e *Engine) GetPeopleRecommendations(ctx context.Context, userDID string, l
 			return recs, nil
 		}
 	}
+
+	start := time.Now()
+	e.logger.Info("people recommendations cache miss, computing on-demand", "did", userDID)
 
 	half := max(limit/2, 1)
 
@@ -119,6 +131,8 @@ func (e *Engine) GetPeopleRecommendations(ctx context.Context, userDID string, l
 	recs = append(recs, outNet...)
 
 	normalizePersonScores(recs)
+	e.storePrecomputed(ctx, userDID, "person", mustJSON(recs))
+	e.logger.Info("people recommendations computed (on-demand)", "did", userDID, "count", len(recs), "duration", time.Since(start))
 	return recs, nil
 }
 
@@ -134,11 +148,16 @@ func (e *Engine) GetArticleRecommendations(ctx context.Context, userDID string, 
 		}
 	}
 
+	start := time.Now()
+	e.logger.Info("article recommendations cache miss, computing on-demand", "did", userDID)
+
 	recs, err := e.ComputeArticleRecommendationsOnDemand(ctx, userDID, languages, limit)
 	if err != nil {
 		return nil, err
 	}
 	normalizeArticleScores(recs)
+	e.storePrecomputed(ctx, userDID, "article", mustJSON(recs))
+	e.logger.Info("article recommendations computed (on-demand)", "did", userDID, "count", len(recs), "duration", time.Since(start))
 	return recs, nil
 }
 

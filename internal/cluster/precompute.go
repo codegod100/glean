@@ -6,11 +6,6 @@ import (
 	"time"
 )
 
-type PrecomputedRec struct {
-	RecType string
-	Data    string
-}
-
 func (e *Engine) PrecomputeAllRecommendations(ctx context.Context) error {
 	e.logger.Info("starting recommendation precomputation")
 	start := time.Now()
@@ -19,6 +14,8 @@ func (e *Engine) PrecomputeAllRecommendations(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	e.logger.Info("precomputing recommendations for users", "count", len(users))
 
 	computed := 0
 	for _, did := range users {
@@ -43,6 +40,8 @@ func (e *Engine) PrecomputeAllRecommendations(ctx context.Context) error {
 }
 
 func (e *Engine) precomputeForUser(ctx context.Context, userDID string) error {
+	start := time.Now()
+
 	feedRecs, err := e.ComputeFeedRecommendationsOnDemand(ctx, userDID, 10)
 	if err != nil {
 		return err
@@ -80,22 +79,17 @@ func (e *Engine) precomputeForUser(ctx context.Context, userDID string) error {
 		}
 	}
 
-	for _, rec := range []PrecomputedRec{
-		{RecType: "feed", Data: mustJSON(feedRecs)},
-		{RecType: "article", Data: mustJSON(articleRecs)},
-		{RecType: "person", Data: mustJSON(peopleRecs)},
-	} {
-		if rec.Data == "null" {
-			continue
-		}
-		if _, err := e.db.ExecContext(ctx, `
-			INSERT INTO recs.precomputed_recommendations (user_did, rec_type, data, computed_at)
-			VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-			ON CONFLICT(user_did, rec_type) DO UPDATE SET data = excluded.data, computed_at = excluded.computed_at
-		`, userDID, rec.RecType, rec.Data); err != nil {
-			e.logger.Warn("failed to store precomputed rec", "did", userDID, "type", rec.RecType, "error", err)
-		}
-	}
+	e.storePrecomputed(ctx, userDID, "feed", mustJSON(feedRecs))
+	e.storePrecomputed(ctx, userDID, "article", mustJSON(articleRecs))
+	e.storePrecomputed(ctx, userDID, "person", mustJSON(peopleRecs))
+
+	e.logger.Debug("precomputed recommendations for user",
+		"did", userDID,
+		"feeds", len(feedRecs),
+		"articles", len(articleRecs),
+		"people", len(peopleRecs),
+		"duration", time.Since(start),
+	)
 
 	return nil
 }
@@ -134,18 +128,15 @@ func (e *Engine) getPrecomputed(ctx context.Context, userDID, recType string) (s
 	return data, true
 }
 
-func (e *Engine) invalidatePrecomputed(ctx context.Context, userDID, recType string) {
-	_, _ = e.db.ExecContext(ctx, `
-		DELETE FROM recs.precomputed_recommendations
-		WHERE user_did = ? AND rec_type = ?
-	`, userDID, recType)
-}
-
-func (e *Engine) recomputeForUser(ctx context.Context, userDID, recType string) {
-	e.invalidatePrecomputed(ctx, userDID, recType)
-	if err := e.precomputeForUser(ctx, userDID); err != nil {
-		e.logger.Warn("recompute failed for user", "did", userDID, "type", recType, "error", err)
+func (e *Engine) storePrecomputed(ctx context.Context, userDID, recType string, data string) {
+	if data == "null" {
+		return
 	}
+	_, _ = e.db.ExecContext(ctx, `
+		INSERT INTO recs.precomputed_recommendations (user_did, rec_type, data, computed_at)
+		VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(user_did, rec_type) DO UPDATE SET data = excluded.data, computed_at = excluded.computed_at
+	`, userDID, recType, data)
 }
 
 func mustJSON(v any) string {
