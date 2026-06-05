@@ -29,7 +29,13 @@ func writeLikeButton(w http.ResponseWriter, articleID int64, liked bool, count i
 	if bordered {
 		fmt.Fprintf(w, `<button hx-post="/articles/%d/like?bordered=true" hx-target="this" hx-swap="outerHTML" title="%s" class="group inline-flex items-center gap-1.5 text-[10px] uppercase tracking-button px-2.5 py-1 rounded-pill transition %s"><svg class="w-3.5 h-3.5" fill="%s" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/></svg><span>%d</span></button>`, articleID, likeTitle(liked), likedCls, fill, count)
 	} else {
-		fmt.Fprintf(w, `<button hx-post="/articles/%d/like" hx-target="this" hx-swap="outerHTML" title="%s" class="group inline-flex items-center gap-1 text-[10px] uppercase tracking-button px-2 py-0.5 rounded-pill transition %s"><svg class="w-3 h-3" fill="%s" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/></svg><span>%d</span></button>`, articleID, likeTitle(liked), likedCls, fill, count)
+		unlikedBorderCls := "text-spot-text bg-spot-surface border border-spot-divider hover:text-spot-red hover:bg-spot-red/10 hover:border-spot-red/20"
+		likedBorderCls := "text-spot-red bg-spot-red/15 hover:bg-spot-red/25 border border-spot-red/20"
+		borderCls := unlikedBorderCls
+		if liked {
+			borderCls = likedBorderCls
+		}
+		fmt.Fprintf(w, `<button hx-post="/articles/%d/like" hx-target="this" hx-swap="outerHTML" title="%s" class="group inline-flex items-center justify-center gap-1 text-[10px] uppercase tracking-button px-2 py-0.5 rounded-pill transition w-full %s"><svg class="w-3 h-3" fill="%s" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/></svg><span>%d</span></button>`, articleID, likeTitle(liked), borderCls, fill, count)
 	}
 }
 
