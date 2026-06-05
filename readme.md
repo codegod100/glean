@@ -19,7 +19,7 @@ Your subscriptions live as records on your PDS. You own them. If Glean goes away
 
 ## How recommendations work
 
-Glean looks at what you and other users subscribe to, read, and like to suggest feeds and people you might enjoy.
+Glean looks at what you and other users subscribe to, read, and like to suggest feeds, articles, and people you might enjoy.
 
 **Feed suggestions** come from readers who share your subscriptions. If a lot of people who follow the same blogs as you also follow a blog you haven't seen, that blog shows up as a recommendation. The system also considers which articles you've liked, whether you follow the person on Bluesky, and how popular the feed is overall.
 

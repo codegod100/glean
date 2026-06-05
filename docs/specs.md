@@ -701,9 +701,9 @@ J(U1, U2) = jaccard_subscriptions + 0.3 * jaccard_likes + 0.2 * jaccard_tags + 0
 
 Like overlap uses exponential time decay: `EXP(-0.023 * age_days)` (30-day half-life).
 
-### 7.4 On-Demand Scoring
+### 7.4 Precomputed + On-Demand Scoring
 
-Recommendations are computed **on-demand** at query time, not pre-materialized. This avoids write amplification on every cron run.
+Recommendations are **precomputed** for all active users on every cron cycle (`GLEAN_CLUSTER_INTERVAL`, default 1h) and stored in the `precomputed_recommendations` table
 
 **Feed recommendation score** (computed in SQL):
 
@@ -795,8 +795,9 @@ A background goroutine runs on a configurable schedule (`GLEAN_CLUSTER_INTERVAL`
 6. **Compute follow distances**: Incremental BFS for dirty users (1-hop through 3-hop from `follows` table)
 7. **Compute signal profiles**: Per-user category/tag/like summaries
 8. **Auto-dismiss stale**: Dismiss items shown >=5 times over >5 days without action
-9. **Prune old impressions**: Delete `recommendation_impressions` older than 90 days
+9. **Precompute recommendations**: For each active user, compute feed, article, and people recommendations and store as JSON in the `precomputed_recommendations` table. This ensures instant load times for all recommendation sections.
 10. **DB maintenance**: Run `PRAGMA incremental_vacuum` on all 3 databases (users, articles, recs) to reclaim freed pages. Incremental auto-vacuum is enabled via `PRAGMA auto_vacuum = INCREMENTAL` at connection time, so pages freed by impression pruning and other deletions are reclaimed each cycle.
+11. **Prune old impressions**: Delete `recommendation_impressions` older than 90 days
 
 Jetstream ingestion and record indexing happen in a separate persistent goroutine (the Jetstream consumer), not in the cron.
 
@@ -828,7 +829,7 @@ CREATE TABLE recommendation_impressions (
 
 ### 7.12 Computed Recommendation Tables (`<base>_recs`)
 
-Written exclusively by the cron. No user-facing writes — only reads during on-demand scoring.
+Written exclusively by the cron. Read during recommendation requests (precomputed results served first, on-demand fallback if missing).
 
 ```sql
 CREATE TABLE feed_similarity (
@@ -878,6 +879,14 @@ CREATE TABLE user_signal_profiles (
     top_categories  TEXT,
     top_tags        TEXT,
     updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE precomputed_recommendations (
+    user_did    TEXT NOT NULL,
+    rec_type    TEXT NOT NULL CHECK(rec_type IN ('feed', 'article', 'person')),
+    data        TEXT NOT NULL,
+    computed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_did, rec_type)
 );
 ```
 
@@ -1028,7 +1037,8 @@ glean/
 │   ├── cluster/
 │   │   ├── jaccard.go             # Jaccard similarity computation
 │   │   ├── article.go             # Article + feed embedding computation, vec0 KNN content boost, language detection
-│   │   ├── scoring.go             # Feed + people + article recommendation queries (on-demand)
+│   │   ├── scoring.go             # Feed + people + article recommendation queries (precomputed + on-demand fallback)
+│   │   ├── precompute.go          # Precompute all user recommendations (run by cron 4x/day)
 │   │   ├── social.go              # Incremental follow-distance computation (1-3 hop, dirty-flag)
 │   │   ├── weights.go             # Bandit-style signal weight auto-tuning
 │   │   ├── diversity.go           # Post-query domain/category diversity filtering
@@ -1137,7 +1147,8 @@ Cron (every 1h) ──► Cluster Engine
 
 Browser ──GET /dashboard──► Server
                                 │
-                                ├─► Compute recommendations on-demand (filtered by user's language preferences)
+                                ├─► Read precomputed recommendations from DB (instant)
+                                │   (fallback to on-demand if missing)
                                 ├─► Fetch feed metadata
                                 └─◄ Render recommendation cards (htmx)
 ```

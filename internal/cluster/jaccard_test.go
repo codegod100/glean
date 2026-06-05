@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	"pkg.rbrt.fr/glean/internal/db"
@@ -96,7 +95,7 @@ func seedFollowData(t *testing.T, ctx context.Context, dbs *db.Store) {
 }
 
 func newTestEngine(dbs *db.Store) *Engine {
-	return NewEngine(dbs.SQLDB(), dbs.Articles, NewMockEmbedder(8), nil, feedback.NewService(dbs.SQLDB()), slog.Default(), time.Hour, DefaultConfig())
+	return NewEngine(dbs.SQLDB(), dbs.Articles, NewMockEmbedder(8), nil, feedback.NewService(dbs.SQLDB()), slog.Default(), DefaultConfig())
 }
 
 func TestComputeFeedSimilarity(t *testing.T) {

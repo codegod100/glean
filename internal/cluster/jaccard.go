@@ -6,9 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
-	"time"
-
-	"github.com/hashicorp/golang-lru/v2/expirable"
 
 	"pkg.rbrt.fr/glean/internal/db"
 	"pkg.rbrt.fr/glean/internal/feedback"
@@ -49,31 +46,17 @@ type Engine struct {
 	embedder ml.Embedder
 	llm      ml.TextModel
 	feedback *feedback.Service
-
-	feedCache             *expirable.LRU[string, []*FeedRecommendation]
-	peopleCache           *expirable.LRU[string, []*PersonRecommendation]
-	articleCache          *expirable.LRU[string, []*ArticleRecommendation]
-	globalTrendingCache   *expirable.LRU[string, []*db.TrendingItem]
-	personalTrendingCache *expirable.LRU[string, []*db.TrendingItem]
 }
 
-// recCacheSize is the maximum number of recommendations to cache per user.
-const recCacheSize = 512
-
-func NewEngine(sqlDB *sql.DB, articles *db.ArticleStore, embedder ml.Embedder, llm ml.TextModel, fb *feedback.Service, logger *slog.Logger, cacheTTL time.Duration, config Config) *Engine {
+func NewEngine(sqlDB *sql.DB, articles *db.ArticleStore, embedder ml.Embedder, llm ml.TextModel, fb *feedback.Service, logger *slog.Logger, config Config) *Engine {
 	return &Engine{
-		db:                    sqlDB,
-		articles:              articles,
-		logger:                logger,
-		config:                config,
-		embedder:              embedder,
-		llm:                   llm,
-		feedback:              fb,
-		feedCache:             expirable.NewLRU[string, []*FeedRecommendation](recCacheSize, nil, cacheTTL),
-		peopleCache:           expirable.NewLRU[string, []*PersonRecommendation](recCacheSize, nil, cacheTTL),
-		articleCache:          expirable.NewLRU[string, []*ArticleRecommendation](recCacheSize, nil, cacheTTL),
-		globalTrendingCache:   expirable.NewLRU[string, []*db.TrendingItem](recCacheSize, nil, cacheTTL),
-		personalTrendingCache: expirable.NewLRU[string, []*db.TrendingItem](recCacheSize, nil, cacheTTL),
+		db:       sqlDB,
+		articles: articles,
+		logger:   logger,
+		config:   config,
+		embedder: embedder,
+		llm:      llm,
+		feedback: fb,
 	}
 }
 

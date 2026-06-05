@@ -10,7 +10,8 @@ import (
 )
 
 // Cron periodically runs all cluster engine computations (similarity, embeddings,
-// follow distances, signal profiles, auto-dismiss) on a fixed interval.
+// follow distances, signal profiles, auto-dismiss, recommendation precomputation)
+// on a fixed interval.
 type Cron struct {
 	engine   *Engine
 	interval time.Duration
@@ -39,12 +40,6 @@ func (c *Cron) Run(ctx context.Context) error {
 		if !c.engine.mu.TryLock() {
 			c.logger.Info("skipping computation: already in progress")
 		} else {
-			c.engine.feedCache.Purge()
-			c.engine.peopleCache.Purge()
-			c.engine.articleCache.Purge()
-			c.engine.globalTrendingCache.Purge()
-			c.engine.personalTrendingCache.Purge()
-
 			if err := c.engine.ComputeFeedEmbeddings(ctx); err != nil {
 				c.engine.logger.Error("feed embeddings failed", "error", err)
 			}
@@ -69,6 +64,10 @@ func (c *Cron) Run(ctx context.Context) error {
 			if err := c.engine.feedback.AutoDismissStale(ctx, 5, 5); err != nil {
 				c.engine.logger.Error("auto dismiss failed", "error", err)
 			}
+			if err := c.engine.PrecomputeAllRecommendations(ctx); err != nil {
+				c.engine.logger.Error("recommendation precomputation failed", "error", err)
+			}
+
 			c.engine.mu.Unlock()
 		}
 

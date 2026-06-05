@@ -3,8 +3,8 @@ package cluster
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"pkg.rbrt.fr/glean/internal/db"
@@ -47,15 +47,15 @@ type ArticleRecommendation struct {
 }
 
 func (e *Engine) InvalidateFeedCache(userDID string) {
-	e.feedCache.Remove(userDID)
+	go e.recomputeForUser(context.Background(), userDID, "feed")
 }
 
 func (e *Engine) InvalidateArticleCache(userDID string) {
-	e.articleCache.Remove(userDID)
+	go e.recomputeForUser(context.Background(), userDID, "article")
 }
 
 func (e *Engine) InvalidatePeopleCache(userDID string) {
-	e.peopleCache.Remove(userDID)
+	go e.recomputeForUser(context.Background(), userDID, "person")
 }
 
 // GetFeedRecommendations returns feed recommendations for a user. Users with
@@ -63,8 +63,11 @@ func (e *Engine) InvalidatePeopleCache(userDID string) {
 // KNN or graph+popular fallback). Results are min-max normalized and
 // diversity-filtered before returning.
 func (e *Engine) GetFeedRecommendations(ctx context.Context, userDID string, limit int) ([]*FeedRecommendation, error) {
-	if entry, ok := e.feedCache.Get(userDID); ok {
-		return entry, nil
+	if data, ok := e.getPrecomputed(ctx, userDID, "feed"); ok {
+		var recs []*FeedRecommendation
+		if err := json.Unmarshal([]byte(data), &recs); err == nil {
+			return recs, nil
+		}
 	}
 
 	subCount := 0
@@ -84,9 +87,7 @@ func (e *Engine) GetFeedRecommendations(ctx context.Context, userDID string, lim
 	}
 
 	normalizeFeedScores(recs)
-	result := ApplyDiversity(recs, limit)
-	e.feedCache.Add(userDID, result)
-	return result, nil
+	return ApplyDiversity(recs, limit), nil
 }
 
 // GetPeopleRecommendations returns similar users based on subscription overlap,
@@ -94,8 +95,11 @@ func (e *Engine) GetFeedRecommendations(ctx context.Context, userDID string, lim
 // limit come from the user's network (followed) and half from outside. When
 // outside-network candidates are scarce, in-network fills the remaining slots.
 func (e *Engine) GetPeopleRecommendations(ctx context.Context, userDID string, limit int) ([]*PersonRecommendation, error) {
-	if entry, ok := e.peopleCache.Get(userDID); ok {
-		return entry, nil
+	if data, ok := e.getPrecomputed(ctx, userDID, "person"); ok {
+		var recs []*PersonRecommendation
+		if err := json.Unmarshal([]byte(data), &recs); err == nil {
+			return recs, nil
+		}
 	}
 
 	half := max(limit/2, 1)
@@ -115,7 +119,6 @@ func (e *Engine) GetPeopleRecommendations(ctx context.Context, userDID string, l
 	recs = append(recs, outNet...)
 
 	normalizePersonScores(recs)
-	e.peopleCache.Add(userDID, recs)
 	return recs, nil
 }
 
@@ -124,9 +127,11 @@ func (e *Engine) GetPeopleRecommendations(ctx context.Context, userDID string, l
 // (embedding KNN against user's liked articles), and recency. Scores are
 // min-max normalized.
 func (e *Engine) GetArticleRecommendations(ctx context.Context, userDID string, languages []string, limit int) ([]*ArticleRecommendation, error) {
-	artKey := userDID + "|" + strings.Join(languages, ",")
-	if entry, ok := e.articleCache.Get(artKey); ok {
-		return entry, nil
+	if data, ok := e.getPrecomputed(ctx, userDID, "article"); ok {
+		var recs []*ArticleRecommendation
+		if err := json.Unmarshal([]byte(data), &recs); err == nil {
+			return recs, nil
+		}
 	}
 
 	recs, err := e.ComputeArticleRecommendationsOnDemand(ctx, userDID, languages, limit)
@@ -134,47 +139,17 @@ func (e *Engine) GetArticleRecommendations(ctx context.Context, userDID string, 
 		return nil, err
 	}
 	normalizeArticleScores(recs)
-	e.articleCache.Add(artKey, recs)
 	return recs, nil
 }
 
 func (e *Engine) GetGlobalTrending(ctx context.Context, userDID string, limit, offset int) ([]*db.TrendingItem, error) {
-	if offset == 0 {
-		if entry, ok := e.globalTrendingCache.Get(userDID); ok {
-			return entry, nil
-		}
-	}
-
 	since := time.Now().AddDate(0, 0, -7).Format(time.RFC3339)
-	items, err := e.articles.ListTrendingArticles(ctx, userDID, since, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-
-	if offset == 0 {
-		e.globalTrendingCache.Add(userDID, items)
-	}
-	return items, nil
+	return e.articles.ListTrendingArticles(ctx, userDID, since, limit, offset)
 }
 
 func (e *Engine) GetPersonalTrending(ctx context.Context, userDID string, languages []string, limit, offset int) ([]*db.TrendingItem, error) {
-	key := userDID + "|" + strings.Join(languages, ",")
-	if offset == 0 {
-		if entry, ok := e.personalTrendingCache.Get(key); ok {
-			return entry, nil
-		}
-	}
-
 	since := time.Now().AddDate(0, 0, -7).Format(time.RFC3339)
-	items, err := e.articles.ListTrendingArticlesForUser(ctx, userDID, since, languages, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-
-	if offset == 0 {
-		e.personalTrendingCache.Add(key, items)
-	}
-	return items, nil
+	return e.articles.ListTrendingArticlesForUser(ctx, userDID, since, languages, limit, offset)
 }
 
 // SignalWeights holds per-signal multipliers used in the recommendation scoring

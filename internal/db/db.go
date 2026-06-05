@@ -449,6 +449,14 @@ var recsSchema = []string{
 
 	`CREATE INDEX IF NOT EXISTS recs.idx_follow_distances_a_dist ON follow_distances(user_a, distance)`,
 	`CREATE INDEX IF NOT EXISTS recs.idx_user_similarity_b ON user_similarity(user_b)`,
+
+	`CREATE TABLE IF NOT EXISTS recs.precomputed_recommendations (
+		user_did    TEXT NOT NULL,
+		rec_type    TEXT NOT NULL CHECK(rec_type IN ('feed', 'article', 'person')),
+		data        TEXT NOT NULL,
+		computed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (user_did, rec_type)
+	)`,
 }
 
 func NullStr(s string) sql.NullString {
