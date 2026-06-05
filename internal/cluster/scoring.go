@@ -81,7 +81,7 @@ func (e *Engine) GetFeedRecommendations(ctx context.Context, userDID string, lim
 		if err == nil && len(recs) > 0 {
 			normalizeFeedScores(recs)
 			result := ApplyDiversity(recs, limit)
-			e.storePrecomputed(ctx, userDID, "feed", mustJSON(result))
+			e.storeRecs(ctx, userDID, "feed", result)
 			e.logger.Info("feed recommendations computed (cold-start)", "did", userDID, "count", len(result), "duration", time.Since(start))
 			return result, nil
 		}
@@ -94,7 +94,7 @@ func (e *Engine) GetFeedRecommendations(ctx context.Context, userDID string, lim
 
 	normalizeFeedScores(recs)
 	result := ApplyDiversity(recs, limit)
-	e.storePrecomputed(ctx, userDID, "feed", mustJSON(result))
+	e.storeRecs(ctx, userDID, "feed", result)
 	e.logger.Info("feed recommendations computed (on-demand)", "did", userDID, "count", len(result), "duration", time.Since(start))
 	return result, nil
 }
@@ -131,7 +131,7 @@ func (e *Engine) GetPeopleRecommendations(ctx context.Context, userDID string, l
 	recs = append(recs, outNet...)
 
 	normalizePersonScores(recs)
-	e.storePrecomputed(ctx, userDID, "person", mustJSON(recs))
+	e.storeRecs(ctx, userDID, "person", recs)
 	e.logger.Info("people recommendations computed (on-demand)", "did", userDID, "count", len(recs), "duration", time.Since(start))
 	return recs, nil
 }
@@ -156,7 +156,7 @@ func (e *Engine) GetArticleRecommendations(ctx context.Context, userDID string, 
 		return nil, err
 	}
 	normalizeArticleScores(recs)
-	e.storePrecomputed(ctx, userDID, "article", mustJSON(recs))
+	e.storeRecs(ctx, userDID, "article", recs)
 	e.logger.Info("article recommendations computed (on-demand)", "did", userDID, "count", len(recs), "duration", time.Since(start))
 	return recs, nil
 }

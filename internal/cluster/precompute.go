@@ -79,9 +79,9 @@ func (e *Engine) precomputeForUser(ctx context.Context, userDID string) error {
 		}
 	}
 
-	e.storePrecomputed(ctx, userDID, "feed", mustJSON(feedRecs))
-	e.storePrecomputed(ctx, userDID, "article", mustJSON(articleRecs))
-	e.storePrecomputed(ctx, userDID, "person", mustJSON(peopleRecs))
+	e.storeRecs(ctx, userDID, "feed", feedRecs)
+	e.storeRecs(ctx, userDID, "article", articleRecs)
+	e.storeRecs(ctx, userDID, "person", peopleRecs)
 
 	e.logger.Debug("precomputed recommendations for user",
 		"did", userDID,
@@ -128,21 +128,14 @@ func (e *Engine) getPrecomputed(ctx context.Context, userDID, recType string) (s
 	return data, true
 }
 
-func (e *Engine) storePrecomputed(ctx context.Context, userDID, recType string, data string) {
-	if data == "null" {
-		return
+func (e *Engine) storeRecs(ctx context.Context, userDID, recType string, v any) {
+	data := "[]"
+	if b, err := json.Marshal(v); err == nil {
+		data = string(b)
 	}
 	_, _ = e.db.ExecContext(ctx, `
 		INSERT INTO recs.precomputed_recommendations (user_did, rec_type, data, computed_at)
 		VALUES (?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(user_did, rec_type) DO UPDATE SET data = excluded.data, computed_at = excluded.computed_at
 	`, userDID, recType, data)
-}
-
-func mustJSON(v any) string {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return "null"
-	}
-	return string(b)
 }
