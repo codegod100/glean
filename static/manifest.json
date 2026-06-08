@@ -1,14 +1,42 @@
 {
-  "name": "Glean",
+  "name": "Glean - Social RSS Reader",
   "short_name": "Glean",
-  "description": "The social RSS reader built on AT Protocol.",
+  "description": "The social RSS reader built on AT Protocol. Discover, read, and share articles from across the web.",
   "start_url": "/dashboard",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#0a1814",
   "theme_color": "#00754A",
+  "categories": ["news", "social", "productivity"],
   "icons": [
-    { "src": "/static/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
-    { "src": "/static/favicon.png", "sizes": "512x512", "type": "image/png" },
+    {
+      "src": "/static/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/static/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
     {
       "src": "/static/apple-touch-icon.png",
       "sizes": "180x180",

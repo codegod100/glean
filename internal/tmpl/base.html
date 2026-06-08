@@ -31,12 +31,18 @@
     <meta property="og:image" content="/static/banner.png">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Glean">
-    <link rel="icon" type="image/png" sizes="512x512" href="/static/favicon.png">
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/static/icon-512.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
     <meta name="theme-color" content="#00754A">
     <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Glean">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="application-name" content="Glean">
+    <meta name="msapplication-TileColor" content="#00754A">
+    <meta name="msapplication-TileImage" content="/static/icon-192.png">
     <link rel="manifest" href="/static/manifest.json">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -48,6 +54,51 @@
         <div class="flex justify-end gap-3">
             <button onclick="document.getElementById('confirm-dialog').close(false)" class="text-sm text-spot-text px-4 py-2 rounded-pill border border-spot-outline hover:border-spot-text transition">Cancel</button>
             <button id="confirm-dialog-ok" class="text-sm text-white bg-spot-red hover:brightness-110 px-4 py-2 rounded-pill font-bold uppercase tracking-button transition">Confirm</button>
+        </div>
+    </dialog>
+    <dialog id="install-dialog" class="bg-spot-surface rounded-xl p-6 max-w-sm shadow-spot-elevated border border-spot-divider backdrop:bg-black/50" onclick="if(event.target===this)this.close()">
+        <div class="flex items-center gap-3 mb-5">
+            <img src="/static/favicon.svg" class="w-12 h-12 rounded-xl shrink-0" alt="Glean">
+            <div>
+                <h3 class="text-sm font-bold text-spot-text">Install Glean</h3>
+                <p class="text-xs text-spot-secondary">Add to your home screen for a native app experience</p>
+            </div>
+        </div>
+        <div id="install-native" class="hidden">
+            <p class="text-sm text-spot-secondary mb-5">Install Glean on your device for quick access.</p>
+            <div class="flex gap-2 justify-end">
+                <button onclick="document.getElementById('install-dialog').close()" class="text-sm text-spot-text px-4 py-2 rounded-pill border border-spot-outline hover:border-spot-text transition">Not now</button>
+                <button id="install-btn" class="text-sm text-white bg-spot-green hover:brightness-110 px-4 py-2 rounded-pill font-bold uppercase tracking-button transition">Install</button>
+            </div>
+        </div>
+        <div id="install-manual" class="hidden">
+            <div id="install-instructions-chrome" class="hidden space-y-3">
+                <p class="text-sm text-spot-secondary">To install Glean as an app:</p>
+                <ol class="text-sm text-spot-secondary space-y-2.5 list-decimal list-inside">
+                    <li>Tap the <strong class="text-spot-text">three-dot menu</strong> in the top-right or bottom-right corner</li>
+                    <li>Select <strong class="text-spot-text">"Add to Home screen"</strong> or <strong class="text-spot-text">"Install app"</strong></li>
+                    <li>Tap <strong class="text-spot-text">"Add"</strong> to confirm</li>
+                </ol>
+            </div>
+            <div id="install-instructions-safari" class="hidden space-y-3">
+                <p class="text-sm text-spot-secondary">To install Glean as an app:</p>
+                <ol class="text-sm text-spot-secondary space-y-2.5 list-decimal list-inside">
+                    <li>Tap the <strong class="text-spot-text">Share button</strong> at the bottom of the screen</li>
+                    <li>Scroll down and tap <strong class="text-spot-text">"Add to Home Screen"</strong></li>
+                    <li>Tap <strong class="text-spot-text">"Add"</strong> to confirm</li>
+                </ol>
+            </div>
+            <div id="install-instructions-firefox" class="hidden space-y-3">
+                <p class="text-sm text-spot-secondary">To install Glean as an app:</p>
+                <ol class="text-sm text-spot-secondary space-y-2.5 list-decimal list-inside">
+                    <li>Tap the <strong class="text-spot-text">three-dot menu</strong> in the top-right corner</li>
+                    <li>Select <strong class="text-spot-text">"Install"</strong> or <strong class="text-spot-text">"Add to Home screen"</strong></li>
+                    <li>Tap <strong class="text-spot-text">"Add"</strong> to confirm</li>
+                </ol>
+            </div>
+            <div class="mt-5 flex justify-end">
+                <button onclick="document.getElementById('install-dialog').close()" class="text-sm text-spot-text px-4 py-2 rounded-pill border border-spot-outline hover:border-spot-text transition">Got it</button>
+            </div>
         </div>
     </dialog>
     <dialog id="shortcuts-dialog" class="bg-spot-surface rounded-xl p-6 max-w-xs shadow-spot-elevated border border-spot-divider backdrop:bg-black/50" onclick="if(event.target===this)this.close()">
@@ -208,6 +259,10 @@
                                      <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m6.75 7.5 3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0 0 21 18V6a2.25 2.25 0 0 0-2.25-2.25H5.25A2.25 2.25 0 0 0 3 6v12a2.25 2.25 0 0 0 2.25 2.25Z"/></svg>
                                      Shortcuts
                                  </button>
+                                <button onclick="showInstallDialog()" class="text-xs text-spot-secondary hover:text-spot-text hover:underline inline-flex gap-1.5 items-center transition text-left">
+                                    <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+                                    Install App
+                                </button>
                             </div>
                         </div>
                             <div class="text-right">
@@ -237,6 +292,10 @@
                                      <svg class="w-3.5 h-3.5 theme-icon-light hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
                                      <span class="theme-text-dark">Dark</span>
                                      <span class="theme-text-light hidden">Light</span>
+                                 </button>
+                                 <button onclick="showInstallDialog()" class="text-xs text-spot-secondary hover:text-spot-text inline-flex gap-1.5 items-center transition">
+                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+                                     Install App
                                  </button>
                              </div>
                             <div class="border-t border-spot-divider mt-4 pt-3">
@@ -343,6 +402,46 @@
         if (e.key === 't') window.location.href = '/trending';
         if (e.key === 'l') window.location.href = '/library';
     });
+
+    var deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        deferredPrompt = e;
+    });
+
+    function showInstallDialog() {
+        var dlg = document.getElementById('install-dialog');
+        var nativeEl = document.getElementById('install-native');
+        var manualEl = document.getElementById('install-manual');
+        var ua = navigator.userAgent;
+
+        nativeEl.classList.add('hidden');
+        manualEl.classList.add('hidden');
+        document.getElementById('install-instructions-chrome').classList.add('hidden');
+        document.getElementById('install-instructions-safari').classList.add('hidden');
+        document.getElementById('install-instructions-firefox').classList.add('hidden');
+
+        if (deferredPrompt) {
+            nativeEl.classList.remove('hidden');
+            document.getElementById('install-btn').onclick = function() {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(function() {
+                    deferredPrompt = null;
+                    dlg.close();
+                });
+            };
+        } else {
+            manualEl.classList.remove('hidden');
+            if (/iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+                document.getElementById('install-instructions-safari').classList.remove('hidden');
+            } else if (/Firefox/.test(ua) && /Android/.test(ua)) {
+                document.getElementById('install-instructions-firefox').classList.remove('hidden');
+            } else {
+                document.getElementById('install-instructions-chrome').classList.remove('hidden');
+            }
+        }
+        dlg.showModal();
+    }
     </script>
 </body>
 </html>
