@@ -62,21 +62,18 @@ func (e *Engine) precomputeForUser(ctx context.Context, userDID string) error {
 		}
 	}
 
-	half := 3
-	inNet, err := e.computePeopleByFollowStatus(ctx, userDID, true, half)
+	peoplePool := 10
+	inNet, err := e.computePeopleByFollowStatus(ctx, userDID, true, peoplePool)
 	if err != nil {
 		return err
 	}
-	outNet, err := e.computePeopleByFollowStatus(ctx, userDID, false, half)
+	outNet, err := e.computePeopleByFollowStatus(ctx, userDID, false, peoplePool)
 	if err != nil {
 		return err
 	}
 	peopleRecs := append(inNet, outNet...)
 	if len(peopleRecs) > 0 {
 		normalizePersonScores(peopleRecs)
-		if len(peopleRecs) > 6 {
-			peopleRecs = peopleRecs[:6]
-		}
 	}
 
 	e.storeRecs(ctx, userDID, "feed", feedRecs)

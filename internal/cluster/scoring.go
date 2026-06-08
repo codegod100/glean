@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"time"
 
 	"pkg.rbrt.fr/glean/internal/db"
@@ -104,36 +105,38 @@ func (e *Engine) GetFeedRecommendations(ctx context.Context, userDID string, lim
 // limit come from the user's network (followed) and half from outside. When
 // outside-network candidates are scarce, in-network fills the remaining slots.
 func (e *Engine) GetPeopleRecommendations(ctx context.Context, userDID string, limit int) ([]*PersonRecommendation, error) {
+	half := max(limit/2, 1)
+
 	if data, ok := e.getPrecomputed(ctx, userDID, "person"); ok {
-		var recs []*PersonRecommendation
-		if err := json.Unmarshal([]byte(data), &recs); err == nil {
-			return recs, nil
+		var pool []*PersonRecommendation
+		if err := json.Unmarshal([]byte(data), &pool); err == nil {
+			return samplePeople(pool, half), nil
 		}
 	}
 
 	start := time.Now()
 	e.logger.Info("people recommendations cache miss, computing on-demand", "did", userDID)
 
-	half := max(limit/2, 1)
+	peoplePool := 10
 
-	inNet, err := e.computePeopleByFollowStatus(ctx, userDID, true, half)
+	inNet, err := e.computePeopleByFollowStatus(ctx, userDID, true, peoplePool)
 	if err != nil {
 		return nil, err
 	}
 
-	outNet, err := e.computePeopleByFollowStatus(ctx, userDID, false, half)
+	outNet, err := e.computePeopleByFollowStatus(ctx, userDID, false, peoplePool)
 	if err != nil {
 		return nil, err
 	}
 
-	var recs []*PersonRecommendation
-	recs = append(recs, inNet...)
-	recs = append(recs, outNet...)
+	var pool []*PersonRecommendation
+	pool = append(pool, inNet...)
+	pool = append(pool, outNet...)
 
-	normalizePersonScores(recs)
-	e.storeRecs(ctx, userDID, "person", recs)
-	e.logger.Info("people recommendations computed (on-demand)", "did", userDID, "count", len(recs), "duration", time.Since(start))
-	return recs, nil
+	normalizePersonScores(pool)
+	e.storeRecs(ctx, userDID, "person", pool)
+	e.logger.Info("people recommendations computed (on-demand)", "did", userDID, "count", len(pool), "duration", time.Since(start))
+	return samplePeople(pool, half), nil
 }
 
 // GetArticleRecommendations returns article recommendations combining social
@@ -560,6 +563,34 @@ func (e *Engine) computePeopleByFollowStatus(ctx context.Context, userDID string
 		results = append(results, rec)
 	}
 	return results, rows.Err()
+}
+
+// samplePeople randomly selects up to half people from each group (followed/not)
+// to ensure rotation across page loads.
+func samplePeople(pool []*PersonRecommendation, half int) []*PersonRecommendation {
+	var inNet, outNet []*PersonRecommendation
+	for _, p := range pool {
+		if p.IsFollowed {
+			inNet = append(inNet, p)
+		} else {
+			outNet = append(outNet, p)
+		}
+	}
+
+	rand.Shuffle(len(inNet), func(i, j int) { inNet[i], inNet[j] = inNet[j], inNet[i] })
+	rand.Shuffle(len(outNet), func(i, j int) { outNet[i], outNet[j] = outNet[j], outNet[i] })
+
+	if len(inNet) > half {
+		inNet = inNet[:half]
+	}
+	if len(outNet) > half {
+		outNet = outNet[:half]
+	}
+
+	result := make([]*PersonRecommendation, 0, len(inNet)+len(outNet))
+	result = append(result, inNet...)
+	result = append(result, outNet...)
+	return result
 }
 
 func (e *Engine) ComputeSignalProfiles(ctx context.Context) error {
