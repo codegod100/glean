@@ -6,15 +6,15 @@
         <div class="flex items-center gap-2 mb-4">
             <a href="/articles" class="text-xs text-spot-secondary hover:text-spot-text transition">&larr; All articles</a>
         </div>
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3.5">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3.5 min-w-0">
                 {{template "favicon" dict "src" .Feed.FaviconURL.String "size" "w-10 h-10"}}
-                <div>
+                <div class="min-w-0">
                     <h1 class="text-2xl font-bold text-spot-text" style="letter-spacing: -0.02em;">{{if .Feed.SiteURL.Valid}}<a href="{{.Feed.SiteURL.String}}" target="_blank" rel="noopener noreferrer" class="hover:text-spot-green transition">{{end}}{{if .Feed.Title.Valid}}{{.Feed.Title.String}}{{else}}{{.Feed.FeedURL}}{{end}}{{if .Feed.SiteURL.Valid}}</a>{{end}}</h1>
                     {{if .Feed.SiteURL.Valid}}<a href="{{.Feed.SiteURL.String}}" target="_blank" rel="noopener noreferrer" class="text-xs text-spot-secondary hover:text-spot-green transition">{{.Feed.SiteURL.String}}</a>{{end}}
                 </div>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 shrink-0">
                 {{if not .IsSubscribed}}
                 <form hx-post="/feeds/add" hx-swap="none" hx-on::after-request="if(event.detail.successful) window.location.reload()">
                     {{csrfInput .CSRFToken}}
@@ -33,8 +33,8 @@
         {{if .Feed.Description.Valid}}<p class="text-sm text-spot-secondary mt-3 leading-relaxed">{{.Feed.Description.String}}</p>{{end}}
     </div>
 
-    <div class="flex items-center gap-3 mb-6 flex-wrap">
-        <form method="GET" action="/articles" class="relative flex-1 min-w-[200px]">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
+        <form method="GET" action="/articles" class="relative w-full sm:flex-1 sm:min-w-[200px]">
             <input type="text" name="q" value="{{.SearchQuery}}" placeholder="Search articles..."
                    class="w-full bg-spot-hover text-spot-text rounded-pill pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-secondary"
                    hx-get="/articles" hx-trigger="keyup changed delay:300ms, search" hx-target="#article-list" hx-swap="innerHTML" hx-include="[name='q']">
@@ -96,8 +96,8 @@
     </div>
     <p class="text-sm text-spot-secondary mb-6">All your subscribed articles, {{if .SortOldest}}oldest first{{else}}newest first{{end}}.</p>
 
-    <div class="flex items-center gap-3 mb-6 flex-wrap">
-        <div class="flex items-center gap-1.5">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
+        <div class="flex items-center gap-1.5 flex-wrap">
             <a href="/articles?{{if not .SortOldest}}sort=oldest{{end}}{{if .Status}}&status={{.Status}}{{end}}"
                class="px-2.5 py-1.5 rounded-pill text-xs transition
                       {{if .SortOldest}}bg-spot-active-pill-bg text-spot-active-pill-text font-bold{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}}"
@@ -113,7 +113,7 @@
             <a href="/articles?{{if .Status}}status={{.Status}}&{{end}}category=__none__{{if .SortOldest}}&sort=oldest{{end}}" class="text-sm px-3 py-1 rounded-pill font-bold {{if eq .Category "__none__"}}bg-spot-active-pill-bg text-spot-active-pill-text{{else}}bg-spot-hover text-spot-secondary hover:text-spot-text{{end}} transition">Uncategorized</a>
             {{end}}
         </div>
-        <form method="GET" action="/articles" class="relative flex-1 min-w-[180px]">
+        <form method="GET" action="/articles" class="relative w-full sm:flex-1 sm:min-w-[180px]">
             <input type="text" name="q" value="{{.SearchQuery}}" placeholder="Search articles..."
                    class="w-full bg-spot-hover text-spot-text rounded-pill pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-secondary"
                    hx-get="/articles" hx-trigger="keyup changed delay:300ms, search" hx-target="#article-list" hx-swap="innerHTML" hx-include="[name='q']">

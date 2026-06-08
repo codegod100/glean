@@ -1,6 +1,6 @@
 {{define "feed-item.html"}}
 <div id="feed-{{.ID}}" class="contents">
-<div class="feed-item px-5 py-4 flex items-center justify-between gap-3 hover:bg-spot-hover-50 transition">
+<div class="feed-item px-4 sm:px-5 py-4 flex items-center justify-between gap-3 hover:bg-spot-hover-50 transition">
     <a href="/articles?feed={{.FeedURL}}" class="min-w-0 flex-1 flex items-center gap-3">
         {{template "favicon" dict "src" .FaviconURL.String "size" "w-5 h-5"}}
         <div class="min-w-0 flex-1">
@@ -29,9 +29,9 @@
         </form>
     </div>
 </div>
-<div id="feed-edit-{{.ID}}" class="px-5 py-4 bg-spot-hover/50 hidden">
+<div id="feed-edit-{{.ID}}" class="px-4 sm:px-5 py-4 bg-spot-hover/50 hidden">
     <form hx-post="/feeds/edit" hx-target="#feed-{{.ID}}" hx-swap="outerHTML"
-          class="flex items-center gap-2">
+          class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
         {{csrfInput .CSRFToken}}
         <input type="hidden" name="feed_url" value="{{.FeedURL}}">
         <input type="text" name="category" value="{{if .Category.Valid}}{{.Category.String}}{{end}}"

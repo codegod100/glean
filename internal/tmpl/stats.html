@@ -16,7 +16,7 @@
         </div>
         <div class="divide-y divide-spot-divider">
             {{range $metrics}}
-            <div class="px-5 py-3.5 flex items-start justify-between hover:bg-spot-hover transition">
+            <div class="px-4 sm:px-5 py-3.5 flex flex-col sm:flex-row sm:items-start justify-between hover:bg-spot-hover transition gap-1 sm:gap-0">
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2">
                         <span class="text-sm font-medium text-spot-text">{{.Name}}</span>
