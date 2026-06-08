@@ -311,6 +311,9 @@ func (h *StreamDBHandler) handleStandardDocument(ctx context.Context, event *Eve
 		if f, err := h.articles.GetFeed(ctx, publicationURI); err == nil && f.SiteURL.Valid {
 			articleURL = f.SiteURL.String + doc.Path
 		}
+		if related := doc.RelatedLinkURL(); related != "" && articleURL == "" {
+			articleURL = related
+		}
 
 		articles := []feed.Article{{
 			FeedURL:   publicationURI,

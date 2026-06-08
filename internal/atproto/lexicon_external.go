@@ -3,7 +3,10 @@
 // See lexicon_test.go for the test ensuring these stay in sync with lexicons/.
 package atproto
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strings"
+)
 
 type FollowRecord struct {
 	Subject   string          `json:"subject"`
@@ -143,4 +146,25 @@ type StandardDocumentRecord struct {
 	Labels       json.RawMessage `json:"labels,omitempty"`
 	Links        json.RawMessage `json:"links,omitempty"`
 	Tags         []string        `json:"tags,omitempty"`
+}
+
+type StandardDocumentLink struct {
+	Rel string `json:"rel"`
+	URI string `json:"uri"`
+}
+
+func (doc *StandardDocumentRecord) RelatedLinkURL() string {
+	if len(doc.Links) == 0 {
+		return ""
+	}
+	var links []StandardDocumentLink
+	if err := json.Unmarshal(doc.Links, &links); err != nil {
+		return ""
+	}
+	for _, l := range links {
+		if l.Rel == "related" && strings.HasPrefix(l.URI, "http") {
+			return l.URI
+		}
+	}
+	return ""
 }

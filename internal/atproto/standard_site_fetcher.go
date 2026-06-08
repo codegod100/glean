@@ -91,11 +91,16 @@ func (f *StandardSiteFetcher) fetchDocuments(ctx context.Context, client *Client
 		published := parseRFC3339(doc.PublishedAt)
 		updated := parseRFC3339(doc.UpdatedAt)
 
+		articleURL := publicationURL + doc.Path
+		if related := doc.RelatedLinkURL(); related != "" && articleURL == "" {
+			articleURL = related
+		}
+
 		articles = append(articles, feed.Article{
 			FeedURL:   publicationURI,
 			GUID:      r.URI,
 			Title:     doc.Title,
-			URL:       publicationURL + doc.Path,
+			URL:       articleURL,
 			Author:    firstContributor(doc.Contributors),
 			Content:   doc.TextContent,
 			Summary:   doc.Description,
