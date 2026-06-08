@@ -122,6 +122,8 @@ func (s *ArticleStore) ListAnnotations(ctx context.Context, feedURL, articleURL,
 	if articleURL != "" {
 		conds = append(conds, "a.article_url = ?")
 		args = append(args, articleURL)
+	} else if feedURL != "" {
+		conds = append(conds, "(a.article_url = '' OR a.article_url IS NULL)")
 	}
 	if authorDID != "" {
 		conds = append(conds, "a.author_did = ?")

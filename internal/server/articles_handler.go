@@ -254,7 +254,7 @@ func (s *Server) handleArticleDetail(w http.ResponseWriter, r *http.Request) {
 
 	g.Go(func() error {
 		var err error
-		annotations, err = s.dbs.Articles.ListAnnotations(gCtx, "", article.URL.String, "", 20, 0)
+		annotations, err = s.dbs.Articles.ListAnnotations(gCtx, article.FeedURL, article.URL.String, "", 20, 0)
 		if err != nil {
 			s.logger.Warn("failed to list annotations", "error", err)
 			return nil
