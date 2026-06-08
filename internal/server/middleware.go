@@ -73,7 +73,7 @@ func (s *Server) csrfMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if r.Header.Get("HX-Request") == htmxRequestHeader {
+		if isHXRequest(r) {
 			origin := r.Header.Get("Origin")
 			if origin != "" && !sameOrigin(origin, r.Host) {
 				http.Error(w, "forbidden", http.StatusForbidden)

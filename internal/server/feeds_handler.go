@@ -332,7 +332,7 @@ func (s *Server) handleClearAllSubscriptions(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	w.Header().Set("HX-Redirect", "/feeds")
+	w.Header().Set(HXRedirect, "/feeds")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -416,7 +416,7 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	w.Header().Set("HX-Redirect", "/feeds")
+	w.Header().Set(HXRedirect, "/feeds")
 	w.WriteHeader(http.StatusOK)
 }
 

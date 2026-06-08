@@ -50,7 +50,7 @@ func (s *Server) handleToggleLanguage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("HX-Redirect", "/profile/"+user.DID)
+	w.Header().Set(HXRedirect, "/profile/"+user.DID)
 	w.WriteHeader(http.StatusOK)
 }
 

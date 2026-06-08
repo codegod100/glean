@@ -34,7 +34,6 @@ import (
 	"pkg.rbrt.fr/glean/static"
 )
 
-const htmxRequestHeader = "true"
 
 var oauthScopes = []string{
 	"atproto",
@@ -574,7 +573,7 @@ func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderError(w http.ResponseWriter, r *http.Request, code int, title, message string) {
-	if r.Header.Get("HX-Request") == htmxRequestHeader {
+	if isHXRequest(r) {
 		w.WriteHeader(code)
 		w.Write([]byte(message))
 		return
@@ -597,7 +596,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		data["CSRFToken"] = cookie.Value
 	}
 
-	if r.Header.Get("HX-Request") == htmxRequestHeader {
+	if isHXRequest(r) {
 		if err := s.templates.ExecuteTemplate(w, name, data); err != nil {
 			s.logger.Error("template error", "error", err, "template", name)
 			http.Error(w, err.Error(), http.StatusInternalServerError)

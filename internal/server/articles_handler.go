@@ -144,7 +144,7 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if r.Header.Get("HX-Request") == htmxRequestHeader {
+	if isHXRequest(r) {
 		s.render(w, r, "articles-content.html", data)
 		return
 	}
