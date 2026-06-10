@@ -54,6 +54,12 @@ var oauthScopes = []string{
 	"rpc:app.bsky.actor.getProfile?aud=*",
 }
 
+var bufPool = sync.Pool{
+	New: func() any {
+		return new(bytes.Buffer)
+	},
+}
+
 func splitString(s, sep string) []string {
 	return strings.Split(s, sep)
 }
@@ -604,8 +610,11 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		return
 	}
 
-	var buf bytes.Buffer
-	if err := s.templates.ExecuteTemplate(&buf, name, data); err != nil {
+	buf := bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufPool.Put(buf)
+
+	if err := s.templates.ExecuteTemplate(buf, name, data); err != nil {
 		s.logger.Error("template error", "error", err, "template", name)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
