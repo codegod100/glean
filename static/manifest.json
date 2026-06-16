@@ -5,7 +5,7 @@
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
-  "orientation": "any",
+  "orientation": "portrait",
   "background_color": "#0a1814",
   "theme_color": "#00754A",
   "categories": ["news", "social", "productivity"],
