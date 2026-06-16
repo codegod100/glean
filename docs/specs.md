@@ -293,7 +293,7 @@ Output:
 
 ### 3.9 AppView Jetstream Consumption
 
-Glean subscribes to a Jetstream endpoint (`GLEAN_JETSTREAM`, default `wss://jetstream.glean.at`) for all `at.glean.*` records:
+Glean subscribes to a Jetstream endpoint (`GLEAN_JETSTREAM`, default `wss://jetstream1.eurosky.network`) for all `at.glean.*` records:
 
 ```
 SUBSCRIBE collections: ["at.glean.subscription", "at.glean.annotation", "at.glean.like", "app.bsky.graph.follow", "sh.tangled.graph.follow", "at.margin.note", "app.skyreader.feed.subscription"]
@@ -1095,7 +1095,7 @@ glean/
 
 Session cookies are HMAC-signed using `GLEAN_SESSION_KEY` (required, must be set to a random string). The server refuses to start without it.
 
-DID resolution uses a configurable PLC directory (`GLEAN_PLC_URL`, defaults to `https://didplc.glean.at`). The identity directory is initialized once at startup via `InitIdentity()` with a caching layer (250k entries, 24h TTL).
+DID resolution uses a configurable PLC directory (`GLEAN_PLC_URL`, defaults to `https://plc.eurosky.network`). The identity directory is initialized once at startup via `InitIdentity()` with a caching layer (250k entries, 24h TTL).
 
 1. User visits `/`, clicks "Sign in with Bluesky" (or any AT Proto PDS)
 2. Server redirects to AT Protocol OAuth authorization endpoint
