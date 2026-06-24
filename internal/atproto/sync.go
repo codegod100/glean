@@ -164,6 +164,7 @@ func (s *Sync) syncAnnotations(ctx context.Context, userDID string) error {
 
 	var annotations []*db.Annotation
 	activeURIs := make(map[string]bool)
+	seenContent := make(map[string]bool)
 
 	for _, r := range annRecs {
 		var rec AnnotationRecord
@@ -174,6 +175,7 @@ func (s *Sync) syncAnnotations(ctx context.Context, userDID string) error {
 			continue
 		}
 		activeURIs[r.URI] = true
+		seenContent[annotationContentKey(userDID, rec.ArticleURL, rec.Quote, rec.Note)] = true
 		t := parseRFC3339(rec.CreatedAt)
 		a := &db.Annotation{
 			URI:        r.URI,
@@ -201,6 +203,14 @@ func (s *Sync) syncAnnotations(ctx context.Context, userDID string) error {
 		if articleURL == "" {
 			continue
 		}
+
+		// A margin note that mirrors an existing glean annotation is skipped so it
+		// does not show up as a duplicate. Its URI is intentionally not tracked as
+		// active, so any stale duplicate row gets removed by orphan cleanup.
+		if seenContent[annotationContentKey(userDID, articleURL, quote, note)] {
+			continue
+		}
+
 		activeURIs[r.URI] = true
 
 		feedURL := ""
@@ -264,6 +274,45 @@ func (s *Sync) syncFollows(ctx context.Context, userDID string) error {
 	}
 
 	return s.users.SyncFollows(ctx, userDID, activeFollows)
+}
+
+// annotationContentKey is the identity used to detect that a margin note mirrors
+// a glean annotation. It mirrors ArticleStore.AnnotationExistsByContent.
+func annotationContentKey(authorDID, articleURL, quote, note string) string {
+	return authorDID + "\x1f" + articleURL + "\x1f" + quote + "\x1f" + note
+}
+
+// DeleteMirroredMarginNotes removes the user's at.margin.note records that mirror
+// the given glean annotation (same article URL, quote and note). Glean mirrors
+// every annotation it creates, so deleting an annotation must also delete its
+// mirror or the next sync would resurrect it as a margin-note annotation.
+func DeleteMirroredMarginNotes(ctx context.Context, client *Client, did, articleURL, quote, note string) error {
+	records, err := listAllRecords(ctx, client, did, CollectionMarginNote)
+	if err != nil {
+		return err
+	}
+	target := annotationContentKey(did, articleURL, quote, note)
+	for _, r := range records {
+		var rec MarginNoteRecord
+		if err := json.Unmarshal(r.Value, &rec); err != nil {
+			continue
+		}
+		rArticleURL, rQuote, rNote, _ := rec.ToAnnotation()
+		if rArticleURL == "" {
+			continue
+		}
+		if annotationContentKey(did, rArticleURL, rQuote, rNote) != target {
+			continue
+		}
+		parsed, ok := ParseRecordURI(r.URI)
+		if !ok {
+			continue
+		}
+		if err := client.DeleteRecord(ctx, did, CollectionMarginNote, parsed.RKey); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Sync) backfillMissingPDSRecords(ctx context.Context, userDID string) error {

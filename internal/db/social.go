@@ -84,6 +84,20 @@ func (s *ArticleStore) DeleteAnnotation(ctx context.Context, uri string) error {
 	return err
 }
 
+// DeleteAnnotationsByContent removes every annotation a user has for a given
+// article + quote + note. A glean annotation and its at.margin.note mirror share
+// this content, so deleting by content clears both rows even though they have
+// different URIs.
+func (s *ArticleStore) DeleteAnnotationsByContent(ctx context.Context, authorDID, articleURL, quote, note string) error {
+	_, err := s.db.ExecContext(ctx, `
+		DELETE FROM articles.annotations
+		WHERE author_did = ? AND article_url = ?
+			AND COALESCE(quote, '') = COALESCE(?, '')
+			AND COALESCE(note, '') = COALESCE(?, '')
+	`, authorDID, articleURL, quote, note)
+	return err
+}
+
 func (s *ArticleStore) AnnotationExists(ctx context.Context, uri string) (bool, error) {
 	var exists int
 	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM articles.annotations WHERE uri = ?`, uri).Scan(&exists)

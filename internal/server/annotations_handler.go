@@ -196,10 +196,18 @@ func (s *Server) handleDeleteAnnotation(w http.ResponseWriter, r *http.Request) 
 					return
 				}
 			}
+
+			// The annotation is mirrored to at.margin.note on creation; delete the
+			// mirror too, otherwise the next sync resurrects it as a margin note.
+			if mirrorErr := atproto.DeleteMirroredMarginNotes(ctx, client, user.DID, annotation.ArticleURL, annotation.Quote.String, annotation.Note.String); mirrorErr != nil {
+				s.logger.Error("failed to delete mirrored margin note", "error", mirrorErr)
+			}
 		}
 	}
 
-	if err := s.dbs.Articles.DeleteAnnotation(ctx, annotation.URI); err != nil {
+	// Delete by content so any duplicate row created by the mirror (different URI,
+	// identical content) is removed alongside the canonical annotation.
+	if err := s.dbs.Articles.DeleteAnnotationsByContent(ctx, user.DID, annotation.ArticleURL, annotation.Quote.String, annotation.Note.String); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
