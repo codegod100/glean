@@ -121,24 +121,18 @@
             </button>
         </div>
 
-        <form id="annotation-form" hx-post="/library/create" hx-target="#annotations-list" hx-swap="beforeend"
+        <form id="comment-form" hx-post="/library/create" hx-target="#annotations-list" hx-swap="beforeend"
               hx-on::after-request="this.reset()"
               class="bg-spot-surface rounded-xl shadow-spot p-4 mb-4 space-y-3">
             {{csrfInput .CSRFToken}}
             <input type="hidden" name="feed_url" value="{{.Article.FeedURL}}">
             <input type="hidden" name="article_url" value="{{if .Article.URL.Valid}}{{.Article.URL.String}}{{end}}">
-            <div id="quote-highlight" class="hidden mb-2">
-                <blockquote id="quote-preview" class="border-l-2 border-spot-green pl-3 text-sm text-spot-secondary italic"></blockquote>
-            </div>
-            <input type="hidden" name="quote" id="quote-input">
-            <div>
-                <textarea name="note" rows="2" placeholder="Add a note..."
-                          class="w-full bg-spot-hover text-spot-text rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder resize-none"></textarea>
-            </div>
+            <textarea name="note" rows="2" placeholder="Add a comment..."
+                      class="w-full bg-spot-hover text-spot-text rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder resize-none"></textarea>
             <div class="flex gap-2">
                 <input type="text" name="tags" placeholder="Tags (comma separated)"
-                       class="flex-1 bg-spot-hover text-spot-text rounded-pill px-5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
-                <button type="submit" class="bg-spot-green text-white rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition">Annotate</button>
+                       class="flex-1 min-w-0 bg-spot-hover text-spot-text rounded-pill px-5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
+                <button type="submit" class="bg-spot-green text-white rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition shrink-0">Comment</button>
             </div>
         </form>
 
@@ -150,6 +144,31 @@
             {{end}}
         </div>
     </section>
+
+    <div id="annotation-popover" class="hidden fixed z-50 w-[22rem] max-w-[calc(100vw-2rem)] bg-spot-surface rounded-xl shadow-spot-heavy border border-spot-divider p-4 space-y-3">
+        <div class="flex items-center justify-between">
+            <span class="text-[10px] font-bold uppercase tracking-button text-spot-secondary">Annotate</span>
+            <button type="button" id="annotation-popover-close" aria-label="Close" class="text-spot-secondary hover:text-spot-text transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+        <form id="annotation-form" hx-post="/library/create" hx-target="#annotations-list" hx-swap="beforeend" class="space-y-3">
+            {{csrfInput .CSRFToken}}
+            <input type="hidden" name="feed_url" value="{{.Article.FeedURL}}">
+            <input type="hidden" name="article_url" value="{{if .Article.URL.Valid}}{{.Article.URL.String}}{{end}}">
+            <div id="quote-highlight" class="hidden mb-1">
+                <blockquote id="quote-preview" class="border-l-2 border-spot-green pl-3 text-sm text-spot-secondary italic"></blockquote>
+            </div>
+            <input type="hidden" name="quote" id="quote-input">
+            <textarea name="note" rows="2" placeholder="Add a note..."
+                      class="w-full bg-spot-hover text-spot-text rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder resize-none"></textarea>
+            <div class="flex gap-2">
+                <input type="text" name="tags" placeholder="Tags (comma separated)"
+                       class="flex-1 min-w-0 bg-spot-hover text-spot-text rounded-pill px-5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-spot-green placeholder:text-spot-placeholder">
+                <button type="submit" class="bg-spot-green text-white rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition shrink-0">Annotate</button>
+            </div>
+        </form>
+    </div>
 
     <div class="flex items-center justify-between mt-8 mb-4">
         <a href="javascript:history.back()" class="text-sm text-spot-secondary hover:text-spot-text inline-flex items-center gap-1.5 transition">
@@ -172,8 +191,53 @@
     var quoteInput = document.getElementById('quote-input');
     var quotePreview = document.getElementById('quote-preview');
     var quoteHighlight = document.getElementById('quote-highlight');
+    var popover = document.getElementById('annotation-popover');
+    var closeBtn = document.getElementById('annotation-popover-close');
+    var noteField = form.querySelector('textarea[name="note"]');
+
+    function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+    function position(rect) {
+        var margin = 8;
+        var popRect = popover.getBoundingClientRect();
+        var width = popRect.width;
+        var height = popRect.height;
+
+        var left = clamp(rect.left + (rect.width - width) / 2, margin, document.documentElement.clientWidth - width - margin);
+
+        var top = rect.bottom + margin;
+        if (document.documentElement.clientHeight - rect.bottom < height + margin && rect.top > height + margin) {
+            top = rect.top - height - margin;
+        }
+        top = Math.max(margin, top);
+
+        popover.style.left = left + 'px';
+        popover.style.top = top + 'px';
+    }
+
+    function openForSelection(sel, text) {
+        if (text.length > 1000) text = text.substring(0, 1000);
+        quoteInput.value = text;
+        quotePreview.textContent = text;
+        quoteHighlight.classList.remove('hidden');
+        popover.classList.remove('hidden');
+        position(sel.getRangeAt(0).getBoundingClientRect());
+        noteField.focus();
+    }
+
+    function close() {
+        popover.classList.add('hidden');
+        popover.style.top = '';
+        popover.style.left = '';
+        form.reset();
+        quoteInput.value = '';
+        quoteHighlight.classList.add('hidden');
+        var sel = window.getSelection();
+        if (sel) sel.removeAllRanges();
+    }
 
     document.addEventListener('mouseup', function(e) {
+        if (!popover.classList.contains('hidden') && popover.contains(e.target)) return;
         var sel = window.getSelection();
         var text = sel.toString().trim();
         if (!text) return;
@@ -181,12 +245,20 @@
         var body = e.target.closest('.article-body');
         if (!body) return;
 
-        if (text.length > 1000) text = text.substring(0, 1000);
-        quoteInput.value = text;
-        quotePreview.textContent = text;
-        quoteHighlight.classList.remove('hidden');
-        form.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        form.querySelector('textarea[name="note"]').focus();
+        openForSelection(sel, text);
+    });
+
+    closeBtn.addEventListener('click', close);
+
+    document.addEventListener('mousedown', function(e) {
+        if (popover.classList.contains('hidden')) return;
+        if (popover.contains(e.target)) return;
+        if (e.target.closest('.article-body')) return;
+        close();
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && !popover.classList.contains('hidden')) close();
     });
 
     var origReset = form.reset.bind(form);
@@ -195,6 +267,10 @@
         quoteInput.value = '';
         quoteHighlight.classList.add('hidden');
     };
+
+    form.addEventListener('htmx:afterRequest', function(e) {
+        if (e.detail && e.detail.successful) close();
+    });
 
     function highlightQuotes() {
         var el = document.getElementById('annotation-quotes');
