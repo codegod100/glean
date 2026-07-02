@@ -23,7 +23,7 @@ dependencies:
 
 steps:
   - name: "Install dependencies"
-    command: "bun install"
+    command: "cd web && bun install"
 
   - name: "Build glean"
     command: "make build"
