@@ -265,8 +265,7 @@
             <div class="space-y-2">
                 <Logo size="sm" />
                 <p class="max-w-xs text-[var(--muted)]">
-                    The social RSS reader on AT Protocol. Your feeds, your data,
-                    yours.
+                    The social RSS reader on AT Protocol.
                 </p>
             </div>
             <div class="flex flex-wrap gap-x-10 gap-y-6">
@@ -317,7 +316,7 @@
                     >
                         Settings
                     </p>
-                    <ThemeToggle />
+                    <ThemeToggle block={true} />
                     <button
                         class="block font-bold uppercase hover:text-[var(--accent)]"
                         onclick={() => (showShortcuts = true)}>Shortcuts</button
@@ -338,7 +337,7 @@
             <div
                 class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2 px-4 py-3 text-[0.65rem] uppercase tracking-wide text-[var(--muted)]"
             >
-                <span>&copy; {new Date().getFullYear()} Glean</span>
+                <span>&copy; {new Date().getFullYear()} Glean.at</span>
                 <span
                     >Made in Europe · <a
                         href="https://bsky.app/profile/julien.rbrt.fr"

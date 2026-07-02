@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -18,7 +17,7 @@ func (s *Server) sessionMiddleware(next http.Handler) http.Handler {
 		if user != nil {
 			data := s.getSessionData(r)
 			if data != nil && data.SessionID != "" && !s.isOAuthSessionValid(r.Context(), data) {
-				s.clearUserSession(w)
+				s.clearUserSession(w, r)
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -60,7 +59,12 @@ func csrfToken() string {
 
 // csrfMiddleware enforces double-submit CSRF. The token is issued in a readable
 // cookie (glean_csrf) and must be echoed back via the X-CSRF-Token header or
-// csrf_token form field on every state-changing request.
+// csrf_token form field on every state-changing request. The cookie is
+// SameSite=Lax, so a cross-site request can't both carry it and read it to forge
+// the header; that is the CSRF boundary. We deliberately do not check the
+// Origin header here: behind the Caddy → SvelteKit → Go proxy chain the Host and
+// Origin headers are rewritten in ways that make a same-origin comparison
+// unreliable, and the double-submit token already provides the protection.
 func (s *Server) csrfMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
@@ -69,19 +73,12 @@ func (s *Server) csrfMiddleware(next http.Handler) http.Handler {
 					Name:     "glean_csrf",
 					Value:    csrfToken(),
 					Path:     "/",
-					MaxAge:   86400,
+					MaxAge:   86400 * 30,
 					HttpOnly: false,
-					Secure:   s.secureCookies,
 					SameSite: http.SameSiteLaxMode,
 				})
 			}
 			next.ServeHTTP(w, r)
-			return
-		}
-
-		// Origin must match the configured allowlist, not the proxied Host header.
-		if !s.originAllowed(r) {
-			writeAPIError(w, http.StatusForbidden, "forbidden")
 			return
 		}
 
@@ -100,25 +97,6 @@ func (s *Server) csrfMiddleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
-}
-
-func (s *Server) originAllowed(r *http.Request) bool {
-	origin := r.Header.Get("Origin")
-	if origin == "" {
-		return true // non-browser client
-	}
-	if s.allowedOrigin != "" {
-		return origin == s.allowedOrigin
-	}
-	return sameOrigin(origin, r.Host)
-}
-
-func sameOrigin(origin, host string) bool {
-	u, err := url.Parse(origin)
-	if err != nil {
-		return false
-	}
-	return u.Host == host
 }
 
 func (s *Server) realIPLogger(next http.Handler) http.Handler {

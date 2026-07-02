@@ -12,16 +12,6 @@ async function proxyApi({
   const target = API_URL.replace(/\/$/, "") + url.pathname + url.search;
 
   const headers = new Headers(request.headers);
-  // Forward the browser's original Host so the Go CSRF same-origin check
-  // (Origin vs Host) passes. Go routes by path, not Host.
-  const originHost = request.headers.get("host");
-  if (originHost) {
-    headers.set("host", originHost);
-    headers.set("x-forwarded-host", originHost);
-  }
-  const proto = url.protocol.replace(":", "");
-  headers.set("x-forwarded-proto", proto);
-
   const init: RequestInit = {
     method: request.method,
     headers,
@@ -29,6 +19,13 @@ async function proxyApi({
       request.method !== "GET" && request.method !== "HEAD"
         ? await request.arrayBuffer()
         : undefined,
+    // The OAuth callback (/api/auth/callback) is a browser navigation, not an
+    // XHR: the auth server redirects the user's browser here, and Go responds
+    // with a 303 to a frontend route (/dashboard, /auth/login). Those routes
+    // only exist on the SvelteKit origin, not the Go API, so the proxy must
+    // NOT follow redirects server-side — pass the 303 through for the browser
+    // to follow via the normal Caddy → SvelteKit chain.
+    redirect: "manual",
     // @ts-expect-error Node fetch supports duplex for streaming request bodies.
     duplex: "half",
   };

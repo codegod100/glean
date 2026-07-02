@@ -48,28 +48,25 @@ var oauthScopes = []string{
 }
 
 type Server struct {
-	dbs           *db.Store
-	router        *chi.Mux
-	logger        *slog.Logger
-	oauth         *oauth.ClientApp
-	oauthStore    *db.OAuthStore
-	fetcher       *feed.Fetcher
-	scheduler     *feed.Scheduler
-	engine        *cluster.Engine
-	feedback      *feedback.Service
-	scraper       *scraper.Scraper
-	llm           ml.TextModel
-	clientID      string
-	callbackURL   string
-	frontendURL   string
-	sessionKey    []byte
-	secureCookies bool   // true in production (clientID set); gates cookie Secure flag
-	allowedOrigin string // configured browser origin for CSRF; empty in localhost dev
+	dbs         *db.Store
+	router      *chi.Mux
+	logger      *slog.Logger
+	oauth       *oauth.ClientApp
+	oauthStore  *db.OAuthStore
+	fetcher     *feed.Fetcher
+	scheduler   *feed.Scheduler
+	engine      *cluster.Engine
+	feedback    *feedback.Service
+	scraper     *scraper.Scraper
+	llm         ml.TextModel
+	clientID    string // empty in localhost dev; toggles the OAuth flow mode
+	frontendURL string // public browser origin (e.g. https://glean.at)
+	sessionKey  []byte
 }
 
 func New(
 	dbs *db.Store,
-	clientID, callbackURL, frontendURL string,
+	clientID, frontendURL string,
 	scheduler *feed.Scheduler,
 	fetcher *feed.Fetcher,
 	engine *cluster.Engine,
@@ -79,45 +76,33 @@ func New(
 ) *Server {
 	oauthStore := db.NewOAuthStore(dbs)
 
+	// The OAuth callback is always served by the frontend at /api/auth/callback
+	// (SvelteKit proxies it here). clientID empty = localhost dev flow.
+	callbackURL := strings.TrimRight(frontendURL, "/") + "/api/auth/callback"
+
 	var config oauth.ClientConfig
 	if clientID == "" {
-		// Localhost dev: the OAuth callback must go through the SvelteKit
-		// frontend (which proxies /api to Go) so the post-callback redirect to
-		// /dashboard lands on the frontend, not on Go's API-only server.
-		origin := frontendURL
-		if origin == "" {
-			origin = "http://localhost:3000"
-		}
-		cbURL := strings.TrimRight(origin, "/") + "/api/auth/callback"
-		config = oauth.NewLocalhostConfig(cbURL, oauthScopes)
+		config = oauth.NewLocalhostConfig(callbackURL, oauthScopes)
 	} else {
-		// callbackURL points at the public SvelteKit origin, proxied to /api/auth/callback.
-		cb := callbackURL
-		if !strings.Contains(cb, "/api/auth/callback") {
-			cb = strings.TrimRight(cb, "/") + "/api/auth/callback"
-		}
-		config = oauth.NewPublicConfig(clientID, cb, oauthScopes)
+		config = oauth.NewPublicConfig(clientID, callbackURL, oauthScopes)
 	}
 	oauthClient := oauth.NewClientApp(&config, oauthStore)
 
 	s := &Server{
-		dbs:           dbs,
-		router:        chi.NewMux(),
-		logger:        logger,
-		oauth:         oauthClient,
-		oauthStore:    oauthStore,
-		fetcher:       fetcher,
-		scheduler:     scheduler,
-		engine:        engine,
-		feedback:      feedback.NewService(dbs.SQLDB()),
-		scraper:       scraper.New(logger),
-		llm:           textModel,
-		clientID:      clientID,
-		callbackURL:   callbackURL,
-		frontendURL:   frontendURL,
-		sessionKey:    sessionKey,
-		secureCookies: clientID != "",
-		allowedOrigin: frontendOrigin(frontendURL, clientID),
+		dbs:         dbs,
+		router:      chi.NewMux(),
+		logger:      logger,
+		oauth:       oauthClient,
+		oauthStore:  oauthStore,
+		fetcher:     fetcher,
+		scheduler:   scheduler,
+		engine:      engine,
+		feedback:    feedback.NewService(dbs.SQLDB()),
+		scraper:     scraper.New(logger),
+		llm:         textModel,
+		clientID:    clientID,
+		frontendURL: frontendURL,
+		sessionKey:  sessionKey,
 	}
 
 	s.setupMiddleware()
@@ -336,31 +321,28 @@ func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
 	writeAPIError(w, http.StatusNotFound, "not found")
 }
 
-// allowedOrigins returns the browser origins permitted by CORS. In production
-// this is the configured frontend URL; in localhost dev the SvelteKit proxy
-// is same-origin so any value works, but we still avoid "*".
+// allowedOrigins returns the browser origins permitted by CORS. The app is
+// normally same-origin (SvelteKit proxies /api to Go); this mainly matters for
+// the localhost dev server.
 func (s *Server) allowedOrigins() []string {
-	if s.allowedOrigin != "" {
-		return []string{s.allowedOrigin}
+	if o := originOf(s.frontendURL); o != "" {
+		return []string{o}
 	}
 	return []string{"http://localhost:3000", "http://localhost:5173"}
 }
 
-// frontendOrigin derives the browser origin (scheme://host) from frontendURL,
-// falling back to the client ID host.
-func frontendOrigin(frontendURL, clientID string) string {
-	for _, raw := range []string{frontendURL, clientID} {
-		if raw == "" {
-			continue
-		}
-		u, err := url.Parse(raw)
-		if err != nil || u.Host == "" {
-			continue
-		}
-		if u.Scheme == "" {
-			u.Scheme = "https"
-		}
-		return u.Scheme + "://" + u.Host
+// originOf parses a URL and returns its scheme://host, defaulting an absent
+// scheme to https. Returns "" if raw is empty or unparseable.
+func originOf(raw string) string {
+	if raw == "" {
+		return ""
 	}
-	return ""
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	if u.Scheme == "" {
+		u.Scheme = "https"
+	}
+	return u.Scheme + "://" + u.Host
 }

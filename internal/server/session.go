@@ -46,7 +46,7 @@ func (s *Server) getUserFromSession(r *http.Request) *db.User {
 	return user
 }
 
-func (s *Server) setUserSession(w http.ResponseWriter, user *db.User) {
+func (s *Server) setUserSession(w http.ResponseWriter, r *http.Request, user *db.User) {
 	data := sessionData{DID: user.DID}
 	encoded, err := encodeSession(s.sessionKey, data)
 	if err != nil {
@@ -54,27 +54,30 @@ func (s *Server) setUserSession(w http.ResponseWriter, user *db.User) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "glean_session",
-		Value:    encoded,
-		Path:     "/",
-		MaxAge:   86400 * 30,
-		HttpOnly: true,
-		Secure:   s.secureCookies,
-		SameSite: http.SameSiteLaxMode,
-	})
+	http.SetCookie(w, sessionCookie("glean_session", encoded, 86400*30, r))
 }
 
-func (s *Server) clearUserSession(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     "glean_session",
-		Value:    "",
+func (s *Server) clearUserSession(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, sessionCookie("glean_session", "", -1, r))
+}
+
+// sessionCookie builds the session cookie. Secure is set when the request
+// arrived over TLS or a TLS-terminating proxy (X-Forwarded-Proto: https), so
+// it is correct in production behind Caddy and off in plain-HTTP local dev.
+func sessionCookie(name, value string, maxAge int, r *http.Request) *http.Cookie {
+	return &http.Cookie{
+		Name:     name,
+		Value:    value,
 		Path:     "/",
-		MaxAge:   -1,
+		MaxAge:   maxAge,
 		HttpOnly: true,
-		Secure:   s.secureCookies,
+		Secure:   isHTTPS(r),
 		SameSite: http.SameSiteLaxMode,
-	})
+	}
+}
+
+func isHTTPS(r *http.Request) bool {
+	return r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 }
 
 type sessionData struct {

@@ -64,6 +64,7 @@
     let digestOpen = $state(false);
     async function markDigestRead() {
         if (!digest) return;
+        if (!confirm("Mark these articles as read?")) return;
         await endpoints.markDigestRead(digest.article_ids);
         digest = { ...digest, consumed: true };
     }

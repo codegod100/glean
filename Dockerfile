@@ -36,7 +36,6 @@ WORKDIR /app/web
 # SvelteKit proxies /api to the Go API on localhost:8080.
 ENV GLEAN_API_URL=http://127.0.0.1:8080
 ENV PORT=3000
-ENV ORIGIN=http://localhost:3000
 
 EXPOSE 3000
 

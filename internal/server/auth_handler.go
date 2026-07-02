@@ -66,7 +66,7 @@ func (s *Server) handleAuthStart(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusInternalServerError, "Could not create your account. Please try again.")
 			return
 		}
-		s.setUserSession(w, user)
+		s.setUserSession(w, r, user)
 		writeJSON(w, http.StatusOK, redirectResponse{Redirect: "/dashboard"})
 		return
 	}
@@ -77,38 +77,6 @@ func (s *Server) handleAuthStart(w http.ResponseWriter, r *http.Request) {
 // handleAuthCallback is hit by the OAuth provider after authorization. It is a
 // browser navigation (not an XHR), so it issues HTTP redirects rather than JSON.
 func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
-	params := r.URL.Query()
-
-	if params.Get("code") != "" && params.Get("state") != "" {
-		s.handleOAuthCallback(w, r)
-		return
-	}
-
-	handle := params.Get("handle")
-	if handle == "" {
-		http.Redirect(w, r, "/auth/login?error=missing_handle", http.StatusSeeOther)
-		return
-	}
-
-	did, err := atproto.ResolveHandle(r.Context(), handle)
-	if err != nil {
-		s.logger.Error("failed to resolve handle", "error", err)
-		http.Redirect(w, r, "/auth/login?error=handle_not_found", http.StatusSeeOther)
-		return
-	}
-
-	user, err := s.dbs.Users.CreateUser(r.Context(), did)
-	if err != nil {
-		s.logger.Error("failed to create user", "error", err)
-		http.Redirect(w, r, "/auth/login?error=create_failed", http.StatusSeeOther)
-		return
-	}
-
-	s.setUserSession(w, user)
-	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
-}
-
-func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	sessData, err := s.oauth.ProcessCallback(r.Context(), r.URL.Query())
 	if err != nil {
 		s.logger.Error("OAuth callback failed", "error", err)
@@ -117,7 +85,6 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	did := sessData.AccountDID.String()
-
 	client := s.pdsClientFromSession(sessData)
 
 	user, err := s.dbs.Users.CreateUser(r.Context(), did)
@@ -139,15 +106,7 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "glean_session",
-		Value:    encoded,
-		Path:     "/",
-		MaxAge:   86400 * 30,
-		HttpOnly: true,
-		Secure:   s.secureCookies,
-		SameSite: http.SameSiteLaxMode,
-	})
+	http.SetCookie(w, sessionCookie("glean_session", encoded, 86400*30, r))
 
 	s.syncUserInBackground(user.DID, client)
 
@@ -187,6 +146,6 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 			_ = s.oauth.Logout(r.Context(), did, session.SessionID)
 		}
 	}
-	s.clearUserSession(w)
+	s.clearUserSession(w, r)
 	writeJSON(w, http.StatusOK, redirectResponse{Redirect: "/"})
 }
