@@ -3,15 +3,17 @@ package server
 import (
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+
 	"pkg.rbrt.fr/glean/internal/ml"
 )
 
 func (s *Server) handleToggleLanguage(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 
-	lang := r.PathValue("code")
+	lang := chi.URLParam(r, "code")
 	if lang == "" {
-		http.Error(w, "missing language code", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "missing language code")
 		return
 	}
 
@@ -20,14 +22,14 @@ func (s *Server) handleToggleLanguage(w http.ResponseWriter, r *http.Request) {
 		valid[known.Code] = true
 	}
 	if !valid[lang] {
-		http.Error(w, "unknown language", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "unknown language")
 		return
 	}
 
 	current, err := s.dbs.Users.GetLanguages(r.Context(), user.DID)
 	if err != nil {
 		s.logger.Error("failed to get languages", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -46,19 +48,18 @@ func (s *Server) handleToggleLanguage(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.dbs.Users.UpdateLanguages(r.Context(), user.DID, updated); err != nil {
 		s.logger.Error("failed to update languages", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	w.Header().Set(HXRedirect, "/profile/"+user.DID)
-	w.WriteHeader(http.StatusOK)
+	writeJSON(w, http.StatusOK, languagesResponse{Languages: nonNil(updated)})
 }
 
 func (s *Server) handleToggleExpandedView(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -66,19 +67,18 @@ func (s *Server) handleToggleExpandedView(w http.ResponseWriter, r *http.Request
 
 	if err := s.dbs.Users.SetExpandedView(r.Context(), user.DID, enabled); err != nil {
 		s.logger.Error("failed to update expanded view", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	w.Header().Set("HX-Redirect", "/profile/"+user.DID)
-	w.WriteHeader(http.StatusOK)
+	writeJSON(w, http.StatusOK, expandedViewResponse{ExpandedView: enabled})
 }
 
 func (s *Server) handleToggleDigestEnabled(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -86,10 +86,9 @@ func (s *Server) handleToggleDigestEnabled(w http.ResponseWriter, r *http.Reques
 
 	if err := s.dbs.Users.SetDigestEnabled(r.Context(), user.DID, enabled); err != nil {
 		s.logger.Error("failed to update digest enabled", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	w.Header().Set("HX-Redirect", "/profile/"+user.DID)
-	w.WriteHeader(http.StatusOK)
+	writeJSON(w, http.StatusOK, digestEnabledResponse{DigestEnabled: enabled})
 }

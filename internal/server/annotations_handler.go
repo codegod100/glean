@@ -57,10 +57,6 @@ func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 			likedPage.HasNext = true
 			likedPage.NextPage = likedPage.Page + 1
 		}
-		navSuffix := buildNavSuffix("", true, "")
-		for _, a := range articles {
-			a.NavSuffix = navSuffix
-		}
 		return nil
 	})
 
@@ -84,17 +80,20 @@ func (s *Server) handleLibrary(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 
-	if err := g.Wait(); err != nil {
-		s.logger.Warn("library error", "error", err, "did", user.DID)
+	_ = g.Wait()
+
+	items := make([]Article, len(articles))
+	for i, a := range articles {
+		a.NavSuffix = buildNavSuffix("", true, "")
+		items[i] = toArticle(a)
 	}
 
-	s.render(w, r, "library.html", map[string]any{
-		"User":           user,
-		"CurrentUserDID": user.DID,
-		"Articles":       articles,
-		"Annotations":    annotations,
-		"LikedPage":      likedPage,
-		"AnnotPage":      annotPage,
+	writeJSON(w, http.StatusOK, libraryResponse{
+		User:        toUser(user),
+		Articles:    items,
+		Annotations: toAnnotations(annotations),
+		LikedPage:   likedPage,
+		AnnotPage:   annotPage,
 	})
 }
 
@@ -134,7 +133,7 @@ func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) 
 		uri, cid, err := client.CreateRecord(ctx, user.DID, atproto.CollectionAnnotation, record)
 		if err != nil {
 			s.logger.Error("failed to write annotation to PDS", "error", err)
-			http.Error(w, "failed to write annotation to PDS: "+err.Error(), http.StatusInternalServerError)
+			writeAPIError(w, http.StatusInternalServerError, "failed to write annotation to PDS: "+err.Error())
 			return
 		}
 		a.URI = uri
@@ -155,15 +154,12 @@ func (s *Server) handleCreateAnnotation(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := s.dbs.Articles.CreateAnnotation(ctx, a); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	a.AuthorHandle = atproto.ResolveProfile(r.Context(), user.DID).Handle
-	s.render(w, r, "annotation-card.html", map[string]any{
-		"annotation": a,
-		"userDID":    user.DID,
-	})
+	writeJSON(w, http.StatusOK, annotationResponse{Annotation: toAnnotation(a)})
 }
 
 func (s *Server) handleDeleteAnnotation(w http.ResponseWriter, r *http.Request) {
@@ -171,18 +167,18 @@ func (s *Server) handleDeleteAnnotation(w http.ResponseWriter, r *http.Request) 
 	ctx := r.Context()
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
 
 	annotation, err := s.dbs.Articles.GetAnnotation(ctx, id)
 	if err != nil {
-		http.Error(w, "annotation not found", http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "annotation not found")
 		return
 	}
 
 	if annotation.AuthorDID != user.DID {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		writeAPIError(w, http.StatusForbidden, "forbidden")
 		return
 	}
 
@@ -192,7 +188,7 @@ func (s *Server) handleDeleteAnnotation(w http.ResponseWriter, r *http.Request) 
 			if ok {
 				if delErr := client.DeleteRecord(ctx, user.DID, parsed.Collection, parsed.RKey); delErr != nil {
 					s.logger.Error("failed to delete annotation from PDS", "error", delErr)
-					http.Error(w, "failed to delete annotation from PDS: "+delErr.Error(), http.StatusInternalServerError)
+					writeAPIError(w, http.StatusInternalServerError, "failed to delete annotation from PDS: "+delErr.Error())
 					return
 				}
 			}
@@ -208,11 +204,11 @@ func (s *Server) handleDeleteAnnotation(w http.ResponseWriter, r *http.Request) 
 	// Delete by content so any duplicate row created by the mirror (different URI,
 	// identical content) is removed alongside the canonical annotation.
 	if err := s.dbs.Articles.DeleteAnnotationsByContent(ctx, user.DID, annotation.ArticleURL, annotation.Quote.String, annotation.Note.String); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func resolveAnnotationHandles(ctx context.Context, annotations []*db.Annotation) {

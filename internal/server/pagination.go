@@ -8,12 +8,12 @@ import (
 const defaultPageSize = 25
 
 type Pagination struct {
-	Page     int
-	PageSize int
-	HasPrev  bool
-	HasNext  bool
-	PrevPage int
-	NextPage int
+	Page     int  `json:"page"`
+	PageSize int  `json:"page_size"`
+	HasPrev  bool `json:"has_prev"`
+	HasNext  bool `json:"has_next"`
+	PrevPage int  `json:"prev_page"`
+	NextPage int  `json:"next_page"`
 }
 
 func pageFromRequest(r *http.Request, pageSize int) Pagination {

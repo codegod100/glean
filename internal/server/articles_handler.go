@@ -16,36 +16,6 @@ import (
 	"pkg.rbrt.fr/glean/internal/db"
 )
 
-func writeLikeButton(w http.ResponseWriter, articleID int64, liked bool, count int, bordered bool) {
-	fill := "none"
-	likedCls := "text-spot-text bg-spot-hover hover:text-spot-red hover:bg-spot-red/15"
-	if liked {
-		fill = "currentColor"
-		likedCls = "text-spot-red bg-spot-red/15 hover:bg-spot-red/25"
-	}
-
-	w.Header().Set("Content-Type", "text/html")
-
-	if bordered {
-		fmt.Fprintf(w, `<button hx-post="/articles/%d/like?bordered=true" hx-target="this" hx-swap="outerHTML" title="%s" class="group inline-flex items-center gap-1.5 text-[10px] uppercase tracking-button px-2.5 py-1 rounded-pill transition %s"><svg class="w-3.5 h-3.5" fill="%s" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/></svg><span>%d</span></button>`, articleID, likeTitle(liked), likedCls, fill, count)
-	} else {
-		unlikedBorderCls := "text-spot-text bg-spot-surface border border-spot-divider hover:text-spot-red hover:bg-spot-red/10 hover:border-spot-red/20"
-		likedBorderCls := "text-spot-red bg-spot-red/15 hover:bg-spot-red/25 border border-spot-red/20"
-		borderCls := unlikedBorderCls
-		if liked {
-			borderCls = likedBorderCls
-		}
-		fmt.Fprintf(w, `<button hx-post="/articles/%d/like" hx-target="this" hx-swap="outerHTML" title="%s" class="group inline-flex items-center justify-center gap-1 text-[10px] uppercase tracking-button px-2 py-0.5 rounded-pill transition w-full %s"><svg class="w-3 h-3" fill="%s" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/></svg><span>%d</span></button>`, articleID, likeTitle(liked), borderCls, fill, count)
-	}
-}
-
-func likeTitle(liked bool) string {
-	if liked {
-		return "Unlike"
-	}
-	return "Like"
-}
-
 func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	ctx := r.Context()
@@ -69,8 +39,10 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var articles []*db.Article
-	var err error
+	var (
+		articles []*db.Article
+		err      error
+	)
 
 	if searchQuery != "" {
 		articles, err = s.dbs.Articles.SearchArticles(ctx, user.DID, searchQuery, page.Limit()+1, page.Offset())
@@ -87,7 +59,7 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		s.logger.Error("failed to list articles", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -97,59 +69,40 @@ func (s *Server) handleArticles(w http.ResponseWriter, r *http.Request) {
 		articles = articles[:page.PageSize]
 	}
 
-	navSuffix := buildNavSuffix(feedURL, false, status)
-	for _, a := range articles {
-		a.NavSuffix = navSuffix
-	}
-
 	settings, _ := s.dbs.Users.GetSettings(ctx, user.DID)
-	expandedView := false
-	if settings != nil {
-		expandedView = settings.ExpandedView
-	}
-
-	sortParam := ""
-	if sortOldest {
-		sortParam = "oldest"
-	}
+	expandedView := settings != nil && settings.ExpandedView
 
 	categories, _ := s.dbs.Articles.GetCategories(ctx, user.DID)
+	categories = nonNil(categories)
 
-	data := map[string]any{
-		"User":         user,
-		"Articles":     articles,
-		"FeedURL":      feedURL,
-		"Status":       status,
-		"SearchQuery":  searchQuery,
-		"Page":         page,
-		"BaseURL":      "/articles",
-		"QueryParams":  buildQueryParams(map[string]string{"feed": feedURL, "status": status, "q": searchQuery, "sort": sortParam, "category": category}),
-		"Now":          time.Now(),
-		"ExpandedView": expandedView,
-		"SortOldest":   sortOldest,
-		"Category":     category,
-		"Categories":   categories,
+	out := make([]Article, len(articles))
+	for i, a := range articles {
+		out[i] = toArticle(a)
+	}
+
+	resp := articlesResponse{
+		User:         toUser(user),
+		Articles:     out,
+		FeedURL:      feedURL,
+		Status:       status,
+		SearchQuery:  searchQuery,
+		SortOldest:   sortOldest,
+		Category:     category,
+		Categories:   categories,
+		ExpandedView: expandedView,
+		Pagination:   page,
+		Now:          time.Now().Unix(),
 	}
 
 	if feedURL != "" {
 		if feed, err := s.dbs.Articles.GetFeed(ctx, feedURL); err == nil {
-			data["Feed"] = feed
-		} else {
-			s.logger.Warn("failed to get feed", "error", err, "feed", feedURL)
+			resp.Feed = new(toFeed(feed))
 		}
-		if _, err := s.dbs.Articles.GetSubscription(ctx, user.DID, feedURL); err == nil {
-			data["IsSubscribed"] = true
-		} else {
-			data["IsSubscribed"] = false
-		}
+		_, subErr := s.dbs.Articles.GetSubscription(ctx, user.DID, feedURL)
+		resp.IsSubscribed = subErr == nil
 	}
 
-	if isHXRequest(r) {
-		s.render(w, r, "articles-content.html", data)
-		return
-	}
-
-	s.render(w, r, "articles.html", data)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleNewArticleCount(w http.ResponseWriter, r *http.Request) {
@@ -157,7 +110,7 @@ func (s *Server) handleNewArticleCount(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	sinceUnix, err := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "invalid since")
 		return
 	}
 	since := time.Unix(sinceUnix, 0)
@@ -165,23 +118,11 @@ func (s *Server) handleNewArticleCount(w http.ResponseWriter, r *http.Request) {
 	count, err := s.dbs.Articles.CountNewArticles(ctx, user.DID, since)
 	if err != nil {
 		s.logger.Error("failed to count new articles", "error", err, "did", user.DID)
-		w.WriteHeader(http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "failed to count")
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html")
-	if count == 0 {
-		w.Write([]byte(""))
-		return
-	}
-	fmt.Fprintf(w, `<div id="new-articles-banner" class="bg-spot-green rounded-xl px-5 py-3 flex items-center justify-between mb-4"><span class="text-sm text-white font-medium">%d new article%s available.</span><a href="%s" class="text-sm font-bold text-white uppercase tracking-button hover:underline transition">Refresh</a></div>`, count, pluralS(count), r.URL.Query().Get("return"))
-}
-
-func pluralS(n int) string {
-	if n != 1 {
-		return "s"
-	}
-	return ""
+	writeJSON(w, http.StatusOK, newArticleCountResponse{Count: count})
 }
 
 func (s *Server) handleArticleDetail(w http.ResponseWriter, r *http.Request) {
@@ -189,18 +130,21 @@ func (s *Server) handleArticleDetail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
 
 	article, err := s.dbs.Articles.GetArticle(ctx, id)
 	if err != nil {
-		http.Error(w, "article not found", http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "article not found")
 		return
 	}
 
+	fromFeedURL := r.URL.Query().Get("from_feed")
+	navLiked := r.URL.Query().Get("liked") == "1"
+	navStatus := r.URL.Query().Get("status")
+
 	var (
-		readState   *db.ReadState
 		likeCount   int
 		liked       bool
 		annotations []*db.Annotation
@@ -208,24 +152,11 @@ func (s *Server) handleArticleDetail(w http.ResponseWriter, r *http.Request) {
 		nextID      *int64
 	)
 
-	fromFeedURL := r.URL.Query().Get("from_feed")
-	navLiked := r.URL.Query().Get("liked") == "1"
-	navStatus := r.URL.Query().Get("status")
-
 	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
 		if err := s.dbs.Articles.MarkArticleRead(gCtx, user.DID, id); err != nil {
 			s.logger.Warn("failed to mark article read", "error", err, "id", id)
-		}
-		return nil
-	})
-
-	g.Go(func() error {
-		var err error
-		readState, err = s.dbs.Articles.GetReadState(gCtx, user.DID, id)
-		if err != nil {
-			s.logger.Warn("failed to get read state", "error", err, "id", id)
 		}
 		return nil
 	})
@@ -281,52 +212,57 @@ func (s *Server) handleArticleDetail(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 
-	if err := g.Wait(); err != nil {
-		s.logger.Warn("article detail error", "error", err, "id", id)
+	_ = g.Wait()
+
+	dto := toArticle(article)
+	dto.IsRead = true
+	dto.LikeCount = likeCount
+	dto.HasLiked = liked
+
+	annots := make([]Annotation, len(annotations))
+	for i, a := range annotations {
+		annots[i] = toAnnotation(a)
 	}
 
-	s.render(w, r, "article_detail.html", map[string]any{
-		"User":           user,
-		"CurrentUserDID": user.DID,
-		"Article":        article,
-		"Feed":           feed,
-		"ReadState":      readState,
-		"LikeCount":      likeCount,
-		"HasLiked":       liked,
-		"Annotations":    annotations,
-		"NextID":         nextID,
-		"NextSuffix":     buildNavSuffix(fromFeedURL, navLiked, navStatus),
-	})
+	resp := articleDetailResponse{
+		User:           toUser(user),
+		CurrentUserDID: user.DID,
+		Article:        dto,
+		Feed:           toFeed(feed),
+		Annotations:    annots,
+		NextID:         nextID,
+		NextSuffix:     buildNavSuffix(fromFeedURL, navLiked, navStatus),
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleMarkRead(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
 	if err := s.dbs.Articles.MarkArticleRead(r.Context(), user.DID, id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "text/html")
-	fmt.Fprintf(w, `<button id="read-btn-%[1]d" hx-post="/articles/%[1]d/unread" hx-target="#read-btn-%[1]d" hx-swap="outerHTML" title="Mark as unread" class="group inline-flex items-center gap-1 text-[10px] text-spot-secondary uppercase tracking-button px-2 py-0.5 rounded-pill bg-spot-hover hover:text-spot-green hover:bg-spot-green/15 transition"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span>Unread</span></button>`, id)
+	writeJSON(w, http.StatusOK, articleStateResponse{ID: id, IsRead: true})
 }
 
 func (s *Server) handleMarkUnread(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
 	if err := s.dbs.Articles.MarkArticleUnread(r.Context(), user.DID, id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	w.Header().Set("Content-Type", "text/html")
-	fmt.Fprintf(w, `<button id="read-btn-%[1]d" hx-post="/articles/%[1]d/read" hx-target="#read-btn-%[1]d" hx-swap="outerHTML" title="Mark as read" class="group inline-flex items-center gap-1 text-[10px] text-spot-text uppercase tracking-button px-2 py-0.5 rounded-pill bg-spot-hover hover:text-spot-green hover:bg-spot-green/15 transition"><svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span>Read</span></button>`, id)
+	writeJSON(w, http.StatusOK, articleStateResponse{ID: id, IsRead: false})
 }
 
 func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
@@ -334,26 +270,26 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
 
 	article, err := s.dbs.Articles.GetArticle(ctx, id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, err.Error())
 		return
 	}
 
 	liked, err := s.dbs.Articles.HasLiked(ctx, user.DID, article.FeedURL, article.URL.String)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	if liked {
 		existingLike, getErr := s.dbs.Articles.GetLike(ctx, user.DID, article.FeedURL, article.URL.String)
 		if getErr != nil {
-			http.Error(w, getErr.Error(), http.StatusInternalServerError)
+			writeAPIError(w, http.StatusInternalServerError, getErr.Error())
 			return
 		}
 		if existingLike.URI != "" {
@@ -362,14 +298,14 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 				if ok {
 					if delErr := client.DeleteRecord(ctx, user.DID, parsed.Collection, parsed.RKey); delErr != nil {
 						s.logger.Error("failed to delete like from PDS", "error", delErr)
-						http.Error(w, "failed to delete like from PDS: "+delErr.Error(), http.StatusInternalServerError)
+						writeAPIError(w, http.StatusInternalServerError, "failed to delete like from PDS: "+delErr.Error())
 						return
 					}
 				}
 			}
 		}
 		if err := s.dbs.Articles.DeleteLikeByUserArticle(ctx, user.DID, article.FeedURL, article.URL.String); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			writeAPIError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	} else {
@@ -383,7 +319,7 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 			uri, _, err := client.CreateRecord(ctx, user.DID, atproto.CollectionLike, likeRecord)
 			if err != nil {
 				s.logger.Error("failed to write like to PDS", "error", err)
-				http.Error(w, "failed to write like to PDS: "+err.Error(), http.StatusInternalServerError)
+				writeAPIError(w, http.StatusInternalServerError, "failed to write like to PDS: "+err.Error())
 				return
 			}
 
@@ -395,14 +331,9 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 				CreatedAt:  sql.NullTime{Time: time.Now(), Valid: true},
 			}
 			if err := s.dbs.Articles.CreateLike(ctx, like); err != nil && !errors.Is(err, db.ErrDuplicateLike) {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				writeAPIError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
-			if err := s.feedback.MarkImpressionActed(ctx, user.DID, "article", article.URL.String); err != nil {
-				s.logger.Warn("failed to mark impression acted", "error", err)
-			}
-			sig := s.engine.GetDominantSignal(s.engine.GetWeights(ctx, user.DID))
-			s.engine.RewardSignal(ctx, user.DID, sig)
 		} else {
 			like := &db.Like{
 				URI:        fmt.Sprintf("glean:like:%d", time.Now().UnixNano()),
@@ -412,15 +343,15 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 				CreatedAt:  sql.NullTime{Time: time.Now(), Valid: true},
 			}
 			if err := s.dbs.Articles.CreateLike(ctx, like); err != nil && !errors.Is(err, db.ErrDuplicateLike) {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				writeAPIError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
-			if err := s.feedback.MarkImpressionActed(ctx, user.DID, "article", article.URL.String); err != nil {
-				s.logger.Warn("failed to mark impression acted", "error", err)
-			}
-			sig := s.engine.GetDominantSignal(s.engine.GetWeights(ctx, user.DID))
-			s.engine.RewardSignal(ctx, user.DID, sig)
 		}
+		if err := s.feedback.MarkImpressionActed(ctx, user.DID, "article", article.URL.String); err != nil {
+			s.logger.Warn("failed to mark impression acted", "error", err)
+		}
+		sig := s.engine.GetDominantSignal(s.engine.GetWeights(ctx, user.DID))
+		s.engine.RewardSignal(ctx, user.DID, sig)
 	}
 
 	likeCount := 0
@@ -430,13 +361,21 @@ func (s *Server) handleLikeArticle(w http.ResponseWriter, r *http.Request) {
 			s.logger.Warn("failed to get like count", "error", err)
 		}
 	}
-	bordered := r.URL.Query().Get("bordered") == "true"
-	writeLikeButton(w, id, !liked, likeCount, bordered)
+
+	writeJSON(w, http.StatusOK, likeResponse{
+		ID:        id,
+		Liked:     !liked,
+		LikeCount: likeCount,
+	})
 }
 
 func (s *Server) handleMarkAllRead(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	ctx := r.Context()
+	if err := r.ParseForm(); err != nil {
+		writeAPIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	feedURL := r.FormValue("feed")
 	var err error
 	if feedURL != "" {
@@ -445,10 +384,9 @@ func (s *Server) handleMarkAllRead(w http.ResponseWriter, r *http.Request) {
 		err = s.dbs.Articles.MarkAllSubscribedRead(ctx, user.DID)
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	w.Header().Set("HX-Refresh", "true")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -456,45 +394,39 @@ func (s *Server) handleFetchContent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
 
 	article, err := s.dbs.Articles.GetArticle(ctx, id)
 	if err != nil {
-		http.Error(w, "article not found", http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "article not found")
 		return
 	}
 
 	if !article.URL.Valid {
-		s.logger.Warn("cannot fetch content: article has no URL", "id", id)
-		http.Error(w, "article has no URL", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "article has no URL")
 		return
 	}
 
 	content, err := s.scraper.Scrape(ctx, article.URL.String)
 	if err != nil {
 		s.logger.Error("failed to scrape article", "error", err, "url", article.URL.String)
-		w.Header().Set("Content-Type", "text/html")
-		_, _ = fmt.Fprintf(w, `<div id="article-content" class="text-spot-secondary text-sm">Failed to fetch content. <button hx-post="/articles/%d/fetch-content" hx-target="#article-content" hx-swap="outerHTML" class="text-spot-green underline">Retry</button></div>`, id)
-		return
-	}
-
-	if content == "" {
-		w.Header().Set("Content-Type", "text/html")
-		_, _ = fmt.Fprintf(w, `<div id="article-content" class="text-spot-secondary text-sm">No readable content found. <a href="%s" target="_blank" rel="noopener noreferrer" class="text-spot-green underline">Read on original site</a></div>`, article.URL.String)
+		writeAPIError(w, http.StatusBadGateway, "failed to fetch content")
 		return
 	}
 
 	cleaned := sanitizeHTML(content)
-
-	if err := s.dbs.Articles.UpdateArticleFullContent(ctx, id, cleaned); err != nil {
-		s.logger.Error("failed to save full content", "error", err, "id", id)
+	if cleaned != "" {
+		if err := s.dbs.Articles.UpdateArticleFullContent(ctx, id, cleaned); err != nil {
+			s.logger.Error("failed to save full content", "error", err, "id", id)
+		}
 	}
 
-	w.Header().Set("Content-Type", "text/html")
-	_, _ = fmt.Fprintf(w, `<div id="article-content" class="article-body">%s</div>`, cleaned)
-	s.logger.Info("scraped article content", "id", id, "url", article.URL.String, "content_len", len(cleaned))
+	writeJSON(w, http.StatusOK, fetchContentResponse{
+		ID:          id,
+		FullContent: cleaned,
+	})
 }
 
 func buildNavSuffix(feedURL string, liked bool, status string) string {

@@ -14,7 +14,7 @@ func (s *Server) handleTrending(w http.ResponseWriter, r *http.Request) {
 
 	scope := r.URL.Query().Get("scope")
 	if scope == scopeForMe && user == nil {
-		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+		writeAPIError(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
 	if scope != scopeForMe {
@@ -50,12 +50,20 @@ func (s *Server) handleTrending(w http.ResponseWriter, r *http.Request) {
 		trending = trending[:page.PageSize]
 	}
 
-	s.render(w, r, "trending.html", map[string]any{
-		"User":        user,
-		"Trending":    trending,
-		"Scope":       scope,
-		"Page":        page,
-		"BaseURL":     "/trending",
-		"QueryParams": buildQueryParams(map[string]string{"scope": scope}),
+	out := make([]TrendingItem, len(trending))
+	for i, t := range trending {
+		out[i] = toTrendingItem(t)
+	}
+
+	var userObj *User
+	if user != nil {
+		userObj = new(toUser(user))
+	}
+
+	writeJSON(w, http.StatusOK, trendingResponse{
+		User:       userObj,
+		Trending:   out,
+		Scope:      scope,
+		Pagination: page,
 	})
 }

@@ -1,7 +1,0 @@
-{{define "feed-list.html"}}
-{{range .Subscriptions}}
-{{template "feed-item.html" dict "ID" .ID "FeedURL" .FeedURL "FeedTitle" .FeedTitle "Category" .Category "FaviconURL" .FaviconURL "UnreadCount" .UnreadCount "CSRFToken" $.CSRFToken}}
-{{else}}
-{{template "empty-state.html" (dict "icon" "icon-rss" "title" "No feeds yet" "subtitle" "Add one from the sidebar to get started.")}}
-{{end}}
-{{end}}

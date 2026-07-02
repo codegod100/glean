@@ -38,10 +38,12 @@ func (s *Server) isOAuthSessionValid(ctx context.Context, data *sessionData) boo
 	return err == nil
 }
 
+// requireAuth gates API routes. Returns 401 JSON so the SvelteKit load layer
+// can redirect unauthenticated users to the login page.
 func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if currentUser(r) == nil {
-			http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+			writeAPIError(w, http.StatusUnauthorized, "authentication required")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -56,6 +58,9 @@ func csrfToken() string {
 	return hex.EncodeToString(b)
 }
 
+// csrfMiddleware enforces double-submit CSRF. The token is issued in a readable
+// cookie (glean_csrf) and must be echoed back via the X-CSRF-Token header or
+// csrf_token form field on every state-changing request.
 func (s *Server) csrfMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
@@ -66,6 +71,7 @@ func (s *Server) csrfMiddleware(next http.Handler) http.Handler {
 					Path:     "/",
 					MaxAge:   86400,
 					HttpOnly: false,
+					Secure:   s.secureCookies,
 					SameSite: http.SameSiteLaxMode,
 				})
 			}
@@ -73,31 +79,38 @@ func (s *Server) csrfMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if isHXRequest(r) {
-			origin := r.Header.Get("Origin")
-			if origin != "" && !sameOrigin(origin, r.Host) {
-				http.Error(w, "forbidden", http.StatusForbidden)
-				return
-			}
-			next.ServeHTTP(w, r)
+		// Origin must match the configured allowlist, not the proxied Host header.
+		if !s.originAllowed(r) {
+			writeAPIError(w, http.StatusForbidden, "forbidden")
 			return
 		}
 
 		cookie, err := r.Cookie("glean_csrf")
 		if err != nil {
-			http.Error(w, "missing csrf token", http.StatusForbidden)
+			writeAPIError(w, http.StatusForbidden, "missing csrf token")
 			return
 		}
-		formToken := r.FormValue("csrf_token")
+		formToken := r.Header.Get("X-CSRF-Token")
 		if formToken == "" {
-			formToken = r.Header.Get("X-CSRF-Token")
+			formToken = r.FormValue("csrf_token")
 		}
 		if formToken == "" || formToken != cookie.Value {
-			http.Error(w, "csrf mismatch", http.StatusForbidden)
+			writeAPIError(w, http.StatusForbidden, "csrf mismatch")
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) originAllowed(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true // non-browser client
+	}
+	if s.allowedOrigin != "" {
+		return origin == s.allowedOrigin
+	}
+	return sameOrigin(origin, r.Host)
 }
 
 func sameOrigin(origin, host string) bool {

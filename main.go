@@ -70,6 +70,7 @@ func main() {
 
 	clientID := envOr("GLEAN_OAUTH_CLIENT_ID", "")
 	callbackURL := envOr("GLEAN_OAUTH_REDIRECT_URL", "")
+	frontendURL := envOr("GLEAN_FRONTEND_URL", "http://localhost:3000")
 
 	storeAdapter := db.NewFeedAdapter(dbs.Articles)
 	siteFetcher := atproto.NewStandardSiteFetcher(logger)
@@ -104,7 +105,7 @@ func main() {
 	engine := cluster.NewEngine(dbs.SQLDB(), dbs.Articles, embedder, llm, feedback.NewService(dbs.SQLDB()), logger, cluster.DefaultConfig())
 
 	fetcher := feed.NewFetcher(siteFetcher)
-	srv := server.New(dbs, clientID, callbackURL, *addr, scheduler, fetcher, engine, logger, []byte(sessionKey), llm)
+	srv := server.New(dbs, clientID, callbackURL, frontendURL, scheduler, fetcher, engine, logger, []byte(sessionKey), llm)
 
 	cron := cluster.NewCron(engine, *clusterInterval, logger, dbs)
 

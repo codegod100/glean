@@ -43,7 +43,7 @@ func (s *Server) handleSitemap(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) baseURL() string {
 	if s.clientID == "" {
-		return "http://localhost:8080"
+		return "http://localhost:3000"
 	}
 	host := s.clientID
 	host, _ = strings.CutPrefix(host, "https://")

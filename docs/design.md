@@ -1,186 +1,155 @@
 # Glean Design System
 
-Adapted from the Starbucks-inspired green palette. Warm, confident, and grounded in a four-tier green system with a dark/light theme switch.
+Brutalist / minimal. Monochrome base (ink + paper) with a single green accent. Monospace typography, sharp corners, thick 2px borders, hard offset shadows. Built with SvelteKit + Tailwind CSS v4.
 
 ## 1. Visual Theme & Atmosphere
 
-Glean is a **warm, focused reading environment**. The canvas alternates between a deep forest green (dark mode) and a warm cream (light mode), with Green Accent (`#00754A`) anchoring all CTAs, links, and brand moments. The palette is deliberately not blue, not purple — it references natural, grounded tones.
+Glean is a **raw, structural reading environment**. The canvas is stark: near-black ink on near-white paper (light mode), inverted in dark mode. A single accent green carries the brand and all interactive highlights. No soft shadows, no rounded pills, no gradients — just borders, type, and contrast.
 
-Typography uses **Inter** (Google Fonts) as the universal typeface, with tight `-0.01em` letter-spacing across the entire product. A single typeface, a single voice.
+**Typography** uses **JetBrains Mono** (Google Fonts) as the universal typeface, weights 400–800. Labels and metadata are uppercase with wide tracking. The aesthetic is terminal-like: dense, precise, unornamented.
 
-Surfaces breathe through rounded geometry: pill buttons (`9999px`), `12px` card corners, and `50%` circular avatars. Shadows are whisper-soft dual-layers, never heavy. The system feels like a well-lit reading room.
+**Geometry** is sharp — every radius is `0px`. Borders are 2px solid. Shadows are hard offsets (`4px 4px 0 0`), never blurred — they read as physical depth, a hallmark of brutalist UI. Interactive elements translate on hover/press (`translate(-1px,-1px)` → deeper shadow → `translate(1px,1px)` → flush), giving a tactile, mechanical feel.
 
-All radii are driven by CSS custom properties (`--radius-sm`, `--radius-md`, `--radius-lg`, `--radius-pill`, `--radius-full`) wired through `tailwind.config.js`. A **squared** shape mode is available via `data-shape="squared"` on the root element, which sets all radius variables to `0`. The toggle lives in the footer alongside the theme switcher and persists via `localStorage('shape')`.
+**Layout** is a single centered column (`max-w-5xl`) under a sticky top header bar. No sidebar. The header carries the wordmark, inline nav, search, and a user dropdown. Footer is a structured multi-column band at the bottom of every page.
 
-**Color-block rhythm (landing page):** Cream/forest hero → white card sections → House Green (`#1E3932`) feature band with white text → cream utility zone → House Green footer.
-
-Logo is a stylized bee: body with horizontal stripes (like text lines on a page), semi-transparent wings that evoke open book pages, round eyes, curved antennae, and a small smile. The bee represents gleaning (collecting nectar/knowledge), social behavior (hives/communities), and reading (the striped body reads like lines of text, wings like turning pages).
+**Logo** is the favicon glyph (the stylized bee mark) rendered as a boxed letter "G" — a square accent-green tile with the letter, paired with a heavy uppercase "Glean" wordmark.
 
 ## 2. Color Palette
 
-### Primary Greens
+The system uses CSS custom properties (defined in `web/src/app.css`) that swap via `[data-theme]`. All components reference these tokens (e.g. `var(--accent)`), never hardcoded hex.
 
-| Name         | Hex       | Role                                             |
-| ------------ | --------- | ------------------------------------------------ |
-| Green Accent | `#00754A` | CTAs, active states, link hovers, brand accent   |
-| Green Dark   | `#006241` | Headings on landing page, stronger brand moments |
-| House Green  | `#1E3932` | Dark bands, footer, feature sections             |
-| Green Uplift | `#2b5148` | Decorative accents, mid-dark green               |
-| Green Light  | `#d4e9e2` | Light green utility surfaces, valid-state tints  |
+### Light Theme (default)
 
-### Dark Theme (default)
+| Token          | Value     | Use                           |
+| -------------- | --------- | ----------------------------- |
+| `--bg`         | `#fafaf7` | Page canvas (warm paper)      |
+| `--fg`         | `#0a0a0a` | Primary text, borders (ink)   |
+| `--surface`    | `#f0efe9` | Card / panel background       |
+| `--border`     | `#0a0a0a` | All borders (2px solid)       |
+| `--muted`      | `#6b6b6b` | Secondary / metadata text     |
+| `--faint`      | `#c8c8c2` | Disabled, tertiary fills      |
+| `--accent`     | `#00754a` | Links, active states, brand   |
+| `--accent-ink` | `#ecfff4` | Accent-tinted surfaces        |
+| `--danger`     | `#c82014` | Destructive actions, sign-out |
 
-| Token              | Value                    | Use                           |
-| ------------------ | ------------------------ | ----------------------------- |
-| `--spot-bg`        | `#0a1814`                | Page background, sidebar      |
-| `--spot-surface`   | `#152b24`                | Card background               |
-| `--spot-hover`     | `#1e3c33`                | Hover state, input background |
-| `--spot-text`      | `#f2f2f2`                | Primary text                  |
-| `--spot-secondary` | `rgba(255,255,255,0.78)` | Secondary/metadata text       |
-| `--spot-body`      | `rgba(255,255,255,0.92)` | Body copy, article content    |
-| `--spot-muted`     | `rgba(255,255,255,0.42)` | Disabled/tertiary text        |
-| `--spot-divider`   | `rgba(255,255,255,0.12)` | Borders, dividers             |
-| `--spot-outline`   | `rgba(255,255,255,0.20)` | Button borders, input borders |
+### Dark Theme
 
-### Light Theme
+| Token          | Value     | Use                           |
+| -------------- | --------- | ----------------------------- |
+| `--bg`         | `#0a0a0a` | Page canvas (ink)             |
+| `--fg`         | `#f5f5ef` | Primary text, borders (paper) |
+| `--surface`    | `#161616` | Card / panel background       |
+| `--border`     | `#f5f5ef` | All borders (inverted)        |
+| `--muted`      | `#9a9a9a` | Secondary / metadata text     |
+| `--faint`      | `#3a3a3a` | Disabled, tertiary fills      |
+| `--accent`     | `#00754a` | Links, active states, brand   |
+| `--accent-ink` | `#062018` | Accent-tinted surfaces        |
+| `--danger`     | `#ff5a4d` | Destructive actions           |
 
-| Token              | Value              | Use                           |
-| ------------------ | ------------------ | ----------------------------- |
-| `--spot-bg`        | `#f2f0eb`          | Page canvas (warm cream)      |
-| `--spot-surface`   | `#ffffff`          | Card background               |
-| `--spot-hover`     | `#edebe9`          | Hover state (ceramic)         |
-| `--spot-text`      | `rgba(0,0,0,0.87)` | Primary text (warm black)     |
-| `--spot-secondary` | `rgba(0,0,0,0.58)` | Secondary/metadata text       |
-| `--spot-body`      | `rgba(0,0,0,0.70)` | Body copy                     |
-| `--spot-muted`     | `rgba(0,0,0,0.25)` | Disabled/tertiary text        |
-| `--spot-divider`   | `rgba(0,0,0,0.08)` | Borders, dividers             |
-| `--spot-outline`   | `rgba(0,0,0,0.15)` | Button borders, input borders |
-
-### Semantic
-
-| Name   | Hex       | Use               |
-| ------ | --------- | ----------------- |
-| Red    | `#c82014` | Errors, likes     |
-| Orange | `#ffa42b` | Ratings, warnings |
-| Blue   | `#539df5` | External links    |
+> The accent green (`#00754a`) is identical in both light and dark themes.
 
 ## 3. Typography
 
-**Font:** Inter (Google Fonts), weights 400/500/600/700
+**Font:** JetBrains Mono (Google Fonts), weights 400 / 500 / 600 / 700 / 800.
 
-**Global:** `letter-spacing: -0.01em` on body
-
-| Role          | Size | Weight | Tailwind Class                                |
-| ------------- | ---- | ------ | --------------------------------------------- |
-| Page title    | 24px | 700    | `text-2xl font-bold`                          |
-| Section title | 18px | 600    | `text-lg font-semibold`                       |
-| Body          | 14px | 400    | `text-sm`                                     |
-| Small/meta    | 12px | 400    | `text-xs`                                     |
-| Button label  | 14px | 700    | `text-sm font-bold uppercase tracking-button` |
-| Micro         | 10px | 400    | `text-[10px]`                                 |
+| Role            | Class                                                                  |
+| --------------- | ---------------------------------------------------------------------- |
+| Page title      | `text-2xl font-extrabold uppercase tracking-tight`                     |
+| Section heading | `text-xs font-extrabold uppercase tracking-widest text-[var(--muted)]` |
+| Body            | `text-sm` (base), `text-[var(--muted)]` (secondary)                    |
+| Button label    | `text-[0.72rem] font-bold uppercase` (via `btn`)                       |
+| Tag / chip      | `text-[0.68rem] font-semibold uppercase` (via `chip` / `tag`)          |
+| Micro/meta      | `text-[0.7rem] text-[var(--muted)]`                                    |
 
 ## 4. Components
 
+All interactive primitives are defined as Tailwind v4 `@utility` classes in `app.css`.
+
 ### Buttons
 
-All buttons use full-pill radius (`rounded-pill` = `9999px`).
+| Class            | Style                                                      | Use                          |
+| ---------------- | ---------------------------------------------------------- | ---------------------------- |
+| `btn`            | 2px border, hard offset shadow, uppercase, press animation | Default buttons              |
+| `btn btn-accent` | `btn` + accent green background, white text                | Primary CTAs (Sign in, Save) |
+| `btn btn-ghost`  | `btn` with no border/shadow until hover                    | Toolbar / icon buttons       |
 
-**Primary Filled:**
+Hover: `translate(-1px,-1px)` + deeper shadow. Active: `translate(1px,1px)` + flush.
 
-```
-bg-spot-green text-white rounded-pill px-5 py-2 text-sm font-bold uppercase tracking-button hover:brightness-110 transition
-```
+### Chips & Tags
 
-Used for CTAs: "Add", "Subscribe", "Annotate", "Save", "Sign in", "Get started", "Login".
+- **`chip`** — small uppercase pill with 1.5px border. Add `data-active="true"` for the inverted (fg/bg) active state. Used for filters, like/read toggles, counts.
+- **`tag`** — even smaller uppercase label with 1px border, `--surface` background. Used for annotation tags, categories.
 
-**Primary Outlined:**
+### Panels & Cards
 
-```
-border border-spot-outline text-spot-text rounded-pill px-4 py-1.5 text-xs font-bold uppercase tracking-button hover:border-spot-text transition
-```
-
-Used for secondary actions: "Refresh feeds", "Mark all read", "Import OPML", "Export OPML", "Fetch full content", "See what's trending", dialog Cancel/Close.
-
-**Toolbar Micro:**
-
-```
-text-spot-text bg-spot-hover text-[10px] uppercase tracking-button px-2.5 py-1 rounded-pill transition
-```
-
-Used in-card and in-toolbar for small actions: Like, Read, Original, Share. Default text is `text-spot-text` (never grey). Semantic hover colors override the default on certain buttons: Like → red, Read → green, Share → blue, Original stays `text-spot-text`.
-
-### Cards
-
-`rounded-xl` (12px) radius, `shadow-spot` elevation, `bg-spot-surface` background.
-
-```
-bg-spot-surface rounded-xl p-4 shadow-spot hover:bg-spot-hover-50 transition
-```
-
-### Shadows
-
-| Token                  | Use          |
-| ---------------------- | ------------ |
-| `shadow-spot`          | Cards        |
-| `shadow-spot-heavy`    | Modals, hero |
-| `shadow-spot-elevated` | Dialogs, floating elements |
-
-### Navigation
-
-- **Sidebar** (desktop): Fixed left, `w-60`, logo at top, nav links, user profile at bottom
-- **Bottom nav** (mobile): Fixed bottom, 5-tab horizontal bar
-- **Active link**: `bg-spot-hover text-spot-text font-bold`
+- **`panel`** — `--surface` background, 2px `--border` border. The base card container.
+- **`panel-press`** — adds the hover/press translate + hard shadow animation. Used on interactive cards (articles, trending, profiles).
 
 ### Forms
 
-- Input fields: `bg-spot-hover rounded-pill px-5 py-2 text-sm focus:ring-2 focus:ring-spot-green`
-- Textareas: `bg-spot-hover rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-spot-green`
-- File inputs: native browser style with pill-styled file button
+- **`input-brutal`** — 2px border, monospace, focus pushes `translate(-1px,-1px)` with a hard shadow.
+- Textareas and selects reuse `input-brutal`.
 
-### Badges / Tags
+### Shadows
 
-- Unread count: `bg-spot-green/20 text-spot-green px-2.5 py-0.5 rounded-full font-bold`
-- Category pills: `bg-spot-hover text-spot-secondary px-4 py-1.5 rounded-full font-bold`
-- Active category: `bg-spot-active-pill-bg text-spot-active-pill-text`
+| Token              | Value                       | Use                  |
+| ------------------ | --------------------------- | -------------------- |
+| `--shadow-hard-sm` | `2px 2px 0 0 var(--border)` | Buttons, small cards |
+| `--shadow-hard`    | `4px 4px 0 0 var(--border)` | Hover lift, modals   |
+
+Modal dialogs use inline `shadow-[6px_6px_0_0_var(--border)]`.
+
+### Navigation
+
+- **Header bar** (all breakpoints): sticky top, 2px bottom border, `max-w-5xl`. Wordmark left, inline nav (desktop), search/shortcuts/user menu right.
+- **Mobile nav row**: below the header, horizontal-scroll row of nav chips (hidden on `md+`).
+- **Active nav item**: inverted `bg-[var(--fg)] text-[var(--bg)]`.
+- **User menu**: dropdown panel with hard shadow (Profile, Install, Sign out).
+
+### Article body
+
+Rendered RSS/HTML content uses the `article-body` utility: monospace base, uppercase headings, 2px borders on `pre`/`img`/`iframe`/`table`, accent-green links and blockquote borders, accent-green `<mark>`.
 
 ## 5. Layout
 
-- **Content max-width:** `max-w-6xl` (72rem)
-- **Sidebar:** `w-60` fixed left (desktop only)
-- **Main content:** `lg:ml-60` offset with `px-4 lg:px-8 py-6`
-- **Landing page:** Full-width (`w-full`) — no max-width wrapper
-- **Footer:** `bg-spot-surface border-t border-spot-divider`
+| Element         | Spec                                   |
+| --------------- | -------------------------------------- |
+| Content width   | `max-w-5xl` (64rem), `px-4`            |
+| Header height   | `h-14` (3.5rem) sticky                 |
+| Content padding | `py-8`                                 |
+| Footer          | `border-t-2`, multi-column, full-width |
 
-### Responsive Breakpoints
+### Responsive Behavior
 
-| Name    | Width      | Nav behavior                    |
-| ------- | ---------- | ------------------------------- |
-| Mobile  | < 768px    | Bottom tab nav, stacked layouts |
-| Tablet  | 768–1023px | Bottom nav, wider gutters       |
-| Desktop | 1024px+    | Sidebar nav, 3-column grids     |
+| Breakpoint | Nav                     | Layout                        |
+| ---------- | ----------------------- | ----------------------------- |
+| `< 768px`  | Mobile nav row (scroll) | Single column, stacked grids  |
+| `≥ 768px`  | Inline header nav       | Multi-column grids where used |
 
-## 6. Tailwind Config
+## 6. Tailwind / CSS Pipeline
 
-All custom colors live under the `spot` namespace in `tailwind.config.js`. CSS variables provide theme switching via `[data-theme]` attribute. Build output goes to `static/output.css` via `npx tailwindcss`.
+- **Tailwind CSS v4** via `@tailwindcss/vite` (no `tailwind.config.js`).
+- **Source:** `web/src/app.css` — `@import "tailwindcss"`, `@theme` block for design tokens, `:root` / `[data-theme]` for theme variables, `@utility` blocks for component classes.
+- **Build:** `cd web && bun run build` (Vite + SvelteKit). Output is the SvelteKit adapter-node build in `web/build/`.
+- No separate CSS build step — Vite compiles Tailwind on the fly.
 
 ## 7. Asset Pipeline
 
-- **CSS build:** `make css` (minified) or `make css-watch` (dev with live reload)
-- **Source:** `static/input.css` — contains `@tailwind` directives, CSS variables for themes, `@layer components` for article-body styles, and base utilities
-- **Output:** `static/output.css` (gitignored, rebuilt on deploy)
-- **Favicon:** `static/favicon.svg` — bee logo (gradient green background, rounded rect). `static/favicon.png` — 512x512 raster fallback. Both linked in `base.html` `<head>`.
-- **Logo:** `<img>` referencing `/static/favicon.svg`, defined in `partials/logo.html` (`logo-icon`, `logo-link`, `logo-text` templates).
+- **Static assets:** `web/static/` — `favicon.svg` (bee logo), `manifest.json`, PNG icons, `banner.png`. Served at the root (`/favicon.svg`, etc.).
+- **Logo component:** `web/src/lib/components/Logo.svelte` — boxed "G" tile + wordmark, sizes `sm` / `md` / `lg`.
+- **Icons:** `web/src/lib/components/Icon.svelte` — monochrome line-icon set (stroke=currentColor, square caps), referenced by `name`.
 
 ## 8. Page Structure
 
-| Page            | Layout                 | Key Features                                                   |
-| --------------- | ---------------------- | -------------------------------------------------------------- |
-| Index (landing) | Full-width, no sidebar | Hero with mockup, feature cols, dark band, CTA                 |
-| Login           | Centered card          | Bluesky + Atmosphere sign-in buttons                           |
-| Dashboard       | 2/3 + 1/3 grid         | Articles + trending/recommendations sidebar                    |
-| Articles        | Full-width list        | Keyboard nav (j/k/o/m), mark-all-read                          |
-| Article Detail  | `max-w-3xl` centered   | Content, like/share/read buttons, annotations                  |
-| Feeds           | 2/3 + 1/3 grid         | Feed list with categories + add/import sidebar, refresh button |
-| Trending        | Full-width list        | Like/annotation counts on each article                         |
-| Library         | Full-width list        | Liked articles and annotations                                 |
-| Profile         | `max-w-2xl` centered   | Avatar, stats, feeds, annotations                              |
+| Page            | Layout                         | Key Features                                                 |
+| --------------- | ------------------------------ | ------------------------------------------------------------ |
+| Index (landing) | Full-width sections, no chrome | Hero + mock dashboard panel, feature grid, accent band, CTA  |
+| Login           | Centered, chromeless           | Handle input + actor typeahead, OAuth start, register        |
+| Dashboard       | Single column                  | Counts, unread articles, lazy recs/digest/trending/people    |
+| Articles        | Single column list             | Search, status/category chips, sort, expanded scroll-to-read |
+| Article Detail  | Single column, centered prose  | Like/read/share, fetch-content, text-select annotate popover |
+| Feeds           | 2/3 list + 1/3 sidebar         | Categories, add/edit/remove, OPML import/export, refresh     |
+| Trending        | Single column list             | Scope toggle (All / For me), sign-in prompt                  |
+| Library         | Two columns                    | Liked articles + annotations, independent pagination         |
+| Profile         | Centered                       | Header + stats, settings (digest/expanded/languages), feeds  |
+| Stats           | Single column                  | Metric categories as panels with monospace values            |

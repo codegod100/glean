@@ -13,6 +13,43 @@ lint:
 	test -z "$(shell gofmt -l ./...)"
 	golangci-lint run ./... --fix
 
+.PHONY: web-install
+web-install:
+	cd web && bun install
+
+# Run the Go API (backend) and the SvelteKit dev server (frontend) together.
+# The frontend proxies /api requests to the Go server (GLEAN_API_URL).
+.PHONY: dev
+dev:
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; \
+	echo "Starting Go API on :8080 and SvelteKit on :3000 (Ctrl-C stops both)..."; \
+	GLEAN_API_URL=http://localhost:8080 go run -tags fts5 . & \
+	GO_PID=$$!; \
+	trap 'kill $$GO_PID 2>/dev/null' INT TERM EXIT; \
+	(cd web && GLEAN_API_URL=http://localhost:8080 bun run dev); \
+	kill $$GO_PID 2>/dev/null || true
+
+.PHONY: dev-api
+dev-api:
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi && go run -tags fts5 .
+
+.PHONY: dev-web
+dev-web:
+	cd web && GLEAN_API_URL=http://localhost:8080 bun run dev
+
+.PHONY: web-build
+web-build:
+	cd web && bun run build
+
+.PHONY: build
+build: web-build
+	go build -tags fts5 -o glean .
+
+.PHONY: icons
+icons:
+	magick web/static/favicon.svg -background none -density 1200 -resize 512x512 -depth 8 PNG32:web/static/favicon.png
+	magick web/static/favicon.svg -background none -density 1200 -resize 180x180 -depth 8 PNG32:web/static/apple-touch-icon.png
+
 .PHONY: lex-lint
 lex-lint:
 	goat lex lint
@@ -21,38 +58,18 @@ lex-lint:
 lex-parse:
 	goat lex parse $(shell find lexicons -name '*.json' 2>/dev/null)
 
-.PHONY: dev
-dev: css htmx
-	@if [ -f .env ]; then set -a; . ./.env; set +a; fi && go run -tags fts5 .
-
-.PHONY: build
-build: css htmx
-	go build -tags fts5 -o glean .
-
-.PHONY: css
-css:
-	bunx tailwindcss -i ./static/input.css -o ./static/output.css --minify
-
-.PHONY: htmx
-htmx:
-	curl -sL 'https://unpkg.com/htmx.org@2' -o ./static/htmx.min.js
-
-.PHONY: css-watch
-css-watch:
-	bunx tailwindcss -i ./static/input.css -o ./static/output.css --watch
-
-.PHONY: icons
-icons:
-	magick static/favicon.svg -background none -density 1200 -resize 512x512 -depth 8 PNG32:static/favicon.png
-	magick static/favicon.svg -background none -density 1200 -resize 180x180 -depth 8 PNG32:static/apple-touch-icon.png
-
 .PHONY: test
 test:
 	go test -tags fts5 ./...
 
+.PHONY: check
+check:
+	cd web && bun run check
+
 .PHONY: clean
 clean:
-	rm -f glean glean.db static/output.css static/htmx.min.js static/favicon.png static/apple-touch-icon.png
+	rm -f glean glean.db
+	rm -rf web/build web/.svelte-kit
 
 .PHONY: docker-build
 docker-build:

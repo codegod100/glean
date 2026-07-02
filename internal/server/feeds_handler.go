@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"time"
@@ -72,21 +73,33 @@ func (s *Server) handleFeeds(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 
-	if err := g.Wait(); err != nil {
-		s.logger.Warn("feeds error", "error", err, "did", user.DID)
-	}
+	_ = g.Wait()
 
-	s.render(w, r, "feeds.html", map[string]any{
-		"User":              user,
-		"Subscriptions":     subs,
-		"SubscriptionCount": subCount,
-		"Categories":        categories,
-		"Category":          category,
-		"DeadFeeds":         deadFeeds,
-		"Page":              page,
-		"BaseURL":           "/feeds",
-		"QueryParams":       buildQueryParams(map[string]string{"category": category}),
+	writeJSON(w, http.StatusOK, feedsResponse{
+		User:              toUser(user),
+		Subscriptions:     toSubscriptions(subs),
+		SubscriptionCount: subCount,
+		Categories:        nonNil(categories),
+		Category:          category,
+		DeadFeeds:         toFeeds(deadFeeds),
+		Pagination:        page,
 	})
+}
+
+func toSubscriptions(subs []*db.Subscription) []Subscription {
+	out := make([]Subscription, len(subs))
+	for i, s := range subs {
+		out[i] = toSubscription(s)
+	}
+	return out
+}
+
+func toFeeds(feeds []*db.Feed) []Feed {
+	out := make([]Feed, len(feeds))
+	for i, f := range feeds {
+		out[i] = toFeed(f)
+	}
+	return out
 }
 
 func (s *Server) storeFetchResult(ctx context.Context, feedURL, siteURL string, result *feed.ParseResult) {
@@ -115,22 +128,21 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 	category := r.FormValue("category")
 
 	if feedURL == "" {
-		http.Error(w, "url required", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "url required")
 		return
 	}
 
 	if !atproto.IsATProtoFeedURL(feedURL) {
-		u, err := url.Parse(feedURL)
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			http.Error(w, "invalid feed URL", http.StatusBadRequest)
+		if err := validateHTTPURL(feedURL); err != nil {
+			writeAPIError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 	}
 
-	result, feedURL, err := s.fetcher.FetchOrDiscover(r.Context(), feedURL)
+	result, resolvedURL, err := s.fetcher.FetchOrDiscover(r.Context(), feedURL)
 	if err != nil {
 		s.logger.Error("failed to fetch feed", "error", err, "url", feedURL)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -141,7 +153,7 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	f := &db.Feed{
-		FeedURL:     feedURL,
+		FeedURL:     resolvedURL,
 		Title:       db.NullStr(feedTitle),
 		SiteURL:     db.NullStr(result.Feed.SiteURL),
 		Description: db.NullStr(result.Feed.Description),
@@ -150,7 +162,7 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.dbs.Articles.UpsertFeed(r.Context(), f); err != nil {
 		s.logger.Error("failed to upsert feed", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -158,54 +170,60 @@ func (s *Server) handleAddFeed(w http.ResponseWriter, r *http.Request) {
 	if client := s.pdsClientForUser(r); client != nil {
 		record := atproto.SubscriptionRecord{
 			CreatedAt: time.Now().Format(time.RFC3339),
-			FeedURL:   feedURL,
+			FeedURL:   resolvedURL,
 			Title:     feedTitle,
 			Category:  category,
 		}
 		uri, cid, err := client.CreateRecord(r.Context(), user.DID, atproto.CollectionSubscription, record)
 		if err != nil {
 			s.logger.Error("failed to write subscription to PDS", "error", err)
-			http.Error(w, "failed to write subscription to PDS: "+err.Error(), http.StatusInternalServerError)
+			writeAPIError(w, http.StatusInternalServerError, "failed to write subscription to PDS: "+err.Error())
 			return
 		}
 		subURI = uri
 		subCID = cid
 	}
 
-	if err := s.dbs.Articles.CreateSubscription(r.Context(), user.DID, feedURL, feedTitle, category, subURI, subCID); err != nil {
+	if err := s.dbs.Articles.CreateSubscription(r.Context(), user.DID, resolvedURL, feedTitle, category, subURI, subCID); err != nil {
 		if errors.Is(err, db.ErrDuplicateSubscription) {
-			http.Error(w, "Already subscribed to this feed.", http.StatusConflict)
+			writeAPIError(w, http.StatusConflict, "Already subscribed to this feed.")
 			return
 		}
 		s.logger.Error("failed to create subscription", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	go s.storeFetchResult(context.WithoutCancel(r.Context()), feedURL, result.Feed.SiteURL, result)
+	go s.storeFetchResult(context.WithoutCancel(r.Context()), resolvedURL, result.Feed.SiteURL, result)
 
 	s.engine.InvalidateFeedCache(user.DID)
-	if err := s.feedback.MarkImpressionActed(r.Context(), user.DID, "feed", feedURL); err != nil {
+	if err := s.feedback.MarkImpressionActed(r.Context(), user.DID, "feed", resolvedURL); err != nil {
 		s.logger.Warn("failed to mark impression acted", "error", err)
 	}
 	sig := s.engine.GetDominantSignal(s.engine.GetWeights(r.Context(), user.DID))
 	s.engine.RewardSignal(r.Context(), user.DID, sig)
 
-	sub, err := s.dbs.Articles.GetSubscription(r.Context(), user.DID, feedURL)
+	sub, err := s.dbs.Articles.GetSubscription(r.Context(), user.DID, resolvedURL)
 	if err != nil {
-		s.logger.Warn("failed to get subscription", "error", err)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	s.render(w, r, "feed-item.html", map[string]any{
-		"User":        user,
-		"ID":          sub.ID,
-		"FeedURL":     sub.FeedURL,
-		"FeedTitle":   sub.FeedTitle,
-		"Category":    sub.Category,
-		"FaviconURL":  sub.FaviconURL,
-		"UnreadCount": sub.UnreadCount,
-	})
+	writeJSON(w, http.StatusOK, subscriptionResponse{Subscription: toSubscription(sub)})
+}
+
+// validateHTTPURL checks that a feed URL has an http(s) scheme and a host.
+func validateHTTPURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid feed URL")
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("invalid feed URL")
+	}
+	if u.Host == "" {
+		return fmt.Errorf("invalid feed URL")
+	}
+	return nil
 }
 
 func (s *Server) handleEditFeed(w http.ResponseWriter, r *http.Request) {
@@ -214,14 +232,13 @@ func (s *Server) handleEditFeed(w http.ResponseWriter, r *http.Request) {
 	category := r.FormValue("category")
 
 	if feedURL == "" {
-		http.Error(w, "url required", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "url required")
 		return
 	}
 
 	sub, err := s.dbs.Articles.GetSubscription(r.Context(), user.DID, feedURL)
 	if err != nil {
-		s.logger.Error("failed to get subscription", "error", err)
-		http.Error(w, "subscription not found", http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "subscription not found")
 		return
 	}
 
@@ -240,7 +257,7 @@ func (s *Server) handleEditFeed(w http.ResponseWriter, r *http.Request) {
 				_, newCID, putErr := client.PutRecord(r.Context(), user.DID, parsed.Collection, parsed.RKey, record)
 				if putErr != nil {
 					s.logger.Error("failed to put subscription record on PDS", "error", putErr)
-					http.Error(w, "failed to update subscription on PDS: "+putErr.Error(), http.StatusInternalServerError)
+					writeAPIError(w, http.StatusInternalServerError, "failed to update subscription on PDS: "+putErr.Error())
 					return
 				}
 				cid = newCID
@@ -250,26 +267,16 @@ func (s *Server) handleEditFeed(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.dbs.Articles.UpdateSubscription(r.Context(), user.DID, feedURL, sub.FeedTitle, category, sub.URI.String, cid); err != nil {
 		s.logger.Error("failed to update subscription", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	updated, err := s.dbs.Articles.GetSubscription(r.Context(), user.DID, feedURL)
 	if err != nil {
-		s.logger.Warn("failed to get updated subscription", "error", err)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-
-	s.render(w, r, "feed-item.html", map[string]any{
-		"User":        user,
-		"ID":          updated.ID,
-		"FeedURL":     updated.FeedURL,
-		"FeedTitle":   updated.FeedTitle,
-		"Category":    updated.Category,
-		"FaviconURL":  updated.FaviconURL,
-		"UnreadCount": updated.UnreadCount,
-	})
+	writeJSON(w, http.StatusOK, subscriptionResponse{Subscription: toSubscription(updated)})
 }
 
 func (s *Server) handleRemoveFeed(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +284,7 @@ func (s *Server) handleRemoveFeed(w http.ResponseWriter, r *http.Request) {
 	feedURL := r.FormValue("url")
 
 	if feedURL == "" {
-		http.Error(w, "url required", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "url required")
 		return
 	}
 
@@ -288,7 +295,7 @@ func (s *Server) handleRemoveFeed(w http.ResponseWriter, r *http.Request) {
 			if ok {
 				if delErr := client.DeleteRecord(r.Context(), user.DID, parsed.Collection, parsed.RKey); delErr != nil {
 					s.logger.Error("failed to delete subscription from PDS", "error", delErr)
-					http.Error(w, "failed to delete subscription from PDS: "+delErr.Error(), http.StatusInternalServerError)
+					writeAPIError(w, http.StatusInternalServerError, "failed to delete subscription from PDS: "+delErr.Error())
 					return
 				}
 			}
@@ -297,11 +304,11 @@ func (s *Server) handleRemoveFeed(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.dbs.Articles.DeleteSubscription(r.Context(), user.DID, feedURL); err != nil {
 		s.logger.Error("failed to delete subscription", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleClearAllSubscriptions(w http.ResponseWriter, r *http.Request) {
@@ -318,7 +325,7 @@ func (s *Server) handleClearAllSubscriptions(w http.ResponseWriter, r *http.Requ
 				if ok {
 					if delErr := client.DeleteRecord(r.Context(), user.DID, parsed.Collection, parsed.RKey); delErr != nil {
 						s.logger.Error("failed to delete subscription from PDS", "error", delErr, "uri", sub.URI.String)
-						http.Error(w, "failed to delete subscription from PDS: "+delErr.Error(), http.StatusInternalServerError)
+						writeAPIError(w, http.StatusInternalServerError, "failed to delete subscription from PDS: "+delErr.Error())
 						return
 					}
 				}
@@ -328,26 +335,25 @@ func (s *Server) handleClearAllSubscriptions(w http.ResponseWriter, r *http.Requ
 
 	if err := s.dbs.Articles.DeleteAllSubscriptions(r.Context(), user.DID); err != nil {
 		s.logger.Error("failed to clear subscriptions", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	w.Header().Set(HXRedirect, "/feeds")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	file, _, err := r.FormFile("opml")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	defer file.Close()
 
 	opml, err := feed.ParseOPML(file)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -416,8 +422,7 @@ func (s *Server) handleOPMLUpload(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	w.Header().Set(HXRedirect, "/feeds")
-	w.WriteHeader(http.StatusOK)
+	writeJSON(w, http.StatusOK, opmlUploadResponse{Added: added})
 }
 
 func (s *Server) handleOPMLDownload(w http.ResponseWriter, r *http.Request) {
@@ -438,7 +443,7 @@ func (s *Server) handleOPMLDownload(w http.ResponseWriter, r *http.Request) {
 
 	data, err := feed.GenerateOPML(feedURLs, "Glean Subscriptions")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -454,10 +459,7 @@ func (s *Server) handleFeedList(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.logger.Warn("failed to list subscriptions", "error", err, "did", user.DID)
 	}
-	s.render(w, r, "feed-list.html", map[string]any{
-		"User":          user,
-		"Subscriptions": subs,
-	})
+	writeJSON(w, http.StatusOK, feedListResponse{Subscriptions: toSubscriptions(subs)})
 }
 
 func (s *Server) handleRefreshFeeds(w http.ResponseWriter, r *http.Request) {
@@ -471,10 +473,7 @@ func (s *Server) handleRefreshFeeds(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.logger.Warn("failed to list subscriptions", "error", err, "did", user.DID)
 	}
-	s.render(w, r, "feed-list.html", map[string]any{
-		"User":          user,
-		"Subscriptions": subs,
-	})
+	writeJSON(w, http.StatusOK, feedListResponse{Subscriptions: toSubscriptions(subs)})
 }
 
 func (s *Server) refreshUserFeeds(ctx context.Context, userDID string) {
@@ -504,13 +503,13 @@ func (s *Server) refreshUserFeeds(ctx context.Context, userDID string) {
 func (s *Server) handleRetryFeed(w http.ResponseWriter, r *http.Request) {
 	feedURL := r.FormValue("url")
 	if feedURL == "" {
-		http.Error(w, "url required", http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, "url required")
 		return
 	}
 
 	f, err := s.dbs.Articles.GetFeed(r.Context(), feedURL)
 	if err != nil {
-		http.Error(w, "feed not found", http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "feed not found")
 		return
 	}
 
@@ -522,13 +521,5 @@ func (s *Server) handleRetryFeed(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.logger.Warn("failed to list dead feeds", "error", err, "did", user.DID)
 	}
-	if len(deadFeeds) == 0 {
-		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(""))
-		return
-	}
-
-	s.render(w, r, "dead-feeds.html", map[string]any{
-		"DeadFeeds": deadFeeds,
-	})
+	writeJSON(w, http.StatusOK, deadFeedsResponse{DeadFeeds: toFeeds(deadFeeds)})
 }

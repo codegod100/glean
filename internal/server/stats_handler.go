@@ -12,25 +12,25 @@ import (
 )
 
 type metricFamily struct {
-	Name        string
-	Type        string
-	Description string
-	Labels      map[string]string
-	Value       float64
+	Name        string            `json:"name"`
+	Type        string            `json:"type"`
+	Description string            `json:"description"`
+	Labels      map[string]string `json:"labels"`
+	Value       float64           `json:"value"`
 }
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
+	userObj := new(toUser(currentUser(r)))
 	metrics, err := s.fetchMetrics()
 	if err != nil {
 		s.logger.Warn("failed to fetch metrics", "error", err)
-		http.Error(w, "Failed to load metrics", http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, "Failed to load metrics")
 		return
 	}
 
-	user := currentUser(r)
-	s.render(w, r, "stats.html", map[string]any{
-		"User":    user,
-		"Metrics": metrics,
+	writeJSON(w, http.StatusOK, statsResponse{
+		User:    userObj,
+		Metrics: metrics,
 	})
 }
 

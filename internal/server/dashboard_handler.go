@@ -2,16 +2,13 @@ package server
 
 import (
 	"context"
-	"database/sql"
 	"net/http"
-	"strings"
 	"time"
 
 	"golang.org/x/sync/errgroup"
 
 	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/cluster"
-	"pkg.rbrt.fr/glean/internal/db"
 	"pkg.rbrt.fr/glean/internal/feedback"
 )
 
@@ -22,10 +19,10 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	var (
 		unreadCount      int
 		subCount         int
-		userLangs        []string
-		articles         []*db.Article
-		personalTrending []*db.TrendingItem
-		globalTrending   []*db.TrendingItem
+		articles         = make([]Article, 0, 5)
+		personalTrending = make([]TrendingItem, 0, 5)
+		globalTrending   = make([]TrendingItem, 0, 5)
+		digestEnabled    bool
 	)
 
 	g, gCtx := errgroup.WithContext(ctx)
@@ -49,16 +46,15 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	})
 
 	g.Go(func() error {
-		var err error
-		articles, err = s.dbs.Articles.ListUnreadArticles(gCtx, user.DID, "", "", 5, 0, false)
+		rows, err := s.dbs.Articles.ListUnreadArticles(gCtx, user.DID, "", "", 5, 0, false)
 		if err != nil {
 			s.logger.Warn("failed to list unread articles", "error", err, "did", user.DID)
+			return nil
 		}
-		return nil
-	})
-
-	g.Go(func() error {
-		userLangs, _ = s.dbs.Users.GetLanguages(gCtx, user.DID)
+		articles = make([]Article, len(rows))
+		for i, a := range rows {
+			articles[i] = toArticle(a)
+		}
 		return nil
 	})
 
@@ -66,31 +62,42 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		s.logger.Warn("dashboard error", "error", err, "did", user.DID)
 	}
 
-	var err error
 	if subCount == 0 {
-		globalTrending, err = s.engine.GetGlobalTrending(gCtx, user.DID, 5, 0)
+		rows, err := s.engine.GetGlobalTrending(ctx, user.DID, 5, 0)
 		if err != nil {
 			s.logger.Warn("failed to get global trending", "error", err, "did", user.DID)
 		}
+		globalTrending = make([]TrendingItem, len(rows))
+		for i, t := range rows {
+			globalTrending[i] = toTrendingItem(t)
+		}
 	} else {
-		personalTrending, err = s.engine.GetPersonalTrending(gCtx, user.DID, userLangs, 5, 0)
+		userLangs, _ := s.dbs.Users.GetLanguages(ctx, user.DID)
+		rows, err := s.engine.GetPersonalTrending(ctx, user.DID, userLangs, 5, 0)
 		if err != nil {
 			s.logger.Warn("failed to get personal trending", "error", err, "did", user.DID)
+		}
+		personalTrending = make([]TrendingItem, len(rows))
+		for i, t := range rows {
+			personalTrending[i] = toTrendingItem(t)
 		}
 	}
 
 	settings, _ := s.dbs.Users.GetSettings(ctx, user.DID)
-	digestEnabled := settings != nil && settings.DigestEnabled
+	if settings != nil {
+		digestEnabled = settings.DigestEnabled
+	}
 
-	s.render(w, r, "dashboard.html", map[string]any{
-		"User":              user,
-		"SubscriptionCount": subCount,
-		"UnreadCount":       unreadCount,
-		"Articles":          articles,
-		"PersonalTrending":  personalTrending,
-		"GlobalTrending":    globalTrending,
-		"Now":               time.Now(),
-		"DigestEnabled":     digestEnabled,
+	writeJSON(w, http.StatusOK, dashboardResponse{
+		User:              toUser(user),
+		SubscriptionCount: subCount,
+		UnreadCount:       unreadCount,
+		Articles:          articles,
+		PersonalTrending:  personalTrending,
+		GlobalTrending:    globalTrending,
+		DigestEnabled:     digestEnabled,
+		HasLLM:            s.llm != nil,
+		Now:               time.Now().Unix(),
 	})
 }
 
@@ -102,32 +109,23 @@ func (s *Server) handleArticleRecommendations(w http.ResponseWriter, r *http.Req
 	articleRecs, err := s.engine.GetArticleRecommendations(ctx, user.DID, userLangs, 5)
 	if err != nil {
 		s.logger.Warn("failed to get article recommendations", "error", err, "did", user.DID)
-		w.WriteHeader(http.StatusOK)
+		writeJSON(w, http.StatusOK, articleRecsResponse{})
 		return
 	}
 
-	if len(articleRecs) == 0 {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	articleRecArticles := make([]*db.Article, len(articleRecs))
-	for i, rec := range articleRecs {
-		articleRecArticles[i] = &db.Article{
+	recs := make([]Article, 0, len(articleRecs))
+	for _, rec := range articleRecs {
+		recs = append(recs, Article{
 			ID:             rec.ArticleID,
+			Title:          rec.Title,
+			URL:            rec.URL,
 			FeedURL:        rec.FeedURL,
 			FeedTitle:      rec.FeedTitle,
-			FeedFaviconURL: sql.NullString{String: rec.FaviconURL, Valid: rec.FaviconURL != ""},
-			Title:          rec.Title,
-			URL:            sql.NullString{String: rec.URL, Valid: rec.URL != ""},
-			Author:         sql.NullString{String: rec.Author, Valid: rec.Author != ""},
-			Summary:        sql.NullString{String: rec.Summary, Valid: rec.Summary != ""},
-			Published:      rec.Published,
-			IsRead:         sql.NullBool{Bool: false, Valid: true},
-			DismissURL:     "/recs/dismiss-article",
-			DismissField:   "article_url",
-			DismissValue:   rec.URL,
-		}
+			FeedFaviconURL: rec.FaviconURL,
+			Author:         rec.Author,
+			Summary:        rec.Summary,
+			Published:      nullTime(rec.Published),
+		})
 	}
 
 	var impressions []feedback.Impression
@@ -140,23 +138,7 @@ func (s *Server) handleArticleRecommendations(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	if cookie, err := r.Cookie("glean_csrf"); err == nil {
-		data := map[string]any{
-			"ArticleRecommendations": articleRecArticles,
-			"CSRFToken":              cookie.Value,
-		}
-		var buf strings.Builder
-		if err := s.templates.ExecuteTemplate(&buf, "partials/article-recommendations.html", data); err != nil {
-			s.logger.Error("article recommendations template error", "error", err)
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(buf.String()))
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
+	writeJSON(w, http.StatusOK, articleRecsResponse{Articles: recs})
 }
 
 func (s *Server) handleFeedRecommendations(w http.ResponseWriter, r *http.Request) {
@@ -167,8 +149,13 @@ func (s *Server) handleFeedRecommendations(w http.ResponseWriter, r *http.Reques
 	feedRecs, err := s.engine.GetFeedRecommendations(ctx, user.DID, 5)
 	if err != nil {
 		s.logger.Warn("failed to get feed recommendations", "error", err, "did", user.DID)
-		w.WriteHeader(http.StatusOK)
+		writeJSON(w, http.StatusOK, feedRecsResponse{SubscriptionCount: subCount})
 		return
+	}
+
+	recs := make([]FeedRecommendation, len(feedRecs))
+	for i, rec := range feedRecs {
+		recs[i] = toFeedRecommendation(rec)
 	}
 
 	var impressions []feedback.Impression
@@ -181,24 +168,10 @@ func (s *Server) handleFeedRecommendations(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	if cookie, err := r.Cookie("glean_csrf"); err == nil {
-		data := map[string]any{
-			"FeedRecommendations": feedRecs,
-			"SubscriptionCount":   subCount,
-			"CSRFToken":           cookie.Value,
-		}
-		var buf strings.Builder
-		if err := s.templates.ExecuteTemplate(&buf, "partials/feed-recommendations.html", data); err != nil {
-			s.logger.Error("feed recommendations template error", "error", err)
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(buf.String()))
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
+	writeJSON(w, http.StatusOK, feedRecsResponse{
+		Feeds:             recs,
+		SubscriptionCount: subCount,
+	})
 }
 
 func (s *Server) handlePeopleRecommendations(w http.ResponseWriter, r *http.Request) {
@@ -208,44 +181,26 @@ func (s *Server) handlePeopleRecommendations(w http.ResponseWriter, r *http.Requ
 	peopleRecs, err := s.engine.GetPeopleRecommendations(ctx, user.DID, 6)
 	if err != nil {
 		s.logger.Warn("failed to get people recommendations", "error", err, "did", user.DID)
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	if len(peopleRecs) == 0 {
-		w.WriteHeader(http.StatusOK)
+		writeJSON(w, http.StatusOK, peopleRecsResponse{})
 		return
 	}
 
 	resolvePeopleHandles(ctx, peopleRecs)
 
-	var followedPeople, discoverPeople []*cluster.PersonRecommendation
+	followed := make([]PersonRecommendation, 0, len(peopleRecs))
+	discover := make([]PersonRecommendation, 0, len(peopleRecs))
 	for _, p := range peopleRecs {
 		if p.IsFollowed {
-			followedPeople = append(followedPeople, p)
+			followed = append(followed, toPersonRecommendation(p))
 		} else {
-			discoverPeople = append(discoverPeople, p)
+			discover = append(discover, toPersonRecommendation(p))
 		}
 	}
 
-	if cookie, err := r.Cookie("glean_csrf"); err == nil {
-		data := map[string]any{
-			"FollowedPeople": followedPeople,
-			"DiscoverPeople": discoverPeople,
-			"CSRFToken":      cookie.Value,
-		}
-		var buf strings.Builder
-		if err := s.templates.ExecuteTemplate(&buf, "partials/people-recommendations.html", data); err != nil {
-			s.logger.Error("people recommendations template error", "error", err)
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(buf.String()))
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
+	writeJSON(w, http.StatusOK, peopleRecsResponse{
+		Followed: followed,
+		Discover: discover,
+	})
 }
 
 func resolvePeopleHandles(ctx context.Context, people []*cluster.PersonRecommendation) {

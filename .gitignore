@@ -25,9 +25,11 @@ go.work.sum
 # database
 *.db*
 
-# tailwind
-static/output.css
+# frontend
 node_modules/
+web/node_modules/
+web/build/
+web/.svelte-kit/
 
 # todo
 todo.md

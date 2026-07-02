@@ -1,17 +1,13 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -30,10 +26,7 @@ import (
 	"pkg.rbrt.fr/glean/internal/metrics"
 	"pkg.rbrt.fr/glean/internal/ml"
 	"pkg.rbrt.fr/glean/internal/scraper"
-	"pkg.rbrt.fr/glean/internal/tmpl"
-	"pkg.rbrt.fr/glean/static"
 )
-
 
 var oauthScopes = []string{
 	"atproto",
@@ -54,37 +47,29 @@ var oauthScopes = []string{
 	"rpc:app.bsky.actor.getProfile?aud=*",
 }
 
-var bufPool = sync.Pool{
-	New: func() any {
-		return new(bytes.Buffer)
-	},
-}
-
-func splitString(s, sep string) []string {
-	return strings.Split(s, sep)
-}
-
 type Server struct {
-	dbs         *db.Store
-	router      *chi.Mux
-	templates   *template.Template
-	logger      *slog.Logger
-	oauth       *oauth.ClientApp
-	oauthStore  *db.OAuthStore
-	fetcher     *feed.Fetcher
-	scheduler   *feed.Scheduler
-	engine      *cluster.Engine
-	feedback    *feedback.Service
-	scraper     *scraper.Scraper
-	llm         ml.TextModel
-	clientID    string
-	callbackURL string
-	sessionKey  []byte
+	dbs           *db.Store
+	router        *chi.Mux
+	logger        *slog.Logger
+	oauth         *oauth.ClientApp
+	oauthStore    *db.OAuthStore
+	fetcher       *feed.Fetcher
+	scheduler     *feed.Scheduler
+	engine        *cluster.Engine
+	feedback      *feedback.Service
+	scraper       *scraper.Scraper
+	llm           ml.TextModel
+	clientID      string
+	callbackURL   string
+	frontendURL   string
+	sessionKey    []byte
+	secureCookies bool   // true in production (clientID set); gates cookie Secure flag
+	allowedOrigin string // configured browser origin for CSRF; empty in localhost dev
 }
 
 func New(
 	dbs *db.Store,
-	clientID, callbackURL, addr string,
+	clientID, callbackURL, frontendURL string,
 	scheduler *feed.Scheduler,
 	fetcher *feed.Fetcher,
 	engine *cluster.Engine,
@@ -96,37 +81,47 @@ func New(
 
 	var config oauth.ClientConfig
 	if clientID == "" {
-		host := addr
-		if strings.HasPrefix(host, ":") {
-			host = "127.0.0.1" + host
+		// Localhost dev: the OAuth callback must go through the SvelteKit
+		// frontend (which proxies /api to Go) so the post-callback redirect to
+		// /dashboard lands on the frontend, not on Go's API-only server.
+		origin := frontendURL
+		if origin == "" {
+			origin = "http://localhost:3000"
 		}
-		cbURL := fmt.Sprintf("http://%s/auth/callback", host)
+		cbURL := strings.TrimRight(origin, "/") + "/api/auth/callback"
 		config = oauth.NewLocalhostConfig(cbURL, oauthScopes)
 	} else {
-		config = oauth.NewPublicConfig(clientID, callbackURL, oauthScopes)
+		// callbackURL points at the public SvelteKit origin, proxied to /api/auth/callback.
+		cb := callbackURL
+		if !strings.Contains(cb, "/api/auth/callback") {
+			cb = strings.TrimRight(cb, "/") + "/api/auth/callback"
+		}
+		config = oauth.NewPublicConfig(clientID, cb, oauthScopes)
 	}
 	oauthClient := oauth.NewClientApp(&config, oauthStore)
 
 	s := &Server{
-		dbs:         dbs,
-		router:      chi.NewMux(),
-		logger:      logger,
-		oauth:       oauthClient,
-		oauthStore:  oauthStore,
-		fetcher:     fetcher,
-		scheduler:   scheduler,
-		engine:      engine,
-		feedback:    feedback.NewService(dbs.SQLDB()),
-		scraper:     scraper.New(logger),
-		llm:         textModel,
-		clientID:    clientID,
-		callbackURL: callbackURL,
-		sessionKey:  sessionKey,
+		dbs:           dbs,
+		router:        chi.NewMux(),
+		logger:        logger,
+		oauth:         oauthClient,
+		oauthStore:    oauthStore,
+		fetcher:       fetcher,
+		scheduler:     scheduler,
+		engine:        engine,
+		feedback:      feedback.NewService(dbs.SQLDB()),
+		scraper:       scraper.New(logger),
+		llm:           textModel,
+		clientID:      clientID,
+		callbackURL:   callbackURL,
+		frontendURL:   frontendURL,
+		sessionKey:    sessionKey,
+		secureCookies: clientID != "",
+		allowedOrigin: frontendOrigin(frontendURL, clientID),
 	}
 
 	s.setupMiddleware()
 	s.setupRoutes()
-	s.loadTemplates()
 
 	return s
 }
@@ -137,10 +132,11 @@ func (s *Server) setupMiddleware() {
 	s.router.Use(middleware.Compress(5))
 	s.router.Use(s.metricsMiddleware)
 	s.router.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type"},
-		MaxAge:         300,
+		AllowedOrigins:   s.allowedOrigins(),
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		AllowCredentials: true,
+		MaxAge:           300,
 	}))
 	s.router.Use(s.sessionMiddleware)
 	s.router.Use(s.csrfMiddleware)
@@ -161,21 +157,26 @@ func (s *Server) metricsMiddleware(next http.Handler) http.Handler {
 }
 
 func normalizeMetricsPath(p string) string {
-	if strings.HasPrefix(p, "/static/") {
-		return "/static/*"
+	if strings.HasPrefix(p, "/api/articles/") {
+		return "/api/articles/*"
+	}
+	if strings.HasPrefix(p, "/api/profile/") {
+		return "/api/profile/*"
 	}
 	return p
 }
 
 func (s *Server) setupRoutes() {
-	s.router.Get("/", s.handleIndex)
+	r := s.router
 
-	s.router.Route("/dashboard", func(r chi.Router) {
+	r.Get("/api/me", s.handleMe)
+
+	r.Route("/api/dashboard", func(r chi.Router) {
 		r.Use(s.requireAuth)
 		r.Get("/", s.handleDashboard)
 	})
 
-	s.router.Route("/feeds", func(r chi.Router) {
+	r.Route("/api/feeds", func(r chi.Router) {
 		r.Use(s.requireAuth)
 		r.Get("/", s.handleFeeds)
 		r.Post("/add", s.handleAddFeed)
@@ -189,7 +190,7 @@ func (s *Server) setupRoutes() {
 		r.Post("/clear", s.handleClearAllSubscriptions)
 	})
 
-	s.router.Route("/articles", func(r chi.Router) {
+	r.Route("/api/articles", func(r chi.Router) {
 		r.Use(s.requireAuth)
 		r.Get("/", s.handleArticles)
 		r.Get("/new-count", s.handleNewArticleCount)
@@ -201,23 +202,23 @@ func (s *Server) setupRoutes() {
 		r.Post("/mark-all-read", s.handleMarkAllRead)
 	})
 
-	s.router.Route("/trending", func(r chi.Router) {
+	r.Route("/api/trending", func(r chi.Router) {
 		r.Get("/", s.handleTrending)
 	})
 
-	s.router.Route("/profile", func(r chi.Router) {
+	r.Route("/api/profile", func(r chi.Router) {
 		r.Use(s.requireAuth)
 		r.Get("/{did}", s.handleProfile)
 	})
 
-	s.router.Route("/library", func(r chi.Router) {
+	r.Route("/api/library", func(r chi.Router) {
 		r.Use(s.requireAuth)
 		r.Get("/", s.handleLibrary)
 		r.Post("/create", s.handleCreateAnnotation)
 		r.Post("/{id}/delete", s.handleDeleteAnnotation)
 	})
 
-	s.router.Route("/recs", func(r chi.Router) {
+	r.Route("/api/recs", func(r chi.Router) {
 		r.Use(s.requireAuth)
 		r.Get("/articles", s.handleArticleRecommendations)
 		r.Get("/feeds", s.handleFeedRecommendations)
@@ -227,191 +228,59 @@ func (s *Server) setupRoutes() {
 		r.Post("/dismiss-person", s.handleDismissPersonRecommendation)
 	})
 
-	s.router.Route("/settings", func(r chi.Router) {
+	r.Route("/api/settings", func(r chi.Router) {
 		r.Use(s.requireAuth)
 		r.Post("/languages/{code}", s.handleToggleLanguage)
 		r.Post("/expanded-view", s.handleToggleExpandedView)
 		r.Post("/digest-enabled", s.handleToggleDigestEnabled)
 	})
 
-	s.router.With(s.requireAuth).Get("/digest", s.handleDigest)
-	s.router.With(s.requireAuth).Post("/digest/mark-read", s.handleDigestMarkRead)
+	r.With(s.requireAuth).Get("/api/digest", s.handleDigest)
+	r.With(s.requireAuth).Post("/api/digest/mark-read", s.handleDigestMarkRead)
 
-	s.router.Get("/auth/login", s.handleAuthLogin)
-	s.router.Get("/auth/register", s.handleAuthRegister)
-	s.router.Get("/auth/resolve", s.handleAuthResolve)
-	s.router.Post("/auth/start", s.handleAuthStart)
-	s.router.Get("/auth/callback", s.handleAuthCallback)
-	s.router.Post("/auth/logout", s.handleAuthLogout)
-	s.router.Get("/oauth/client-metadata", s.handleOAuthClientMetadata)
+	r.Get("/api/auth/login", s.handleAuthLoginMeta)
+	r.Get("/api/auth/register", s.handleAuthRegister)
+	r.Get("/api/auth/actors", s.handleAuthResolve)
+	r.Post("/api/auth/start", s.handleAuthStart)
+	r.Get("/api/auth/callback", s.handleAuthCallback)
+	r.Post("/api/auth/logout", s.handleAuthLogout)
+	r.Get("/api/oauth/client-metadata", s.handleOAuthClientMetadata)
 
 	xrpc := atproto.NewXRPCHandler(s.dbs, s.engine)
-	s.router.Get("/xrpc/at.glean.listSubscriptions", xrpc.ListSubscriptions)
-	s.router.Get("/xrpc/at.glean.listAnnotations", xrpc.ListAnnotations)
-	s.router.Get("/xrpc/at.glean.listLikes", xrpc.ListLikes)
-	s.router.Get("/xrpc/at.glean.getTrending", xrpc.GetTrending)
-	s.router.Get("/xrpc/at.glean.getRecommendations", xrpc.GetRecommendations)
-	s.router.Get("/xrpc/at.glean.listFeedLists", xrpc.ListFeedLists)
+	r.Get("/xrpc/at.glean.listSubscriptions", xrpc.ListSubscriptions)
+	r.Get("/xrpc/at.glean.listAnnotations", xrpc.ListAnnotations)
+	r.Get("/xrpc/at.glean.listLikes", xrpc.ListLikes)
+	r.Get("/xrpc/at.glean.getTrending", xrpc.GetTrending)
+	r.Get("/xrpc/at.glean.getRecommendations", xrpc.GetRecommendations)
+	r.Get("/xrpc/at.glean.listFeedLists", xrpc.ListFeedLists)
 
-	s.router.Get("/terms", s.handleTerms)
-	s.router.Get("/sitemap.xml", s.handleSitemap)
-	s.router.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(static.Files))))
-	s.router.Handle("/metrics", promhttp.Handler())
-	s.router.Get("/stats", s.handleStats)
-	s.router.NotFound(s.handleNotFound)
+	r.Get("/api/sitemap", s.handleSitemap)
+	r.Handle("/metrics", promhttp.Handler())
+	r.Get("/api/stats", s.handleStats)
+	r.NotFound(s.handleNotFound)
 }
 
-func (s *Server) loadTemplates() {
-	fm := template.FuncMap{
-		"dict": func(values ...any) (map[string]any, error) {
-			if len(values)%2 != 0 {
-				return nil, fmt.Errorf("dict requires even number of arguments")
-			}
-			m := make(map[string]any, len(values)/2)
-			for i := 0; i < len(values); i += 2 {
-				key, ok := values[i].(string)
-				if !ok {
-					return nil, fmt.Errorf("dict key must be string")
-				}
-				m[key] = values[i+1]
-			}
-			return m, nil
-		},
-		"formatDate": func(t time.Time) string {
-			return t.Format("Jan 02, 2006")
-		},
-		"formatDateTime": func(t time.Time) string {
-			return t.Format("Jan 02, 2006 15:04")
-		},
-		"split": func(sv, sep string) []string {
-			if sv == "" {
-				return nil
-			}
-			var result []string
-			for _, p := range splitString(sv, sep) {
-				if p != "" {
-					result = append(result, p)
-				}
-			}
-			return result
-		},
-		"repeat": func(str string, n int) string {
-			b := strings.Builder{}
-			for range n {
-				b.WriteString(str)
-			}
-			return b.String()
-		},
-		"int": func(n int64) int {
-			return int(n)
-		},
-		"add": func(a, b int) int {
-			return a + b
-		},
-		"youtubeID": func(rawURL string) string {
-			u, err := url.Parse(rawURL)
-			if err != nil {
-				return ""
-			}
-			host := strings.ToLower(u.Hostname())
-			if host == "youtu.be" {
-				id := strings.TrimPrefix(u.Path, "/")
-				if id != "" {
-					return id
-				}
-				return ""
-			}
-			if host == "www.youtube.com" || host == "youtube.com" || host == "m.youtube.com" {
-				if u.Path == "/watch" || u.Path == "/watch/" {
-					id := u.Query().Get("v")
-					if id != "" {
-						return id
-					}
-				}
-				if after, ok := strings.CutPrefix(u.Path, "/embed/"); ok {
-					id := after
-					if id != "" {
-						return id
-					}
-				}
-				if after, ok := strings.CutPrefix(u.Path, "/shorts/"); ok {
-					id := after
-					if id != "" {
-						return id
-					}
-				}
-			}
-			return ""
-		},
-		"isEmbedURL": func(rawURL string) bool {
-			u, err := url.Parse(rawURL)
-			if err != nil {
-				return false
-			}
-			host := strings.ToLower(u.Hostname())
-			return slices.Contains([]string{
-				"www.youtube.com", "youtube.com", "m.youtube.com", "youtu.be",
-				"vimeo.com", "player.vimeo.com",
-				"open.spotify.com", "embed.spotify.com",
-				"w.soundcloud.com",
-				"bandcamp.com",
-			}, host)
-		},
-		"sanitizeHTML": func(input string) template.HTML {
-			return template.HTML(sanitizeHTML(input))
-		},
-		"plainText": plainText,
-		"now":       time.Now,
-		"activeClass": func(activePath, linkPath string) string {
-			if activePath == linkPath || (len(activePath) > len(linkPath) && activePath[:len(linkPath)+1] == linkPath+"/") {
-				return "bg-spot-hover text-spot-text font-bold"
-			}
-			return "text-spot-secondary"
-		},
-		"csrfInput": func(token any) template.HTML {
-			s, ok := token.(string)
-			if !ok || s == "" {
-				return ""
-			}
-			return template.HTML(`<input type="hidden" name="csrf_token" value="` + s + `">`)
-		},
-		"paginationURL": func(baseURL string, page int, queryParams map[string]string) string {
-			u, _ := url.Parse(baseURL)
-			q := u.Query()
-			for k, v := range queryParams {
-				q.Set(k, v)
-			}
-			if page > 1 {
-				q.Set("page", fmt.Sprintf("%d", page))
-			} else {
-				q.Del("page")
-			}
-			u.RawQuery = q.Encode()
-			return u.String()
-		},
-		"containsString": func(slice any, s string) bool {
-			sl, ok := slice.([]string)
-			if !ok {
-				return false
-			}
-			return slices.Contains(sl, s)
-		},
+func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	csrf := ""
+	if c, err := r.Cookie("glean_csrf"); err == nil {
+		csrf = c.Value
 	}
-
-	var err error
-	s.templates, err = template.New("").Funcs(fm).ParseFS(tmpl.Files, "*.html", "partials/*.html")
-	if err != nil {
-		s.logger.Error("failed to load templates", "error", err)
+	var userObj *User
+	if user != nil {
+		userObj = new(toUser(user))
 	}
+	writeJSON(w, http.StatusOK, meResponse{
+		User:      userObj,
+		CSRFToken: csrf,
+		HasLLM:    s.llm != nil,
+		ClientID:  s.clientID,
+	})
 }
 
 func (s *Server) pdsClientForUser(r *http.Request) *atproto.Client {
 	session := s.getSessionData(r)
-	if session == nil {
-		return nil
-	}
-
-	if session.SessionID == "" {
+	if session == nil || session.SessionID == "" {
 		return nil
 	}
 
@@ -459,189 +328,39 @@ func (s *Server) PeriodicSync(ctx context.Context, interval time.Duration) {
 	}
 }
 
-func (s *Server) BackfillFromCollectionDir(ctx context.Context, collectionDirURL string, concurrency int) {
-	if collectionDirURL == "" {
-		return
-	}
-
-	s.logger.Info("backfilling from collection directory", "url", collectionDirURL)
-
-	dids, err := atproto.FetchSubscriberDIDs(ctx, collectionDirURL)
-	if err != nil {
-		s.logger.Error("failed to fetch subscriber DIDs", "error", err)
-		return
-	}
-
-	existing, err := s.dbs.Users.UserDIDs(ctx)
-	if err != nil {
-		s.logger.Error("failed to list existing users", "error", err)
-		return
-	}
-
-	var missing []string
-	for _, did := range dids {
-		if !existing[did] {
-			missing = append(missing, did)
-		}
-	}
-
-	s.logger.Info("collection directory backfill", "total", len(dids), "missing", len(missing))
-
-	sem := make(chan struct{}, concurrency)
-	var wg sync.WaitGroup
-
-	for _, did := range missing {
-		if ctx.Err() != nil {
-			break
-		}
-
-		sem <- struct{}{}
-		wg.Add(1)
-
-		go func(did string) {
-			defer func() { <-sem }()
-			defer wg.Done()
-
-			if _, err := s.dbs.Users.CreateUser(ctx, did); err != nil {
-				s.logger.Error("failed to create user during backfill", "error", err, "did", did)
-				return
-			}
-
-			pdsURL, err := atproto.ResolvePDSEndpoint(ctx, did)
-			if err != nil {
-				s.logger.Error("failed to resolve PDS for backfill", "error", err, "did", did)
-				return
-			}
-
-			client := atproto.NewUnauthenticatedClient(pdsURL)
-			sync := atproto.NewSync(s.dbs.Articles, s.dbs.Users, client, s.logger)
-			if err := sync.Run(ctx, did); err != nil {
-				s.logger.Error("backfill sync failed", "error", err, "did", did)
-			}
-		}(did)
-	}
-
-	wg.Wait()
-	s.logger.Info("collection directory backfill complete")
-}
-
-func (s *Server) runSyncAll(ctx context.Context) {
-	if n, err := s.oauthStore.CountActiveUsers(ctx); err == nil {
-		metrics.ActiveUsers.Set(float64(n))
-	}
-
-	users, err := s.dbs.Users.ListUsers(ctx)
-	if err != nil {
-		s.logger.Error("failed to list users for sync", "error", err)
-		return
-	}
-
-	for _, u := range users {
-		sessionIDs, err := s.oauthStore.ListSessionsForDID(ctx, u.DID)
-		if err != nil || len(sessionIDs) == 0 {
-			continue
-		}
-
-		did, err := syntax.ParseDID(u.DID)
-		if err != nil {
-			continue
-		}
-
-		sess, err := s.oauth.ResumeSession(ctx, did, sessionIDs[0])
-		if err != nil {
-			s.logger.Warn("failed to resume session for periodic sync", "error", err, "did", u.DID)
-			continue
-		}
-
-		client := atproto.NewClient(sess.APIClient())
-		sync := atproto.NewSync(s.dbs.Articles, s.dbs.Users, client, s.logger)
-		if err := sync.Run(ctx, u.DID); err != nil {
-			metrics.SyncErrors.Inc()
-			s.logger.Error("periodic sync failed", "error", err, "did", u.DID)
-		}
-
-		metrics.SyncRuns.Inc()
-	}
-
-	// Recompute subscriber_count once after all users are synced.
-	if err := s.dbs.Articles.RecountSubscriberCounts(ctx); err != nil {
-		s.logger.Error("recount subscriber counts failed", "error", err)
-	}
-}
-
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.router.ServeHTTP(w, r)
 }
 
 func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotFound)
-	s.render(w, r, "404.html", nil)
+	writeAPIError(w, http.StatusNotFound, "not found")
 }
 
-func (s *Server) renderError(w http.ResponseWriter, r *http.Request, code int, title, message string) {
-	if isHXRequest(r) {
-		w.WriteHeader(code)
-		w.Write([]byte(message))
-		return
+// allowedOrigins returns the browser origins permitted by CORS. In production
+// this is the configured frontend URL; in localhost dev the SvelteKit proxy
+// is same-origin so any value works, but we still avoid "*".
+func (s *Server) allowedOrigins() []string {
+	if s.allowedOrigin != "" {
+		return []string{s.allowedOrigin}
 	}
-	w.WriteHeader(code)
-	s.render(w, r, "error.html", map[string]any{
-		"Title":   title,
-		"Message": message,
-	})
+	return []string{"http://localhost:3000", "http://localhost:5173"}
 }
 
-func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data map[string]any) {
-	if data == nil {
-		data = map[string]any{}
-	}
-
-	data["HasLLM"] = s.llm != nil
-
-	if cookie, err := r.Cookie("glean_csrf"); err == nil {
-		data["CSRFToken"] = cookie.Value
-	}
-
-	if isHXRequest(r) {
-		if err := s.templates.ExecuteTemplate(w, name, data); err != nil {
-			s.logger.Error("template error", "error", err, "template", name)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+// frontendOrigin derives the browser origin (scheme://host) from frontendURL,
+// falling back to the client ID host.
+func frontendOrigin(frontendURL, clientID string) string {
+	for _, raw := range []string{frontendURL, clientID} {
+		if raw == "" {
+			continue
 		}
-		return
-	}
-
-	buf := bufPool.Get().(*bytes.Buffer)
-	buf.Reset()
-	defer bufPool.Put(buf)
-
-	if err := s.templates.ExecuteTemplate(buf, name, data); err != nil {
-		s.logger.Error("template error", "error", err, "template", name)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	path := r.URL.Path
-	if len(path) > 1 {
-		path = strings.TrimRight(path, "/")
-	}
-	baseData := map[string]any{
-		"Content":    template.HTML(buf.String()),
-		"ActivePath": path,
-	}
-	if data != nil {
-		if u, ok := data["User"]; ok {
-			baseData["User"] = u
+		u, err := url.Parse(raw)
+		if err != nil || u.Host == "" {
+			continue
 		}
-		if csrf, ok := data["CSRFToken"]; ok {
-			baseData["CSRFToken"] = csrf
+		if u.Scheme == "" {
+			u.Scheme = "https"
 		}
-		if hasLLM, ok := data["HasLLM"]; ok {
-			baseData["HasLLM"] = hasLLM
-		}
+		return u.Scheme + "://" + u.Host
 	}
-
-	if err := s.templates.ExecuteTemplate(w, "base.html", baseData); err != nil {
-		s.logger.Error("template error", "error", err, "template", "base.html")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	return ""
 }

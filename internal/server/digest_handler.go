@@ -17,33 +17,33 @@ import (
 )
 
 type digestCtx struct {
-	Title       string
-	Summary     string
-	Excerpt     string
-	ArticleIDs  []int64
-	GeneratedAt time.Time
-	CSRFToken   string
-	Consumed    bool
+	Title       string  `json:"title"`
+	Summary     string  `json:"summary"`
+	Excerpt     string  `json:"excerpt"`
+	ArticleIDs  []int64 `json:"article_ids"`
+	GeneratedAt int64   `json:"generated_at"`
+	Consumed    bool    `json:"consumed"`
 }
 
 type digestCacheEntry struct {
-	html       string
-	expiry     time.Time
-	articleIDs []int64
-	consumed   bool
+	data     *digestCtx
+	expiry   time.Time
+	consumed bool
 }
 
 var (
-	digestCache  sync.Map
-	digestFlight singleflight.Group
+	digestCache  = sync.Map{}
+	digestFlight = singleflight.Group{}
 )
 
 const digestTTL = 24 * time.Hour
 
 var refRe = regexp.MustCompile(`\[(\d+)\]`)
 
-func linkifyRefs(html string, articles []*db.Article) string {
-	return refRe.ReplaceAllStringFunc(html, func(match string) string {
+// linkifyRefs turns [n] references in the LLM summary into links to the
+// corresponding article. The frontend receives the already-linkified HTML.
+func linkifyRefs(htmlText string, articles []*db.Article) string {
+	return refRe.ReplaceAllStringFunc(htmlText, func(match string) string {
 		n, err := strconv.Atoi(match[1 : len(match)-1])
 		if err != nil || n < 1 || n > len(articles) {
 			return match
@@ -116,18 +116,17 @@ func (s *Server) buildDigestData(ctx context.Context, user *db.User) *digestCtx 
 
 	summary = linkifyRefs(summary, articles)
 
+	ids := make([]int64, len(articles))
+	for i, a := range articles {
+		ids[i] = a.ID
+	}
+
 	return &digestCtx{
-		Title:   title,
-		Summary: summary,
-		Excerpt: excerptFromHTML(summary),
-		ArticleIDs: func() []int64 {
-			ids := make([]int64, len(articles))
-			for i, a := range articles {
-				ids[i] = a.ID
-			}
-			return ids
-		}(),
-		GeneratedAt: time.Now(),
+		Title:       title,
+		Summary:     summary,
+		Excerpt:     excerptFromHTML(summary),
+		ArticleIDs:  ids,
+		GeneratedAt: time.Now().Unix(),
 	}
 }
 
@@ -152,8 +151,8 @@ func digestArticleContent(a *db.Article) string {
 	return string(runes)
 }
 
-func excerptFromHTML(html string) string {
-	text := plainText(html)
+func excerptFromHTML(htmlText string) string {
+	text := plainText(htmlText)
 	if len(text) > 200 {
 		text = text[:200]
 		if idx := strings.LastIndex(text, ". "); idx > 0 {
@@ -193,10 +192,9 @@ func (s *Server) handleDigest(w http.ResponseWriter, r *http.Request) {
 		entry := cached.(*digestCacheEntry)
 		if time.Now().Before(entry.expiry) {
 			if entry.consumed {
-				s.renderDigest(w, &digestCtx{Consumed: true})
+				writeJSON(w, http.StatusOK, &digestCtx{ArticleIDs: []int64{}, Consumed: true})
 			} else {
-				w.Header().Set("Content-Type", "text/html")
-				w.Write([]byte(entry.html))
+				writeJSON(w, http.StatusOK, entry.data)
 			}
 			return
 		}
@@ -208,25 +206,11 @@ func (s *Server) handleDigest(w http.ResponseWriter, r *http.Request) {
 		if d == nil {
 			return nil, nil
 		}
-
-		if cookie, err := r.Cookie("glean_csrf"); err == nil {
-			d.CSRFToken = cookie.Value
-		}
-
-		var buf strings.Builder
-		if err := s.templates.ExecuteTemplate(&buf, "partials/digest.html", d); err != nil {
-			s.logger.Error("digest template error", "error", err)
-			return nil, nil
-		}
-
-		html := buf.String()
 		digestCache.Store(key, &digestCacheEntry{
-			html:       html,
-			expiry:     time.Now().Add(digestTTL),
-			articleIDs: d.ArticleIDs,
+			data:   d,
+			expiry: time.Now().Add(digestTTL),
 		})
-
-		return html, nil
+		return d, nil
 	})
 
 	if result == nil {
@@ -234,26 +218,14 @@ func (s *Server) handleDigest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte(result.(string)))
-}
-
-func (s *Server) renderDigest(w http.ResponseWriter, d *digestCtx) {
-	var buf strings.Builder
-	if err := s.templates.ExecuteTemplate(&buf, "partials/digest.html", d); err != nil {
-		s.logger.Error("digest template error", "error", err)
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte(buf.String()))
+	writeJSON(w, http.StatusOK, result.(*digestCtx))
 }
 
 func (s *Server) handleDigestMarkRead(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAPIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -273,7 +245,7 @@ func (s *Server) handleDigestMarkRead(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.dbs.Articles.MarkArticlesRead(r.Context(), user.DID, ids); err != nil {
 		s.logger.Error("failed to mark digest articles read", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAPIError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -282,6 +254,5 @@ func (s *Server) handleDigestMarkRead(w http.ResponseWriter, r *http.Request) {
 		consumed: true,
 	})
 
-	w.Header().Set(HXRefresh, "true")
-	s.renderDigest(w, &digestCtx{Consumed: true})
+	writeJSON(w, http.StatusOK, &digestCtx{ArticleIDs: []int64{}, Consumed: true})
 }

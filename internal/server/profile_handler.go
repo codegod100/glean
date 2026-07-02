@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"golang.org/x/sync/errgroup"
 
 	"pkg.rbrt.fr/glean/internal/atproto"
 	"pkg.rbrt.fr/glean/internal/db"
@@ -23,7 +22,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		resolved, err := atproto.ResolveHandle(ctx, param)
 		if err != nil {
 			s.logger.Warn("failed to resolve handle", "error", err, "handle", param)
-			s.renderError(w, r, http.StatusNotFound, "Handle not found", "Could not find a user with that handle.")
+			writeAPIError(w, http.StatusNotFound, "handle not found")
 			return
 		}
 		did = resolved
@@ -32,7 +31,7 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	profileUser, err := s.dbs.Users.GetUser(ctx, did)
 	if err != nil {
 		s.logger.Warn("failed to get user", "error", err, "did", did)
-		s.renderError(w, r, http.StatusNotFound, "User not found", "This user doesn't exist in Glean yet.")
+		writeAPIError(w, http.StatusNotFound, "user not found")
 		return
 	}
 
@@ -41,76 +40,38 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 	profileUser.DisplayName = p.DisplayName
 	profileUser.AvatarURL = p.AvatarURL
 
-	var (
-		subs        []*db.Subscription
-		annotations []*db.Annotation
-		subCount    int
-		userLangs   []string
-	)
-
 	user := currentUser(r)
 
-	g, gCtx := errgroup.WithContext(ctx)
+	subs, _ := s.dbs.Articles.ListSubscriptions(ctx, did, "", 50, 0)
+	annotations, _ := s.dbs.Articles.ListAnnotations(ctx, "", "", did, 50, 0)
+	resolveAnnotationHandles(ctx, annotations)
+	subCount, _ := s.dbs.Articles.GetSubscriptionCount(ctx, did)
+	userLangs, _ := s.dbs.Users.GetLanguages(ctx, user.DID)
 
-	g.Go(func() error {
-		var err error
-		subs, err = s.dbs.Articles.ListSubscriptions(gCtx, did, "", 50, 0)
-		if err != nil {
-			s.logger.Warn("failed to list subscriptions", "error", err, "did", did)
-		}
-		return nil
-	})
-
-	g.Go(func() error {
-		var err error
-		annotations, err = s.dbs.Articles.ListAnnotations(gCtx, "", "", did, 50, 0)
-		if err != nil {
-			s.logger.Warn("failed to list annotations", "error", err, "did", did)
-			return nil
-		}
-		resolveAnnotationHandles(gCtx, annotations)
-		return nil
-	})
-
-	g.Go(func() error {
-		var err error
-		subCount, err = s.dbs.Articles.GetSubscriptionCount(gCtx, did)
-		if err != nil {
-			s.logger.Warn("failed to get subscription count", "error", err, "did", did)
-		}
-		return nil
-	})
-
-	g.Go(func() error {
-		userLangs, _ = s.dbs.Users.GetLanguages(gCtx, user.DID)
-		return nil
-	})
-
-	userSettings := &db.UserSettings{}
-	g.Go(func() error {
-		var err error
-		userSettings, err = s.dbs.Users.GetSettings(gCtx, user.DID)
-		if err != nil {
-			s.logger.Warn("failed to get user settings", "error", err, "did", user.DID)
-		}
-		return nil
-	})
-
-	if err := g.Wait(); err != nil {
-		s.logger.Warn("profile error", "error", err, "did", did)
+	var expandedView, digestEnabled bool
+	if settings, err := s.dbs.Users.GetSettings(ctx, user.DID); err == nil && settings != nil {
+		expandedView = settings.ExpandedView
+		digestEnabled = settings.DigestEnabled
 	}
 
-	s.render(w, r, "profile.html", map[string]any{
-		"User":               user,
-		"CurrentUserDID":     user.DID,
-		"ProfileUser":        profileUser,
-		"Subscriptions":      subs,
-		"Annotations":        annotations,
-		"SubscriptionCount":  subCount,
-		"AnnotationCount":    len(annotations),
-		"UserLanguages":      userLangs,
-		"AvailableLanguages": ml.KnownLanguages(),
-		"ExpandedView":       userSettings.ExpandedView,
-		"DigestEnabled":      userSettings.DigestEnabled,
+	writeJSON(w, http.StatusOK, profileResponse{
+		User:               toUser(user),
+		ProfileUser:        toUser(profileUser),
+		Subscriptions:      toSubscriptions(subs),
+		Annotations:        toAnnotations(annotations),
+		SubscriptionCount:  subCount,
+		AnnotationCount:    len(annotations),
+		UserLanguages:      nonNil(userLangs),
+		AvailableLanguages: ml.KnownLanguages(),
+		ExpandedView:       expandedView,
+		DigestEnabled:      digestEnabled,
 	})
+}
+
+func toAnnotations(annotations []*db.Annotation) []Annotation {
+	out := make([]Annotation, len(annotations))
+	for i, a := range annotations {
+		out[i] = toAnnotation(a)
+	}
+	return out
 }

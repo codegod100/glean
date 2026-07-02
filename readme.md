@@ -36,51 +36,66 @@ The system improves over time: as you subscribe to feeds and like articles, Glea
 ### Docker
 
 ```bash
-docker run -p 8080:8080 -v glean-data:/data atcr.io/julien.rbrt.fr/glean:latest
+docker run -p 3000:3000 -e GLEAN_SESSION_KEY=changeme -v glean-data:/data atcr.io/julien.rbrt.fr/glean:latest
 ```
 
 ### From source
 
+The frontend is a SvelteKit app in `web/`; the Go binary serves a JSON API.
+SvelteKit runs the SSR server (port 3000) and proxies `/api` to the Go API
+(port 8080).
+
 ```bash
 git clone https://github.com/anomalyco/glean.git
 cd glean
-make build
-./glean
+make web-install   # install frontend deps (bun)
+make build         # builds the frontend and the Go binary
 ```
 
-Then open `http://localhost:8080`.
+Run both in dev:
+
+```bash
+make dev-api   # Go API on :8080
+make dev-web   # SvelteKit dev server on :3000 (proxies /api to :8080)
+```
+
+Then open `http://localhost:3000`.
 
 ## Configuration
 
-| Variable                     | Default                            | What it does                                                             |
-| ---------------------------- | ---------------------------------- | ------------------------------------------------------------------------ |
-| `GLEAN_SESSION_KEY`          | _(required)_                       | Secret key for signing session cookies (any random string)               |
-| `GLEAN_ADDR`                 | `:8080`                            | Listen address                                                           |
-| `GLEAN_DB`                   | `glean.db`                         | SQLite base path (`_users`, `_articles`, `_recs` suffixes)               |
-| `GLEAN_JETSTREAM`            | `wss://jetstream1.eurosky.network` | Jetstream WebSocket URL                                                  |
-| `GLEAN_SYNC_INTERVAL`        | `8h`                               | PDS sync interval (Go duration: `24h`, `12h`, etc.)                      |
-| `GLEAN_CLUSTER_INTERVAL`     | `1h`                               | Cluster recomputation interval (Go duration)                             |
-| `GLEAN_FETCH_INTERVAL`       | `15m`                              | Feed fetch scheduler tick interval (Go duration)                         |
-| `GLEAN_COLLECTION_DIR_URL`   | _(empty)_                          | Collection directory URL for startup backfill                            |
-| `GLEAN_BACKFILL_CONCURRENCY` | `5`                                | Max concurrent backfill workers                                          |
-| `GLEAN_PLC_URL`              | `https://plc.eurosky.network`      | PLC directory URL for DID resolution                                     |
-| `GLEAN_OAUTH_CLIENT_ID`      | _(empty)_                          | OAuth client metadata URL (leave empty for localhost dev)                |
-| `GLEAN_OAUTH_REDIRECT_URL`   | _(empty)_                          | OAuth redirect URL (leave empty for localhost dev)                       |
-| `GLEAN_EMBED_BASE_URL`       | _(empty)_                          | Embeddings API base URL (recommended, see below)                         |
-| `GLEAN_EMBED_API_KEY`        | _(empty)_                          | API key for the embeddings endpoint                                      |
-| `GLEAN_EMBED_MODEL`          | `text-embedding-3-small`           | Embedding model name                                                     |
-| `GLEAN_EMBED_DIMENSION`      | `1536`                             | Embedding vector dimension                                               |
-| `GLEAN_LLM_BASE_URL`         | _(empty)_                          | LLM API base URL for language detection and digest summaries (see below) |
-| `GLEAN_LLM_API_KEY`          | _(empty)_                          | API key for the LLM endpoint                                             |
-| `GLEAN_LLM_MODEL`            | `gpt-4o-mini`                      | LLM model name                                                           |
-| `GLEAN_PPROF_ADDR`           | _(empty)_                          | Enable pprof profiling server (e.g. `:6060`, off by default)             |
+| Variable                     | Default                            | What it does                                                                                                  |
+| ---------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `GLEAN_SESSION_KEY`          | _(required)_                       | Secret key for signing session cookies (any random string)                                                    |
+| `GLEAN_ADDR`                 | `:8080`                            | Listen address                                                                                                |
+| `GLEAN_DB`                   | `glean.db`                         | SQLite base path (`_users`, `_articles`, `_recs` suffixes)                                                    |
+| `GLEAN_JETSTREAM`            | `wss://jetstream1.eurosky.network` | Jetstream WebSocket URL                                                                                       |
+| `GLEAN_SYNC_INTERVAL`        | `8h`                               | PDS sync interval (Go duration: `24h`, `12h`, etc.)                                                           |
+| `GLEAN_CLUSTER_INTERVAL`     | `1h`                               | Cluster recomputation interval (Go duration)                                                                  |
+| `GLEAN_FETCH_INTERVAL`       | `15m`                              | Feed fetch scheduler tick interval (Go duration)                                                              |
+| `GLEAN_COLLECTION_DIR_URL`   | _(empty)_                          | Collection directory URL for startup backfill                                                                 |
+| `GLEAN_BACKFILL_CONCURRENCY` | `5`                                | Max concurrent backfill workers                                                                               |
+| `GLEAN_PLC_URL`              | `https://plc.eurosky.network`      | PLC directory URL for DID resolution                                                                          |
+| `GLEAN_OAUTH_CLIENT_ID`      | _(empty)_                          | OAuth client metadata URL (leave empty for localhost dev)                                                     |
+| `GLEAN_OAUTH_REDIRECT_URL`   | _(empty)_                          | OAuth redirect URL, must resolve to `/api/auth/callback` on the public origin (leave empty for localhost dev) |
+| `GLEAN_FRONTEND_URL`         | `http://localhost:3000`            | Public origin of the SvelteKit frontend; used as the OAuth callback base in localhost dev                     |
+| `GLEAN_EMBED_BASE_URL`       | _(empty)_                          | Embeddings API base URL (recommended, see below)                                                              |
+| `GLEAN_EMBED_API_KEY`        | _(empty)_                          | API key for the embeddings endpoint                                                                           |
+| `GLEAN_EMBED_MODEL`          | `text-embedding-3-small`           | Embedding model name                                                                                          |
+| `GLEAN_EMBED_DIMENSION`      | `1536`                             | Embedding vector dimension                                                                                    |
+| `GLEAN_LLM_BASE_URL`         | _(empty)_                          | LLM API base URL for language detection and digest summaries (see below)                                      |
+| `GLEAN_LLM_API_KEY`          | _(empty)_                          | API key for the LLM endpoint                                                                                  |
+| `GLEAN_LLM_MODEL`            | `gpt-4o-mini`                      | LLM model name                                                                                                |
+| `GLEAN_PPROF_ADDR`           | _(empty)_                          | Enable pprof profiling server (e.g. `:6060`, off by default)                                                  |
 
 For production:
 
 ```bash
 export GLEAN_OAUTH_CLIENT_ID=https://yourdomain.com/oauth/client-metadata
-export GLEAN_OAUTH_REDIRECT_URL=https://yourdomain.com/auth/callback
+export GLEAN_OAUTH_REDIRECT_URL=https://yourdomain.com/api/auth/callback
 ```
+
+The SvelteKit server reads `GLEAN_API_URL` (default `http://localhost:8080`) to
+know where the Go API is, and `ORIGIN`/`PORT` for its own listen address.
 
 ## Documentation
 
@@ -89,7 +104,7 @@ export GLEAN_OAUTH_REDIRECT_URL=https://yourdomain.com/auth/callback
 
 ## Stack
 
-Go, SQLite, htmx, TailwindCSS, AT Protocol OAuth.
+Go, SQLite, SvelteKit (SSR), TailwindCSS, AT Protocol OAuth.
 
 ## License
 

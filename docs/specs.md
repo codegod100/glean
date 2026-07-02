@@ -14,7 +14,7 @@ The core idea: your RSS subscriptions are a strong signal about your interests. 
 | ---------------- | ----------------------------------------------------------------------------------------------- |
 | Backend          | Go                                                                                              |
 | Database         | SQLite (3 files: users, articles, recs via `mattn/go-sqlite3` + `sqlite-vec` for vector search) |
-| Frontend         | htmx + TailwindCSS                                                                              |
+| Frontend         | SvelteKit (SSR, adapter-node) + TailwindCSS v4                                                  |
 | Auth             | AT Protocol OAuth / DID resolution (configurable PLC directory)                                 |
 | AT Protocol role | AppView for `at.glean.*` lexicons                                                               |
 | Data source      | AT Protocol Jetstream → SQLite index                                                            |
@@ -420,35 +420,38 @@ Beyond the clustering system, Glean also discovers new feeds from article conten
 
 ## 5. System Architecture
 
-Glean runs as a single Go binary that fills three roles: **AppView** (indexing `at.glean.*` records from Jetstream, serving XRPC queries), **RSS reader** (fetching and storing feed content), and **web UI** (htmx frontend).
+Glean is a two-process deployment: a **Go binary** serving a JSON API (`/api/*`) plus XRPC endpoints, and a **SvelteKit SSR server** (adapter-node) that renders the UI and proxies `/api/*` to Go. The Go binary fills two roles: **AppView** (indexing `at.glean.*` records from Jetstream, serving XRPC queries) and **RSS reader** (fetching and storing feed content). The SvelteKit server owns all page routes, HTML rendering, and SSR data loading.
 
 ```
                           Jetstream (GLEAN_JETSTREAM)
                                 │ subscribe
                                 ▼
-                     ┌─────────────────────┐
-                     │   Go Server (glean.at)│
-                     │                      │
-   Browser ──HTTP──► │  ┌────────────────┐  │ ──XRPC queries──► Other AT apps
-   (htmx + TW)      │  │    Router      │  │
-                     │  │  ┌───────────┐ │  │
-                     │  │  │ Handlers  │ │  │
-                     │  │  │ (UI + XRPC)│ │  │
-                     │  │  └─────┬─────┘ │  │
-                     │  └────────┼────────┘  │
-                     │           │           │
-                     │  ┌────────▼────────┐  │         ┌──────────────────┐
-                     │  │  Service Layer  │  │         │  Feed Scheduler  │
-                     │  │                 │──┼──sync──►│  (goroutine)     │
-                     │  └────────┬────────┘  │         │  Fetcher + Parser│
-                     │           │           │         └────────┬─────────┘
-                     │  ┌────────▼────────┐  │                  │
-                     │  │     SQLite      │  │           RSS/Atom/JSON feeds
-                     │  │  (jetstream idx, │  │
-                     │  │   articles,     │  │         ┌──────────────────┐
-                     │  │   read state,   │  │         │  Cluster Engine  │
-                     │  │   clustering)   │◄─┼────────►│  (periodic cron) │
-                     │  └─────────────────┘  │         └──────────────────┘
+   Browser ──HTTP──► ┌──────────────────────┐
+   (SvelteKit UI)    │  SvelteKit (glean.at) │  :3000
+                     │  SSR + /api proxy    │
+                     └──────────┬───────────┘
+                                │ /api/* (JSON)
+                                ▼
+                     ┌──────────────────────┐         ┌──────────────────┐
+                     │   Go Server          │ ──XRPC──► Other AT apps
+                     │   (glean.at) :8080   │
+                     │  ┌────────────────┐  │         ┌──────────────────┐
+                     │  │ chi Router     │  │         │  Feed Scheduler  │
+                     │  │  ┌──────────┐  │  │         │  (goroutine)     │
+                     │  │  │ Handlers │  │  │ ──sync──►│  Fetcher+Parser │
+                     │  │  │API + XRPC│  │  │         └────────┬─────────┘
+                     │  │  └────┬─────┘  │  │                  │
+                     │  └───────┼────────┘  │           RSS/Atom/JSON feeds
+                     │  ┌───────▼────────┐  │         ┌──────────────────┐
+                     │  │ Service Layer  │  │         │  Cluster Engine  │
+                     │  └───────┬────────┘  │ ────────►│  (periodic cron) │
+                     │  ┌───────▼────────┐  │         └──────────────────┘
+                     │  │    SQLite      │  │
+                     │  │ (jetstream idx,│  │
+                     │  │  articles,     │  │         PDS writes (on user
+                     │  │  read state,   │◄─┼───────── action via UI)
+                     │  │  clustering)   │  │
+                     │  └────────────────┘  │
                      └──────────────────────┘
 
                       AppView responsibilities:
@@ -457,9 +460,8 @@ Glean runs as a single Go binary that fills three roles: **AppView** (indexing `
                         • Convert at.margin.note records to annotations (displayed alongside glean.at annotations), skip if duplicate glean annotation exists
                         • Mirror glean annotations as at.margin.note records on user PDS for interoperability
                         • Import app.skyreader.feed.subscription records as Glean subscriptions
-                     • Serve XRPC query endpoints (at.glean.listSubscriptions, etc.)
-                     • Host the web UI at glean.at
-                     • Write to user PDS on behalf of user (when user acts through UI)
+                        • Serve XRPC query endpoints (at.glean.listSubscriptions, etc.)
+                        • Write to user PDS on behalf of user (when user acts through UI)
 ```
 
 ## 6. Database Schema (SQLite)
@@ -929,70 +931,100 @@ CREATE TABLE recs.feed_embedding_meta (
 
 During cron, `ComputeArticleEmbeddings` embeds new articles in batches using `title + summary + content` (the scraped `full_content` is excluded to stay within model token limits — most embedding models cap at ~8k tokens). Text is truncated to 8000 characters as a safety net. Batches are capped at 100 inputs per API call. `ComputeFeedEmbeddings` embeds feed descriptions (`title || description`) and re-embeds when the source text changes (detected via `feed_embedding_meta`). During on-demand article recommendations, the user's liked article embeddings are averaged into an interest vector, then a vec0 KNN query finds the top-200 most semantically similar articles. For cold-start users (<5 subscriptions), their subscribed feed embeddings are averaged and a KNN query finds similar feeds.
 
-## 8. HTTP API / htmx Endpoints
+## 8. HTTP API
 
-The server renders HTML fragments that htmx swaps into the page. No JSON API needed for the frontend.
+The Go server exposes a JSON API under `/api/*`. The SvelteKit frontend (see `web/`) owns all HTML page routes and consumes these endpoints via `web/src/lib/api.ts`; `web/src/hooks.server.ts` proxies `/api/*` to Go, forwarding cookies and headers. All state-changing requests require a double-submit CSRF token (`X-CSRF-Token` header or `csrf_token` form field) matching the `glean_csrf` cookie.
 
-### 8.1 Pages
+### 8.1 JSON endpoints
 
-| Route                          | Method | Description                                                            |
-| ------------------------------ | ------ | ---------------------------------------------------------------------- |
-| `/`                            | GET    | Landing page / auth redirect                                           |
-| `/dashboard`                   | GET    | Main dashboard: article recs, unread articles, trending, people, feeds |
-| `/feeds`                       | GET    | Manage RSS subscriptions (OPML import for onboarding)                  |
-| `/feeds/list`                  | GET    | Feed list fragment (htmx partial)                                      |
-| `/feeds/opml/upload`           | POST   | Upload OPML file to bulk-import subscriptions (redirects to /feeds)    |
-| `/feeds/opml/download`         | GET    | Export subscriptions as OPML (offboarding)                             |
-| `/feeds/add`                   | POST   | Add a single feed URL                                                  |
-| `/feeds/remove`                | DELETE | Remove a feed                                                          |
-| `/feeds/refresh`               | POST   | Refresh all subscribed feeds                                           |
-| `/feeds/retry`                 | POST   | Retry a failed feed                                                    |
-| `/feeds/clear`                 | POST   | Clear all subscriptions                                                |
-| `/feeds/dismiss`               | POST   | Dismiss a feed recommendation                                          |
-| `/articles`                    | GET    | Read articles (paginated, filterable by feed)                          |
-| `/articles/new-count`          | GET    | Get count of new articles (for badge updates)                          |
-| `/articles/{id}`               | GET    | Article detail view                                                    |
-| `/articles/{id}/read`          | POST   | Mark article as read                                                   |
-| `/articles/{id}/unread`        | POST   | Mark article as unread                                                 |
-| `/articles/{id}/like`          | POST   | Like an article                                                        |
-| `/articles/{id}/fetch-content` | POST   | Fetch full article content from original URL                           |
-| `/articles/mark-all-read`      | POST   | Mark all articles as read                                              |
-| `/articles/dismiss`            | POST   | Dismiss an article recommendation                                      |
-| `/trending`                    | GET    | Community feed: articles ranked by likes (public)                      |
-| `/library`                     | GET    | Liked articles and annotations                                         |
-| `/library/create`              | POST   | Create annotation on an article                                        |
-| `/library/{id}/delete`         | POST   | Delete an annotation                                                   |
-| `/stats`                       | GET    | Application metrics and performance data (Prometheus, public)          |
-| `/profile/{did}`               | GET    | Public profile: their feeds, likes, annotations                        |
-| `/settings/languages/{code}`   | POST   | Toggle a preferred recommendation language (htmx, requires auth)       |
-| `/settings/expanded-view`      | POST   | Toggle expanded article view setting (htmx, requires auth)             |
-| `/settings/digest-enabled`     | POST   | Toggle daily digest setting (htmx, requires auth)                      |
-| `/digest`                      | GET    | Daily digest fragment (LLM summary of unread articles, htmx partial)   |
-| `/digest/mark-read`            | POST   | Mark digest articles as read                                           |
-| `/auth/login`                  | GET    | Login page                                                             |
-| `/auth/register`               | GET    | Register with Eurosky (OAuth flow with hardcoded PDS)                  |
-| `/auth/resolve`                | GET    | Resolve handle to DID                                                  |
-| `/auth/start`                  | POST   | Start OAuth authorization flow                                         |
-| `/auth/callback`               | GET    | OAuth callback                                                         |
-| `/terms`                       | GET    | Terms of service                                                       |
-| `/sitemap.xml`                 | GET    | XML sitemap for search engines                                         |
+All endpoints below return JSON. Those marked 🔒 require authentication (session cookie). Form fields are sent `application/x-www-form-urlencoded`; file uploads are `multipart/form-data`.
 
-### 8.2 htmx Patterns
+| Route                              | Method | Auth | Description                                                                    |
+| ---------------------------------- | ------ | ---- | ------------------------------------------------------------------------------ |
+| `/api/me`                          | GET    |      | Current user, CSRF token, feature flags (`has_llm`, `client_id`)               |
+| `/api/dashboard`                   | GET    | 🔒   | Dashboard: article recs, unread articles, trending, digest flag                |
+| `/api/feeds`                       | GET    | 🔒   | Subscriptions (paginated), categories, dead feeds                              |
+| `/api/feeds/add`                   | POST   | 🔒   | Add a feed URL (fields: `feed_url`, `category`)                                |
+| `/api/feeds/edit`                  | POST   | 🔒   | Edit a subscription category                                                   |
+| `/api/feeds/opml/upload`           | POST   | 🔒   | Bulk-import subscriptions from OPML (field: `opml` file)                       |
+| `/api/feeds/opml/download`         | GET    | 🔒   | Export subscriptions as OPML                                                   |
+| `/api/feeds/refresh`               | POST   | 🔒   | Refresh all subscribed feeds                                                   |
+| `/api/feeds/retry`                 | POST   | 🔒   | Retry a failed feed                                                            |
+| `/api/feeds/list`                  | GET    | 🔒   | Flat subscription list (optional `?category=`)                                 |
+| `/api/feeds/clear`                 | POST   | 🔒   | Remove all subscriptions                                                       |
+| `/api/articles`                    | GET    | 🔒   | Read articles (paginated; `?feed=`, `?status=`, `?q=`, `?sort=`, `?category=`) |
+| `/api/articles/new-count`          | GET    | 🔒   | Count of articles newer than `?since=` (unix seconds) — banner polling         |
+| `/api/articles/{id}`               | GET    | 🔒   | Article detail + annotations (marks read as a side effect)                     |
+| `/api/articles/{id}/read`          | POST   | 🔒   | Mark article read                                                              |
+| `/api/articles/{id}/unread`        | POST   | 🔒   | Mark article unread                                                            |
+| `/api/articles/{id}/like`          | POST   | 🔒   | Toggle like (writes/deletes on PDS)                                            |
+| `/api/articles/{id}/fetch-content` | POST   | 🔒   | Scrape full article content from the source URL                                |
+| `/api/articles/mark-all-read`      | POST   | 🔒   | Mark all (or `?feed=`-scoped) articles read                                    |
+| `/api/trending`                    | GET    |      | Trending articles (`?scope=for-me` requires auth)                              |
+| `/api/profile/{did}`               | GET    | 🔒   | Public profile: feeds, annotations, languages (resolves handles)               |
+| `/api/library`                     | GET    | 🔒   | Liked articles + annotations (paginated)                                       |
+| `/api/library/create`              | POST   | 🔒   | Create annotation (writes at.glean.annotation + at.margin.note mirror)         |
+| `/api/library/{id}/delete`         | POST   | 🔒   | Delete annotation + mirror                                                     |
+| `/api/recs/articles`               | GET    | 🔒   | Article recommendations                                                        |
+| `/api/recs/feeds`                  | GET    | 🔒   | Feed recommendations                                                           |
+| `/api/recs/people`                 | GET    | 🔒   | People recommendations (followed + discover)                                   |
+| `/api/recs/dismiss-feed`           | POST   | 🔒   | Dismiss a feed recommendation                                                  |
+| `/api/recs/dismiss-article`        | POST   | 🔒   | Dismiss an article recommendation                                              |
+| `/api/recs/dismiss-person`         | POST   | 🔒   | Dismiss a person recommendation                                                |
+| `/api/settings/languages/{code}`   | POST   | 🔒   | Toggle a preferred recommendation language                                     |
+| `/api/settings/expanded-view`      | POST   | 🔒   | Toggle expanded article view                                                   |
+| `/api/settings/digest-enabled`     | POST   | 🔒   | Toggle daily digest                                                            |
+| `/api/digest`                      | GET    | 🔒   | Daily digest (LLM summary of unread articles); 204 when none/unavailable       |
+| `/api/digest/mark-read`            | POST   | 🔒   | Mark digest articles read (field: repeated `ids`)                              |
+| `/api/auth/login`                  | GET    |      | Whether OAuth is enabled (`oauth_enabled`)                                     |
+| `/api/auth/register`               | GET    |      | Start registration via Eurosky (`{redirect}`)                                  |
+| `/api/auth/actors`                 | GET    |      | Handle typeahead (`?q=`) → `{actors}`                                          |
+| `/api/auth/start`                  | POST   | 🔒   | Start OAuth flow (field: `handle`) → `{redirect}`                              |
+| `/api/auth/callback`               | GET    |      | OAuth callback (browser redirect, not JSON)                                    |
+| `/api/auth/logout`                 | POST   | 🔒   | End session → `{redirect}`                                                     |
+| `/api/oauth/client-metadata`       | GET    |      | OAuth client metadata document                                                 |
+| `/api/sitemap`                     | GET    |      | Sitemap entries (JSON)                                                         |
+| `/api/stats`                       | GET    |      | Prometheus metrics parsed into `{metrics}`                                     |
+| `/metrics`                         | GET    |      | Raw Prometheus exposition                                                      |
 
-- **Feed list**: `<div hx-get="/feeds/list" hx-trigger="load">` renders the subscription list as a fragment
-- **Infinite scroll articles**: `<div hx-get="/articles?page=2" hx-trigger="intersect">` for pagination
-- **Like button**: `<button hx-post="/articles/{id}/like" hx-swap="outerHTML">` self-updates the button state
-- **OPML upload**: `<form hx-post="/feeds/opml/upload" hx-encoding="multipart/form-data" hx-target="#feed-list">`
+XRPC query endpoints (public, no `/api` prefix):
+
+| Route                               | Description                 |
+| ----------------------------------- | --------------------------- |
+| `/xrpc/at.glean.listSubscriptions`  | List a user's subscriptions |
+| `/xrpc/at.glean.listAnnotations`    | List annotations            |
+| `/xrpc/at.glean.listLikes`          | List likes                  |
+| `/xrpc/at.glean.getTrending`        | Trending articles           |
+| `/xrpc/at.glean.getRecommendations` | Recommendations             |
+| `/xrpc/at.glean.listFeedLists`      | Feed lists                  |
+
+### 8.2 Frontend routes
+
+All HTML page routes live in the SvelteKit app (`web/src/routes/`), not on the Go server. Each route has a `+page.server.ts` load function that calls the JSON API via `endpointsFor(event.fetch)` and a `+page.svelte` rendering component. The layout (`+layout.svelte`) renders the shared chrome and mounts the new-articles banner.
+
+| Path             | Load source          |
+| ---------------- | -------------------- |
+| `/`              | `+page` (landing)    |
+| `/dashboard`     | `/api/dashboard`     |
+| `/articles`      | `/api/articles`      |
+| `/articles/[id]` | `/api/articles/{id}` |
+| `/feeds`         | `/api/feeds`         |
+| `/library`       | `/api/library`       |
+| `/trending`      | `/api/trending`      |
+| `/profile/[did]` | `/api/profile/{did}` |
+| `/stats`         | `/api/stats`         |
+| `/terms`         | (static content)     |
+| `/auth/login`    | `/api/auth/login`    |
+| `/sitemap.xml`   | `/api/sitemap`       |
 
 ## 9. Project Structure
 
 ```
 glean/
 ├── main.go                        # Entry point, wire everything
-├── go.mod
-├── go.sum
-├── Dockerfile
-├── Makefile
+├── go.mod / go.sum
+├── Dockerfile                     # Multi-stage: builds web/ then Go, runs both
+├── Makefile                       # Targets: build, dev-api, dev-web, web-build, test, ...
 ├── lexicons/
 │   └── at/
 │       ├── glean/                  # Glean lexicon JSON schemas (subscription, annotation, like)
@@ -1019,20 +1051,21 @@ glean/
 │   │   ├── follow.go              # Follow queries
 │   │   ├── oauth_store.go         # OAuth session storage
 │   │   ├── user_settings.go       # User settings queries
-│   │   ├── store.go               # FeedStore adapter for scheduler
+│   │   └── store.go               # FeedStore adapter for scheduler
 │   ├── feed/
 │   │   ├── parser.go              # RSS/Atom/RDF/JSON feed parser
 │   │   ├── fetcher.go             # Scheduler with dedup + Fetcher
 │   │   ├── discover.go            # Feed auto-discovery from URLs
 │   │   └── opml.go                # OPML import/export
 │   ├── httpclient/
-│   │   └── httpclient.go         # Shared HTTP transport, retry logic, User-Agent
+│   │   └── httpclient.go          # Shared HTTP transport, retry logic, User-Agent
 │   ├── scraper/
 │   │   └── scraper.go             # Full article content scraper
 │   ├── metrics/
 │   │   └── metrics.go             # Prometheus metrics definitions
 │   ├── ml/
 │   │   ├── embed.go               # Embedder interface + OpenAI-compatible implementation + vector helpers
+│   │   ├── langdetect.go          # Known-language table + detection
 │   │   └── llm.go                 # TextModel interface + OpenAI-compatible LLM implementation
 │   ├── cluster/
 │   │   ├── jaccard.go             # Jaccard similarity computation
@@ -1046,49 +1079,57 @@ glean/
 │   ├── feedback/
 │   │   └── feedback.go            # Dismiss + impression tracking service
 │   ├── server/
-│   │   ├── server.go              # HTTP server, router setup
-│   │   ├── auth_handler.go        # OAuth login/callback/register
+│   │   ├── server.go              # HTTP server, chi router setup (/api/* routes)
+│   │   ├── api.go                 # JSON helpers (writeJSON), DTOs, null helpers
+│   │   ├── api_helpers.go         # URL validation helpers
+│   │   ├── auth_handler.go        # OAuth login/callback/register/logout
 │   │   ├── feeds_handler.go       # Feed management handlers
 │   │   ├── articles_handler.go    # Article reading handlers
-│   │   ├── annotations_handler.go # Annotation handlers
-│   │   ├── dashboard_handler.go   # Dashboard handler
-│   │   ├── trending_handler.go    # Trending handler
-│   │   ├── stats_handler.go       # Stats handler (Prometheus metrics display)
-│   │   ├── index_handler.go       # Landing page handler
-│   │   ├── profile_handler.go     # Public profile handler
-│   │   ├── settings_handler.go    # User settings (language preferences, digest toggle)
-│   │   ├── digest_handler.go      # Daily digest handler (LLM summary, mark-read)
+│   │   ├── annotations_handler.go # Annotation + library handlers
+│   │   ├── dashboard_handler.go   # Dashboard + recommendation handlers
 │   │   ├── recs_handler.go        # Recommendation dismiss handlers
-│   │   ├── sitemap_handler.go   # XML sitemap handler (public pages)
-│   │   ├── terms_handler.go       # Terms of service handler
+│   │   ├── trending_handler.go    # Trending handler
+│   │   ├── profile_handler.go     # Public profile handler
+│   │   ├── settings_handler.go    # User settings (language preferences, digest/expanded toggle)
+│   │   ├── digest_handler.go      # Daily digest handler (LLM summary, mark-read)
+│   │   ├── stats_handler.go       # Stats handler (Prometheus metrics → JSON)
+│   │   ├── sitemap_handler.go     # Sitemap handler
+│   │   ├── index_handler.go       # /api/me + auth-login meta handler
+│   │   ├── sync_handlers.go       # Periodic sync + collection-dir backfill
+│   │   ├── sanitize.go            # HTML sanitization for article content
 │   │   ├── pagination.go          # Pagination helpers
-│   │   ├── middleware.go          # Auth, logging, CSRF middleware
+│   │   ├── middleware.go          # Auth, logging, CSRF, CORS middleware
 │   │   └── session.go             # Session management
-│   ├── sanitize/
-│   │   └── sanitize.go            # HTML sanitization for article content
-│   └── tmpl/
-│       ├── base.html              # Base template with htmx + Tailwind
-│       ├── index.html             # Landing page
-│       ├── login.html             # Login page
-│       ├── dashboard.html         # Dashboard
-│       ├── feeds.html             # Feed management
-│       ├── articles.html          # Article listing
-│       ├── article_detail.html    # Article detail
-│       ├── trending.html          # Trending articles
-│       ├── stats.html             # Application metrics
-│       ├── library.html           # Liked articles + annotations
-│       ├── profile.html           # User profile
-│       ├── error.html             # Error page
-│       ├── 404.html               # Not found page
-│       ├── terms.html             # Terms of service
-│       └── partials/              # Reusable template fragments
-├── static/
-│   ├── input.css                  # Tailwind input
-│   └── output.css                 # Tailwind compiled output
-├── docs/
-│   ├── specs.md                   # Technical specification (this document)
-│   └── design.md                  # Design system
-└── tailwind.config.js
+├── web/                           # SvelteKit (SSR) frontend, adapter-node
+│   ├── src/
+│   │   ├── app.css                # Tailwind v4 entry + design tokens (@theme, [data-theme], @utility)
+│   │   ├── app.html               # HTML shell
+│   │   ├── app.d.ts               # Locals types (user, csrfToken)
+│   │   ├── hooks.server.ts        # /api/* proxy to Go + per-request user load
+│   │   ├── lib/
+│   │   │   ├── api.ts             # Typed endpoint client (endpoints / endpointsFor(fetch))
+│   │   │   ├── types.ts           # API response types
+│   │   │   ├── format.ts          # Date/HTML/youtube formatting helpers
+│   │   │   └── components/        # Svelte components (ArticleCard, FeedItem, Icon, ...)
+│   │   └── routes/               # File-based routes (+page.server.ts load + +page.svelte)
+│   │       ├── +layout.svelte     # Chrome (nav, footer, dialogs, new-articles banner)
+│   │       ├── articles/[id]/     # Article detail
+│   │       ├── dashboard/         # Dashboard
+│   │       ├── feeds/             # Feed management
+│   │       ├── library/           # Liked + annotations
+│   │       ├── trending/          # Trending
+│   │       ├── profile/[did]/     # Public profile
+│   │       ├── stats/             # Metrics
+│   │       ├── auth/login/        # Login
+│   │       ├── terms/             # Terms (static)
+│   │       └── sitemap.xml/       # Sitemap (+server.ts)
+│   ├── static/                    # Favicons, manifest, banner
+│   ├── svelte.config.js           # adapter-node
+│   ├── vite.config.ts             # dev server on :3000
+│   └── package.json               # bun; svelte, @sveltejs/kit, @tailwindcss/vite
+└── docs/
+    ├── specs.md                   # Technical specification (this document)
+    └── design.md                  # Design system
 ```
 
 ## 10. Auth Flow

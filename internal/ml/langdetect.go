@@ -1,8 +1,8 @@
 package ml
 
 type Language struct {
-	Code string
-	Name string
+	Code string `json:"code"`
+	Name string `json:"name"`
 }
 
 var knownLanguages = []Language{

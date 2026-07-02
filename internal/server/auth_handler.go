@@ -13,45 +13,42 @@ import (
 	"pkg.rbrt.fr/glean/internal/atproto"
 )
 
-func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, "login.html", map[string]any{})
+func (s *Server) handleAuthLoginMeta(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, oauthEnabledResponse{OAuthEnabled: s.clientID != ""})
 }
 
+// handleAuthRegister kicks off registration via the Eurosky PDS.
 func (s *Server) handleAuthRegister(w http.ResponseWriter, r *http.Request) {
-	// hardcoded to Eurosky PDS for sign-up because it is a good public one.
 	authURL, err := s.oauth.StartAuthFlow(r.Context(), "https://eurosky.social")
 	if err != nil {
 		s.logger.Error("failed to start register OAuth flow", "error", err)
-		s.renderError(w, r, http.StatusInternalServerError, "Registration failed", "Could not connect to Eurosky. Please try again.")
+		writeAPIError(w, http.StatusInternalServerError, "Could not connect to Eurosky.")
 		return
 	}
-	http.Redirect(w, r, authURL, http.StatusSeeOther)
+	writeJSON(w, http.StatusOK, redirectResponse{Redirect: authURL})
 }
 
 func (s *Server) handleAuthResolve(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimPrefix(r.URL.Query().Get("q"), "@")
 	if q == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"actors":[]}`))
+		writeJSON(w, http.StatusOK, actorsResponse{})
 		return
 	}
 
 	actors, err := atproto.SearchActorsTypeahead(r.Context(), q, 5)
 	if err != nil {
 		s.logger.Warn("actor typeahead failed", "error", err)
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"actors":[]}`))
+		writeJSON(w, http.StatusOK, actorsResponse{})
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"actors": actors})
+	writeJSON(w, http.StatusOK, actorsResponse{Actors: actors})
 }
 
 func (s *Server) handleAuthStart(w http.ResponseWriter, r *http.Request) {
 	handle := strings.TrimPrefix(r.FormValue("handle"), "@")
 	if handle == "" {
-		s.renderError(w, r, http.StatusBadRequest, "Missing handle", "Please enter your handle.")
+		writeAPIError(w, http.StatusBadRequest, "Please enter your handle.")
 		return
 	}
 
@@ -61,22 +58,24 @@ func (s *Server) handleAuthStart(w http.ResponseWriter, r *http.Request) {
 
 		did, resolveErr := atproto.ResolveHandle(r.Context(), handle)
 		if resolveErr != nil {
-			s.renderError(w, r, http.StatusBadRequest, "Handle not found", "Could not resolve that handle. Please check and try again.")
+			writeAPIError(w, http.StatusBadRequest, "Could not resolve that handle. Please check and try again.")
 			return
 		}
 		user, createErr := s.dbs.Users.CreateUser(r.Context(), did)
 		if createErr != nil {
-			s.renderError(w, r, http.StatusInternalServerError, "Sign in failed", "Could not create your account. Please try again.")
+			writeAPIError(w, http.StatusInternalServerError, "Could not create your account. Please try again.")
 			return
 		}
 		s.setUserSession(w, user)
-		http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+		writeJSON(w, http.StatusOK, redirectResponse{Redirect: "/dashboard"})
 		return
 	}
 
-	http.Redirect(w, r, authURL, http.StatusSeeOther)
+	writeJSON(w, http.StatusOK, redirectResponse{Redirect: authURL})
 }
 
+// handleAuthCallback is hit by the OAuth provider after authorization. It is a
+// browser navigation (not an XHR), so it issues HTTP redirects rather than JSON.
 func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 	params := r.URL.Query()
 
@@ -87,21 +86,21 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 
 	handle := params.Get("handle")
 	if handle == "" {
-		s.renderError(w, r, http.StatusBadRequest, "Missing handle", "Please enter your handle.")
+		http.Redirect(w, r, "/auth/login?error=missing_handle", http.StatusSeeOther)
 		return
 	}
 
 	did, err := atproto.ResolveHandle(r.Context(), handle)
 	if err != nil {
 		s.logger.Error("failed to resolve handle", "error", err)
-		s.renderError(w, r, http.StatusBadRequest, "Handle not found", "Could not resolve that handle. Please check and try again.")
+		http.Redirect(w, r, "/auth/login?error=handle_not_found", http.StatusSeeOther)
 		return
 	}
 
 	user, err := s.dbs.Users.CreateUser(r.Context(), did)
 	if err != nil {
 		s.logger.Error("failed to create user", "error", err)
-		s.renderError(w, r, http.StatusInternalServerError, "Sign in failed", "Could not create your account. Please try again.")
+		http.Redirect(w, r, "/auth/login?error=create_failed", http.StatusSeeOther)
 		return
 	}
 
@@ -113,7 +112,7 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	sessData, err := s.oauth.ProcessCallback(r.Context(), r.URL.Query())
 	if err != nil {
 		s.logger.Error("OAuth callback failed", "error", err)
-		s.renderError(w, r, http.StatusInternalServerError, "Authentication failed", "Something went wrong during sign in. Please try again.")
+		http.Redirect(w, r, "/auth/login?error=auth_failed", http.StatusSeeOther)
 		return
 	}
 
@@ -124,7 +123,7 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	user, err := s.dbs.Users.CreateUser(r.Context(), did)
 	if err != nil {
 		s.logger.Error("failed to create user", "error", err)
-		s.renderError(w, r, http.StatusInternalServerError, "Sign in failed", "Could not create your account. Please try again.")
+		http.Redirect(w, r, "/auth/login?error=create_failed", http.StatusSeeOther)
 		return
 	}
 
@@ -136,7 +135,7 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	encoded, err := encodeSession(s.sessionKey, sessionData)
 	if err != nil {
 		s.logger.Error("failed to encode session", "error", err)
-		s.renderError(w, r, http.StatusInternalServerError, "Session error", "Could not create your session. Please try again.")
+		http.Redirect(w, r, "/auth/login?error=session_error", http.StatusSeeOther)
 		return
 	}
 
@@ -146,6 +145,7 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   86400 * 30,
 		HttpOnly: true,
+		Secure:   s.secureCookies,
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -165,7 +165,7 @@ func (s *Server) pdsClientFromSession(sessData *oauth.ClientSessionData) *atprot
 
 func (s *Server) handleOAuthClientMetadata(w http.ResponseWriter, r *http.Request) {
 	if s.clientID == "" {
-		http.Error(w, "localhost client", http.StatusNotFound)
+		writeAPIError(w, http.StatusNotFound, "localhost client")
 		return
 	}
 
@@ -188,5 +188,5 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.clearUserSession(w)
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	writeJSON(w, http.StatusOK, redirectResponse{Redirect: "/"})
 }
