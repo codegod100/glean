@@ -4,7 +4,7 @@
 *.dll
 *.so
 *.dylib
-./glean
+/glean
 
 # Test binary, built with `go test -c`
 *.test

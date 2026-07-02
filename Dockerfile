@@ -41,4 +41,4 @@ ENV ORIGIN=http://localhost:3000
 EXPOSE 3000
 
 # Run the Go API in the background, then the SvelteKit Node server in front.
-CMD sh -c 'GLEAN_API_URL=http://127.0.0.1:8080 GLEAN_ADDR=127.0.0.1:8080 glean & node build/index.js'
+CMD ["sh", "-c", "GLEAN_API_URL=http://127.0.0.1:8080 GLEAN_ADDR=127.0.0.1:8080 glean & GO_PID=$!; trap 'kill $GO_PID' INT TERM; exec node build/index.js"]
