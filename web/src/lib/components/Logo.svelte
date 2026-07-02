@@ -12,6 +12,10 @@
 </script>
 
 <a href="/" class="inline-flex items-center gap-2" aria-label="Glean home">
-    <img src="/favicon.svg" class={dims} alt="Glean" />
+    <img
+        src="/favicon.svg"
+        class="{dims} border-2 border-[var(--border)]"
+        alt="Glean"
+    />
     <span class="{text} font-extrabold tracking-tight uppercase">Glean</span>
 </a>

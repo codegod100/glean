@@ -22,8 +22,9 @@ web-install:
 .PHONY: dev
 dev:
 	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; \
+	GLEAN_FRONTEND_URL="$${GLEAN_FRONTEND_URL:-http://localhost:3000}"; \
 	echo "Starting Go API on :8080 and SvelteKit on :3000 (Ctrl-C stops both)..."; \
-	GLEAN_API_URL=http://localhost:8080 go run -tags fts5 . & \
+	GLEAN_API_URL=http://localhost:8080 GLEAN_FRONTEND_URL=$$GLEAN_FRONTEND_URL go run -tags fts5 . & \
 	GO_PID=$$!; \
 	trap 'kill $$GO_PID 2>/dev/null' INT TERM EXIT; \
 	(cd web && GLEAN_API_URL=http://localhost:8080 bun run dev); \
@@ -31,7 +32,8 @@ dev:
 
 .PHONY: dev-api
 dev-api:
-	@if [ -f .env ]; then set -a; . ./.env; set +a; fi && go run -tags fts5 .
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; \
+	GLEAN_FRONTEND_URL="$${GLEAN_FRONTEND_URL:-http://localhost:3000}" go run -tags fts5 .
 
 .PHONY: dev-web
 dev-web:
