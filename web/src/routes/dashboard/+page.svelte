@@ -7,6 +7,7 @@
     import EmptyState from "$lib/components/EmptyState.svelte";
     import Icon from "$lib/components/Icon.svelte";
     import NewArticlesBanner from "$lib/components/NewArticlesBanner.svelte";
+    import { goto } from "$app/navigation";
     import { endpoints } from "$lib/api";
     import type {
         Article,
@@ -66,6 +67,11 @@
         discover = discover.filter((p) => p.did !== did);
     }
 
+    // Full route reload so newly-fetched articles render without a hard refresh.
+    function onrefresh() {
+        return goto("/dashboard", { invalidateAll: true });
+    }
+
     let digestOpen = $state(false);
     async function markDigestRead() {
         if (!digest) return;
@@ -106,7 +112,7 @@
 </div>
 
 {#if data.subscription_count > 0}
-    <NewArticlesBanner since={data.now} />
+    <NewArticlesBanner since={data.now} {onrefresh} />
 {/if}
 
 {#if data.subscription_count === 0}

@@ -54,6 +54,12 @@
             .then(() => goto("/articles", { invalidateAll: true }));
     }
 
+    // Reload the current route (preserving filters) so newly-fetched articles
+    // appear without a manual hard refresh.
+    function onrefresh() {
+        return goto(buildURL({}), { invalidateAll: true, noScroll: false });
+    }
+
     // Expanded view: mark articles read on scroll.
     function readOnScroll(node: HTMLElement, id: number) {
         if (!data.expanded_view) return;
@@ -283,7 +289,7 @@
 {/if}
 
 <!-- Live banner: surfaces newly-fetched articles since the page loaded -->
-<NewArticlesBanner since={data.now} />
+<NewArticlesBanner since={data.now} {onrefresh} />
 
 <!-- List -->
 <div class="space-y-3">
