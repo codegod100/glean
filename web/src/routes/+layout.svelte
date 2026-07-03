@@ -130,127 +130,133 @@
 
 <div class="min-h-screen flex flex-col">
     <!-- Top header bar -->
-    <header
-        class="sticky top-0 z-30 border-b-2 border-[var(--border)] bg-[var(--bg)]"
-    >
-        <div class="mx-auto flex h-14 max-w-5xl items-center gap-4 px-4">
-            <Logo />
+    {#if page.url.pathname !== "/"}
+        <header
+            class="sticky top-0 z-30 border-b-2 border-[var(--border)] bg-[var(--bg)]"
+        >
+            <div class="mx-auto flex h-14 max-w-5xl items-center gap-4 px-4">
+                <Logo />
 
+                {#if !chromeless}
+                    <nav class="hidden items-center gap-1 md:flex">
+                        {#each navItems as item}
+                            <a
+                                href={item.href}
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition {isActive(
+                                    item.match,
+                                )
+                                    ? 'bg-[var(--fg)] text-[var(--bg)]'
+                                    : 'text-[var(--muted)] hover:text-[var(--fg)] hover:bg-[var(--surface)]'}"
+                            >
+                                <Icon name={item.icon} class="h-3.5 w-3.5" />
+                                {item.label}
+                            </a>
+                        {/each}
+                    </nav>
+
+                    <div class="ml-auto flex items-center gap-2">
+                        <button
+                            class="btn btn-ghost px-2"
+                            title="Search"
+                            onclick={() => goto("/articles")}
+                            aria-label="Search"
+                        >
+                            <Icon name="search" class="h-4 w-4" />
+                        </button>
+                        <button
+                            class="btn btn-ghost hidden px-2 sm:inline-flex"
+                            onclick={() => (showShortcuts = true)}
+                            title="Shortcuts"
+                            aria-label="Shortcuts"
+                        >
+                            <Icon name="keyboard" class="h-4 w-4" />
+                        </button>
+                        {#if data.user}
+                            <div class="relative">
+                                <button
+                                    class="flex items-center gap-2 border-2 border-[var(--border)] px-2 py-1"
+                                    onclick={() => (menuOpen = !menuOpen)}
+                                >
+                                    {#if data.user.avatar_url}
+                                        <img
+                                            src={data.user.avatar_url}
+                                            class="h-6 w-6 border border-[var(--border)] object-cover"
+                                            alt=""
+                                        />
+                                    {/if}
+                                    <span class="text-xs font-bold"
+                                        >@{data.user.handle}</span
+                                    >
+                                    <Icon name="chevronDown" class="h-3 w-3" />
+                                </button>
+                                {#if menuOpen}
+                                    <button
+                                        class="fixed inset-0 z-40 cursor-default"
+                                        onclick={() => (menuOpen = false)}
+                                        aria-label="Close menu"
+                                        tabindex="-1"
+                                    ></button>
+                                    <div
+                                        class="absolute right-0 top-full z-50 mt-1 w-48 border-2 border-[var(--border)] bg-[var(--bg)] shadow-[4px_4px_0_0_var(--border)]"
+                                    >
+                                        <a
+                                            href="/profile/{data.user.did}"
+                                            class="block border-b-2 border-[var(--border)] px-4 py-2.5 text-xs font-bold uppercase hover:bg-[var(--surface)]"
+                                            onclick={() => (menuOpen = false)}
+                                            >Profile</a
+                                        >
+                                        <button
+                                            class="block w-full px-4 py-2.5 text-left text-xs font-bold uppercase hover:bg-[var(--surface)]"
+                                            onclick={() => (showInstall = true)}
+                                            >Install App</button
+                                        >
+                                        <button
+                                            class="block w-full border-t-2 border-[var(--border)] px-4 py-2.5 text-left text-xs font-bold uppercase text-[var(--danger)] hover:bg-[var(--surface)]"
+                                            onclick={logout}>Sign out</button
+                                        >
+                                    </div>
+                                {/if}
+                            </div>
+                        {:else}
+                            <a href="/auth/login" class="btn btn-accent"
+                                >Sign in</a
+                            >
+                        {/if}
+                    </div>
+                {:else}
+                    <div class="ml-auto flex items-center gap-2">
+                        <ThemeToggle />
+                        {#if !data.user}
+                            <a href="/auth/login" class="btn btn-accent"
+                                >Sign in</a
+                            >
+                        {/if}
+                    </div>
+                {/if}
+            </div>
+
+            <!-- Mobile nav row -->
             {#if !chromeless}
-                <nav class="hidden items-center gap-1 md:flex">
+                <nav
+                    class="flex items-center gap-1 overflow-x-auto border-t-2 border-[var(--border)] px-2 py-1 md:hidden"
+                >
                     {#each navItems as item}
                         <a
                             href={item.href}
-                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition {isActive(
+                            class="inline-flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-[0.7rem] font-bold uppercase {isActive(
                                 item.match,
                             )
                                 ? 'bg-[var(--fg)] text-[var(--bg)]'
-                                : 'text-[var(--muted)] hover:text-[var(--fg)] hover:bg-[var(--surface)]'}"
+                                : 'text-[var(--muted)]'}"
                         >
                             <Icon name={item.icon} class="h-3.5 w-3.5" />
                             {item.label}
                         </a>
                     {/each}
                 </nav>
-
-                <div class="ml-auto flex items-center gap-2">
-                    <button
-                        class="btn btn-ghost px-2"
-                        title="Search"
-                        onclick={() => goto("/articles")}
-                        aria-label="Search"
-                    >
-                        <Icon name="search" class="h-4 w-4" />
-                    </button>
-                    <button
-                        class="btn btn-ghost hidden px-2 sm:inline-flex"
-                        onclick={() => (showShortcuts = true)}
-                        title="Shortcuts"
-                        aria-label="Shortcuts"
-                    >
-                        <Icon name="keyboard" class="h-4 w-4" />
-                    </button>
-                    {#if data.user}
-                        <div class="relative">
-                            <button
-                                class="flex items-center gap-2 border-2 border-[var(--border)] px-2 py-1"
-                                onclick={() => (menuOpen = !menuOpen)}
-                            >
-                                {#if data.user.avatar_url}
-                                    <img
-                                        src={data.user.avatar_url}
-                                        class="h-6 w-6 border border-[var(--border)] object-cover"
-                                        alt=""
-                                    />
-                                {/if}
-                                <span class="text-xs font-bold"
-                                    >@{data.user.handle}</span
-                                >
-                                <Icon name="chevronDown" class="h-3 w-3" />
-                            </button>
-                            {#if menuOpen}
-                                <button
-                                    class="fixed inset-0 z-40 cursor-default"
-                                    onclick={() => (menuOpen = false)}
-                                    aria-label="Close menu"
-                                    tabindex="-1"
-                                ></button>
-                                <div
-                                    class="absolute right-0 top-full z-50 mt-1 w-48 border-2 border-[var(--border)] bg-[var(--bg)] shadow-[4px_4px_0_0_var(--border)]"
-                                >
-                                    <a
-                                        href="/profile/{data.user.did}"
-                                        class="block border-b-2 border-[var(--border)] px-4 py-2.5 text-xs font-bold uppercase hover:bg-[var(--surface)]"
-                                        onclick={() => (menuOpen = false)}
-                                        >Profile</a
-                                    >
-                                    <button
-                                        class="block w-full px-4 py-2.5 text-left text-xs font-bold uppercase hover:bg-[var(--surface)]"
-                                        onclick={() => (showInstall = true)}
-                                        >Install App</button
-                                    >
-                                    <button
-                                        class="block w-full border-t-2 border-[var(--border)] px-4 py-2.5 text-left text-xs font-bold uppercase text-[var(--danger)] hover:bg-[var(--surface)]"
-                                        onclick={logout}>Sign out</button
-                                    >
-                                </div>
-                            {/if}
-                        </div>
-                    {:else}
-                        <a href="/auth/login" class="btn btn-accent">Sign in</a>
-                    {/if}
-                </div>
-            {:else}
-                <div class="ml-auto flex items-center gap-2">
-                    <ThemeToggle />
-                    {#if !data.user}
-                        <a href="/auth/login" class="btn btn-accent">Sign in</a>
-                    {/if}
-                </div>
             {/if}
-        </div>
-
-        <!-- Mobile nav row -->
-        {#if !chromeless}
-            <nav
-                class="flex items-center gap-1 overflow-x-auto border-t-2 border-[var(--border)] px-2 py-1 md:hidden"
-            >
-                {#each navItems as item}
-                    <a
-                        href={item.href}
-                        class="inline-flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-[0.7rem] font-bold uppercase {isActive(
-                            item.match,
-                        )
-                            ? 'bg-[var(--fg)] text-[var(--bg)]'
-                            : 'text-[var(--muted)]'}"
-                    >
-                        <Icon name={item.icon} class="h-3.5 w-3.5" />
-                        {item.label}
-                    </a>
-                {/each}
-            </nav>
-        {/if}
-    </header>
+        </header>
+    {/if}
 
     <!-- Content -->
     <main class="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
@@ -291,13 +297,13 @@
                         >Articles</a
                     >
                 </div>
-                <div class="space-y-1.5">
-                    <p
-                        class="text-[0.65rem] font-extrabold uppercase tracking-widest text-[var(--muted)]"
-                    >
-                        Library
-                    </p>
-                    {#if data.user}
+                {#if data.user}
+                    <div class="space-y-1.5">
+                        <p
+                            class="text-[0.65rem] font-extrabold uppercase tracking-widest text-[var(--muted)]"
+                        >
+                            Library
+                        </p>
                         <a
                             href="/feeds"
                             class="block font-bold uppercase hover:text-[var(--accent)]"
@@ -308,8 +314,8 @@
                             class="block font-bold uppercase hover:text-[var(--accent)]"
                             >Annotations</a
                         >
-                    {/if}
-                </div>
+                    </div>
+                {/if}
                 <div class="space-y-1.5">
                     <p
                         class="text-[0.65rem] font-extrabold uppercase tracking-widest text-[var(--muted)]"
