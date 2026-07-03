@@ -23,6 +23,11 @@
     let followed = $state<PersonRecommendation[]>([]);
     let discover = $state<PersonRecommendation[]>([]);
     let digest = $state<Digest | null>(null);
+    let locallyRead = $state<Set<number>>(new Set());
+
+    const unreadArticles = $derived(
+        data.articles.filter((a) => !locallyRead.has(a.id)),
+    );
 
     $effect(() => {
         if (data.subscription_count > 0) {
@@ -67,6 +72,7 @@
         if (!confirm("Mark these articles as read?")) return;
         await endpoints.markDigestRead(digest.article_ids);
         digest = { ...digest, consumed: true };
+        locallyRead = new Set(digest.article_ids);
     }
 
     const trending: TrendingItem[] = $derived([
@@ -116,7 +122,7 @@
             >
         </div>
     </div>
-{:else if data.articles.length > 0}
+    :else if unreadArticles.length > 0
     <!-- Recommended articles -->
     {#if articleRecs && articleRecs.length > 0}
         <section class="mb-10">
@@ -211,7 +217,7 @@
             >
         </div>
         <div class="space-y-3">
-            {#each data.articles as a (a.id)}
+            {#each unreadArticles as a (a.id)}
                 <ArticleCard article={a} />
             {/each}
         </div>
