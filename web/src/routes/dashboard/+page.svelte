@@ -122,7 +122,7 @@
             >
         </div>
     </div>
-    :else if unreadArticles.length > 0
+{:else if unreadArticles.length > 0}
     <!-- Recommended articles -->
     {#if articleRecs && articleRecs.length > 0}
         <section class="mb-10">
