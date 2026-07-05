@@ -49,15 +49,13 @@
     }
 
     function markAllRead() {
-        endpoints
-            .markAllRead(feedURL)
-            .then(() => goto("/articles", { invalidateAll: true }));
+        endpoints.markAllRead(feedURL).then(() => invalidateAll());
     }
 
-    // Reload the current route (preserving filters) so newly-fetched articles
-    // appear without a manual hard refresh.
+    // Re-run the route's load function so newly-fetched articles render
+    // without a navigation or hard refresh.
     function onrefresh() {
-        return goto(buildURL({}), { invalidateAll: true, noScroll: false });
+        return invalidateAll();
     }
 
     // Expanded view: mark articles read on scroll.

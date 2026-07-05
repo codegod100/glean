@@ -7,7 +7,7 @@
     import EmptyState from "$lib/components/EmptyState.svelte";
     import Icon from "$lib/components/Icon.svelte";
     import NewArticlesBanner from "$lib/components/NewArticlesBanner.svelte";
-    import { goto } from "$app/navigation";
+    import { invalidateAll } from "$app/navigation";
     import { endpoints } from "$lib/api";
     import type {
         Article,
@@ -67,9 +67,10 @@
         discover = discover.filter((p) => p.did !== did);
     }
 
-    // Full route reload so newly-fetched articles render without a hard refresh.
+    // Re-run the route's load function so newly-fetched articles render
+    // without a navigation or hard refresh.
     function onrefresh() {
-        return goto("/dashboard", { invalidateAll: true });
+        return invalidateAll();
     }
 
     let digestOpen = $state(false);
