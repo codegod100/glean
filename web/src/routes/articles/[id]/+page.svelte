@@ -103,6 +103,25 @@
         if (text) openForSelection();
     }
 
+    // Mobile browsers (e.g. Chrome on Android) finalize text selections via
+    // the selection handles and do not reliably emit mouseup afterwards. Poll
+    // selectionchange so the popover appears once a selection inside the
+    // article body becomes available.
+    let selectionTimer: ReturnType<typeof setTimeout> | undefined;
+    function onSelectionChange() {
+        if (popoverEl?.contains(document.activeElement)) return;
+        clearTimeout(selectionTimer);
+        selectionTimer = setTimeout(() => {
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0) return;
+            const text = sel.toString().trim();
+            if (!text) return;
+            const range = sel.getRangeAt(0);
+            if (!bodyEl?.contains(range.commonAncestorContainer)) return;
+            openForSelection();
+        }, 200);
+    }
+
     function closePopover() {
         popoverOpen = false;
         quoteValue = "";
@@ -195,7 +214,11 @@
     }
 </script>
 
-<svelte:window onmouseup={onMouseUp} onkeydown={onKeydown} />
+<svelte:window
+    onmouseup={onMouseUp}
+    onkeydown={onKeydown}
+/>
+<svelte:document onselectionchange={onSelectionChange} />
 
 <div class="mx-auto max-w-3xl">
     <!-- Top nav -->
