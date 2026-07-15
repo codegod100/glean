@@ -5,6 +5,7 @@ export CGO_CFLAGS := -I$(CURDIR)/internal/db/include -I$(SQLITE3_INC)
 .PHONY: tools-install
 tools-install:
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+	go install github.com/padiazg/go-crap@latest
 
 .PHONY: lint
 lint:
@@ -63,6 +64,13 @@ lex-parse:
 .PHONY: test
 test:
 	go test -tags fts5 ./...
+
+# CRAP score analysis (cyclomatic complexity x coverage).
+# The fts5 build tag is required for the test build, so it's exported via GOFLAGS
+# for the underlying `go test -cover` run go-crap performs.
+.PHONY: crap
+crap:
+	GOFLAGS=-tags=fts5 go-crap scan --fail-above --threshold 30
 
 .PHONY: check
 check:

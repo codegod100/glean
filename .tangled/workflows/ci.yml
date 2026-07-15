@@ -25,8 +25,14 @@ steps:
   - name: "Install dependencies"
     command: "cd web && bun install"
 
+  - name: "Install Go tools"
+    command: "make tools-install"
+
   - name: "Build glean"
     command: "make build"
 
   - name: "Run tests"
     command: "make test"
+
+  - name: "CRAP score analysis"
+    command: "make crap"
