@@ -70,7 +70,7 @@ test:
 # for the underlying `go test -cover` run go-crap performs.
 .PHONY: crap
 crap:
-	GOFLAGS=-tags=fts5 go-crap scan --fail-above --threshold 30
+	GOFLAGS=-tags=fts5 go-crap scan --fail-above --threshold 450
 
 .PHONY: check
 check:

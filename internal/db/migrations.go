@@ -273,6 +273,45 @@ func migrateUserSettingsDigestEnabled(db *DB) error {
 	return nil
 }
 
+// indexSchema maps an index name to the schema (and attached db prefix) it lives in.
+// Empty prefix means the main database.
+func indexSchema(idx string) string {
+	switch {
+	case strings.HasPrefix(idx, "idx_subscriptions_"),
+		strings.HasPrefix(idx, "idx_articles_"),
+		strings.HasPrefix(idx, "idx_likes_"):
+		return "articles"
+	case strings.HasPrefix(idx, "idx_follow_distances_"),
+		strings.HasPrefix(idx, "idx_user_similarity_"):
+		return "recs"
+	default:
+		return ""
+	}
+}
+
+// indexExists reports whether the given index exists in its schema's sqlite_master.
+func indexExists(db *DB, schema, idx string) bool {
+	table := "sqlite_master"
+	if schema != "" {
+		table = schema + ".sqlite_master"
+	}
+	var name string
+	_ = db.QueryRow(fmt.Sprintf("SELECT name FROM %s WHERE type='index' AND name=?", table), idx).Scan(&name)
+	return name != ""
+}
+
+// dropIndex drops an index from its schema. Empty schema means the main database.
+func dropIndex(db *DB, schema, idx string) error {
+	target := idx
+	if schema != "" {
+		target = schema + "." + idx
+	}
+	if _, err := db.Exec(fmt.Sprintf("DROP INDEX IF EXISTS %s", target)); err != nil {
+		return fmt.Errorf("drop %s: %w", idx, err)
+	}
+	return nil
+}
+
 func migrateDropFollowsUserIndex(db *DB) error {
 	for _, idx := range []string{
 		"idx_follows_user",
@@ -289,29 +328,12 @@ func migrateDropFollowsUserIndex(db *DB) error {
 		"idx_follow_distances_b",
 		"idx_user_similarity_a",
 	} {
-		var schema string
-		if strings.HasPrefix(idx, "idx_subscriptions_") || strings.HasPrefix(idx, "idx_articles_") || strings.HasPrefix(idx, "idx_likes_") {
-			_ = db.QueryRow("SELECT name FROM articles.sqlite_master WHERE type='index' AND name=?", idx).Scan(&schema)
-		} else if strings.HasPrefix(idx, "idx_follow_distances_") || strings.HasPrefix(idx, "idx_user_similarity_") {
-			_ = db.QueryRow("SELECT name FROM recs.sqlite_master WHERE type='index' AND name=?", idx).Scan(&schema)
-		} else {
-			_ = db.QueryRow("SELECT name FROM sqlite_master WHERE type='index' AND name=?", idx).Scan(&schema)
-		}
-		if schema == "" {
+		schema := indexSchema(idx)
+		if !indexExists(db, schema, idx) {
 			continue
 		}
-		if strings.HasPrefix(idx, "idx_subscriptions_") || strings.HasPrefix(idx, "idx_articles_") || strings.HasPrefix(idx, "idx_likes_") {
-			if _, err := db.Exec(fmt.Sprintf("DROP INDEX IF EXISTS articles.%s", idx)); err != nil {
-				return fmt.Errorf("drop %s: %w", idx, err)
-			}
-		} else if strings.HasPrefix(idx, "idx_follow_distances_") || strings.HasPrefix(idx, "idx_user_similarity_") {
-			if _, err := db.Exec(fmt.Sprintf("DROP INDEX IF EXISTS recs.%s", idx)); err != nil {
-				return fmt.Errorf("drop %s: %w", idx, err)
-			}
-		} else {
-			if _, err := db.Exec(fmt.Sprintf("DROP INDEX IF EXISTS %s", idx)); err != nil {
-				return fmt.Errorf("drop %s: %w", idx, err)
-			}
+		if err := dropIndex(db, schema, idx); err != nil {
+			return err
 		}
 	}
 	return nil
