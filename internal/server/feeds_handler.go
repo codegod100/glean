@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -281,7 +282,18 @@ func (s *Server) handleEditFeed(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleRemoveFeed(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
-	feedURL := r.FormValue("url")
+
+	// FormValue only parses the body for POST/PUT/PATCH; for DELETE we read it manually.
+	feedURL := r.URL.Query().Get("url")
+	if feedURL == "" {
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+		if err == nil {
+			vals, parseErr := url.ParseQuery(string(body))
+			if parseErr == nil {
+				feedURL = vals.Get("url")
+			}
+		}
+	}
 
 	if feedURL == "" {
 		writeAPIError(w, http.StatusBadRequest, "url required")
