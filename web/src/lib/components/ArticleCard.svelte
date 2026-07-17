@@ -61,6 +61,9 @@
             .filter(Boolean)
             .join(" / "),
     );
+    const articleTitle = $derived(
+        article.title || article.feed_title || article.feed_url,
+    );
 
     function fmt(t: string): string {
         const d = new Date(t);
@@ -89,7 +92,7 @@
                         class="{expanded
                             ? 'text-lg'
                             : 'text-base'} font-bold leading-snug"
-                        >{article.title}</span
+                        >{articleTitle}</span
                     >
                 </a>
                 <div
