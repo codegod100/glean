@@ -2,6 +2,11 @@ SQLITE3_VER := $(shell grep 'mattn/go-sqlite3' go.mod | awk '{print $$2}')
 SQLITE3_INC := $(shell go env GOMODCACHE)/github.com/mattn/go-sqlite3@$(SQLITE3_VER)
 export CGO_CFLAGS := -I$(CURDIR)/internal/db/include -I$(SQLITE3_INC)
 
+# Add `go install` bin dir to PATH so tools installed via `make tools-install`
+# (golangci-lint, go-crap) are found by later make targets in CI environments
+# where the default PATH does not include $(go env GOPATH)/bin.
+export PATH := $(shell go env GOPATH)/bin:$(PATH)
+
 .PHONY: tools-install
 tools-install:
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
