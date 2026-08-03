@@ -58,17 +58,18 @@
         annotations = data.annotations;
     });
 
-    // Sync local optimistic state when navigating between articles.
-    $effect(() => {
-        read = data.article.is_read;
-    });
+    // Tracks which article id we've already auto-marked read, so the effect
+    // fires once per navigation instead of fighting toggleRead's updates.
+    let markedReadId = $state<number | null>(null);
 
     // Mark the article read on actual navigation. The server's detail handler
     // no longer marks read, so a hover/touch preload won't mark every hovered
-    // card as read; only a real visit does.
+    // card as read; only a real visit does. Runs once per article, so
+    // toggleRead stays in control of subsequent state changes.
     $effect(() => {
         const id = data.article.id;
-        if (!read) {
+        if (markedReadId !== id) {
+            markedReadId = id;
             read = true;
             endpoints.markRead(id).catch(() => {
                 if (data.article.id === id) read = false;
