@@ -58,6 +58,24 @@
         annotations = data.annotations;
     });
 
+    // Sync local optimistic state when navigating between articles.
+    $effect(() => {
+        read = data.article.is_read;
+    });
+
+    // Mark the article read on actual navigation. The server's detail handler
+    // no longer marks read, so a hover/touch preload won't mark every hovered
+    // card as read; only a real visit does.
+    $effect(() => {
+        const id = data.article.id;
+        if (!read) {
+            read = true;
+            endpoints.markRead(id).catch(() => {
+                if (data.article.id === id) read = false;
+            });
+        }
+    });
+
     function clamp(v: number, min: number, max: number) {
         return Math.max(min, Math.min(max, v));
     }

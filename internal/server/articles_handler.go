@@ -152,12 +152,17 @@ func (s *Server) handleArticleDetail(w http.ResponseWriter, r *http.Request) {
 		nextID      *int64
 	)
 
+	var isRead bool
+
 	g, gCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
-		if err := s.dbs.Articles.MarkArticleRead(gCtx, user.DID, id); err != nil {
-			s.logger.Warn("failed to mark article read", "error", err, "id", id)
+		state, err := s.dbs.Articles.GetReadState(gCtx, user.DID, id)
+		if err != nil {
+			s.logger.Warn("failed to get read state", "error", err, "id", id)
+			return nil
 		}
+		isRead = state.IsRead
 		return nil
 	})
 
@@ -215,7 +220,7 @@ func (s *Server) handleArticleDetail(w http.ResponseWriter, r *http.Request) {
 	_ = g.Wait()
 
 	dto := toArticle(article)
-	dto.IsRead = true
+	dto.IsRead = isRead
 	dto.LikeCount = likeCount
 	dto.HasLiked = liked
 
