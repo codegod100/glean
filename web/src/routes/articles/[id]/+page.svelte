@@ -6,7 +6,6 @@
     import Icon from "$lib/components/Icon.svelte";
     import BlueskyLogo from "$lib/components/BlueskyLogo.svelte";
     import { endpoints } from "$lib/api";
-    import { invalidateAll } from "$app/navigation";
     import { youtubeID, isEmbedURL } from "$lib/format";
     import type { Annotation } from "$lib/types";
 
@@ -182,7 +181,6 @@
         try {
             if (next) await endpoints.markRead(data.article.id);
             else await endpoints.markUnread(data.article.id);
-            await invalidateAll();
         } catch {
             read = !next;
         }
