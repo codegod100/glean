@@ -1,28 +1,68 @@
 <script lang="ts">
     import { navigating } from "$app/state";
 
-    // Avoid flashing on instant navigations: only show the bar after a short
-    // delay if the navigation is still in progress.
+    // Monotonic progress bar: the fill only ever moves forward while a
+    // navigation is active, then completes to 100% and fades out. This avoids
+    // the back-and-forth jitter caused by restarting a looping keyframe
+    // animation on every navigation.
+    let progress = $state(0);
     let visible = $state(false);
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let fading = $state(false);
+
+    let showTimer: ReturnType<typeof setTimeout> | undefined;
+    let trickleTimer: ReturnType<typeof setInterval> | undefined;
+    let completeTimer: ReturnType<typeof setTimeout> | undefined;
+
+    function clearTimers() {
+        if (showTimer) clearTimeout(showTimer);
+        if (trickleTimer) clearInterval(trickleTimer);
+        if (completeTimer) clearTimeout(completeTimer);
+        showTimer = trickleTimer = completeTimer = undefined;
+    }
+
+    function start() {
+        clearTimers();
+        progress = 0;
+        fading = false;
+        // Avoid flashing on instant navigations: only show after a delay.
+        showTimer = setTimeout(() => {
+            visible = true;
+            progress = 0.2;
+            // Asymptotic trickle toward 0.9 so the bar never stalls at 100%
+            // before the navigation actually completes.
+            trickleTimer = setInterval(() => {
+                progress = Math.min(0.9, progress + (0.9 - progress) * 0.1);
+            }, 200);
+        }, 100);
+    }
+
+    function done() {
+        clearTimers();
+        if (!visible) return;
+        progress = 1;
+        fading = true;
+        completeTimer = setTimeout(() => {
+            visible = false;
+            fading = false;
+        }, 300);
+    }
 
     $effect(() => {
-        const active = navigating.to !== null;
-        if (active) {
-            timer = setTimeout(() => (visible = true), 100);
-        } else {
-            if (timer) clearTimeout(timer);
-            visible = false;
-        }
+        if (navigating.to !== null) start();
+        else done();
     });
+
+    $effect(() => () => clearTimers());
 </script>
 
 {#if visible}
     <div
         class="nav-progress"
+        class:fading
         role="progressbar"
         aria-label="Loading"
         aria-busy="true"
+        style="transform: scaleX({progress})"
     ></div>
 {/if}
 
@@ -34,32 +74,21 @@
         height: 3px;
         width: 100%;
         background: var(--accent);
-        z-index: 60;
-        /* Indeterminate sweep: shrink-grow across the viewport. */
         transform-origin: left center;
-        animation: nav-progress-indeterminate 1s ease-in-out infinite;
+        opacity: 1;
+        z-index: 60;
+        transition:
+            transform 0.2s ease,
+            opacity 0.3s ease;
     }
 
-    @keyframes nav-progress-indeterminate {
-        0% {
-            transform: scaleX(0);
-            opacity: 0.85;
-        }
-        50% {
-            transform: scaleX(0.7);
-            opacity: 1;
-        }
-        100% {
-            transform: scaleX(0);
-            opacity: 0.85;
-        }
+    .nav-progress.fading {
+        opacity: 0;
     }
 
     @media (prefers-reduced-motion: reduce) {
         .nav-progress {
-            animation: none;
-            transform: scaleX(1);
-            opacity: 1;
+            transition: none;
         }
     }
 </style>
