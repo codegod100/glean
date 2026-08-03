@@ -8,6 +8,7 @@
     import ThemeToggle from "$lib/components/ThemeToggle.svelte";
     import ShortcutsDialog from "$lib/components/ShortcutsDialog.svelte";
     import InstallDialog from "$lib/components/InstallDialog.svelte";
+    import NavigationProgress from "$lib/components/NavigationProgress.svelte";
     import { setCsrfToken, endpoints } from "$lib/api";
 
     let {
@@ -127,6 +128,8 @@
 </svelte:head>
 
 <svelte:window onkeydown={handleKeydown} />
+
+<NavigationProgress />
 
 <div class="min-h-screen flex flex-col">
     <!-- Top header bar -->
