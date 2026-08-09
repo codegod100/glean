@@ -330,6 +330,7 @@ body {
 
 .annotation-highlight {
     background: var(--accent-ink);
+    color: var(--fg);
     border-bottom: 2px solid var(--accent);
     padding: 0 0.1rem;
     cursor: pointer;

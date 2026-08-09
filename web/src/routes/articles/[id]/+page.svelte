@@ -45,6 +45,209 @@
     let bodyEl = $state<HTMLElement | null>(null);
     let popoverEl = $state<HTMLElement | null>(null);
 
+    // Escape regex metacharacters in a literal string so it can be embedded
+    // safely in a RegExp.
+    function escapeRegExp(s: string): string {
+        return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    // Collapse runs of whitespace in the quote so it matches rendered text,
+    // where HTML whitespace normalization has already happened.
+    function normalizeQuote(q: string): string {
+        return q.replace(/\s+/g, " ").trim();
+    }
+
+    // Strip every existing highlight under `root`, unwrapping the <mark>
+    // elements so the underlying text is restored verbatim.
+    function clearHighlights(root: HTMLElement) {
+        for (const m of Array.from(
+            root.querySelectorAll("mark.annotation-highlight"),
+        )) {
+            const parent = m.parentNode;
+            if (!parent) continue;
+            while (m.firstChild) parent.insertBefore(m.firstChild, m);
+            parent.removeChild(m);
+        }
+        root.normalize();
+    }
+
+    // Wrap every occurrence of any annotation quote in `root` with
+    // <mark class="annotation-highlight">. Handles quotes that span multiple
+    // text nodes (e.g. when an inline element like <a> sits inside the quote)
+    // by wrapping each affected text-node fragment in its own <mark>.
+    // Idempotent when paired with clearHighlights.
+    //
+    // `quoteToId` maps each normalized quote to the annotation id it belongs
+    // to, so cross-node fragments can still point at the right annotation card.
+    function applyHighlights(
+        root: HTMLElement,
+        quoteToId: Map<string, number>,
+    ) {
+        const sorted = [...quoteToId.keys()]
+            .filter((q) => q.trim().length > 0)
+            .sort((a, b) => b.length - a.length);
+        if (sorted.length === 0) return;
+        const pattern = new RegExp(
+            "(" + sorted.map(escapeRegExp).join("|") + ")",
+            "gi",
+        );
+
+        const walker = document.createTreeWalker(
+            root,
+            NodeFilter.SHOW_TEXT,
+            {
+                acceptNode(node) {
+                    const parent = node.parentNode as HTMLElement | null;
+                    if (!parent) return NodeFilter.FILTER_REJECT;
+                    const tag = parent.tagName;
+                    if (
+                        tag === "SCRIPT" ||
+                        tag === "STYLE" ||
+                        tag === "MARK" ||
+                        tag === "NOSCRIPT"
+                    )
+                        return NodeFilter.FILTER_REJECT;
+                    if (!node.nodeValue || !node.nodeValue.trim())
+                        return NodeFilter.FILTER_REJECT;
+                    return NodeFilter.FILTER_ACCEPT;
+                },
+            },
+        );
+
+        // Collect text nodes and build a flat normalized string with a map
+        // back to (node, localOffset) for every character.
+        const nodes: Text[] = [];
+        let flat = "";
+        // Each entry maps a flat-string index to the source text node and the
+        // offset within that node's value. Built incrementally so we can map
+        // any regex match back to its DOM position even when normalization
+        // collapses whitespace runs.
+        const indexMap: { node: Text; offset: number }[] = [];
+        let n: Node | null;
+        while ((n = walker.nextNode())) {
+            const node = n as Text;
+            const value = node.nodeValue ?? "";
+            for (let i = 0; i < value.length; i++) {
+                const ch = value[i];
+                // Collapse any run of whitespace to a single space, mirroring
+                // how normalizeQuote prepares the quotes.
+                const isWs = /\s/.test(ch);
+                const prevIsWs = flat.length > 0 && /\s/.test(flat[flat.length - 1]);
+                if (isWs && prevIsWs) continue;
+                flat += isWs ? " " : ch;
+                indexMap.push({ node, offset: i });
+            }
+            nodes.push(node);
+        }
+        flat = flat.trim();
+        if (flat.length === 0) return;
+
+        // Find match ranges in the flat string and remember which quote each
+        // match belongs to (by normalized text), so cross-node fragments can
+        // tag themselves with the right annotation id.
+        const matches: { start: number; end: number; quote: string }[] = [];
+        let m: RegExpExecArray | null;
+        pattern.lastIndex = 0;
+        while ((m = pattern.exec(flat)) !== null) {
+            if (m[0].length === 0) {
+                pattern.lastIndex++;
+                continue;
+            }
+            matches.push({
+                start: m.index,
+                end: m.index + m[0].length,
+                quote: m[0],
+            });
+        }
+        if (matches.length === 0) return;
+
+        // Group matched text nodes so we can wrap them. For each text node,
+        // compute the list of [localStart, localEnd, quote) intervals that fall
+        // inside any match.
+        // Build per-node intervals by walking the indexMap over match ranges.
+        const byNode = new Map<
+            Text,
+            Array<[number, number, string]>
+        >();
+        for (const { start, end, quote } of matches) {
+            for (let i = start; i < end; i++) {
+                const entry = indexMap[i];
+                if (!entry) continue;
+                const list = byNode.get(entry.node) ?? [];
+                const last = list[list.length - 1];
+                if (last && last[1] === entry.offset && last[2] === quote)
+                    last[1] = entry.offset + 1;
+                else
+                    list.push([entry.offset, entry.offset + 1, quote]);
+                byNode.set(entry.node, list);
+            }
+        }
+        if (byNode.size === 0) return;
+
+        // Wrap intervals in each affected node. Process nodes in document order
+        // to keep DOM mutations predictable.
+        for (const node of nodes) {
+            const intervals = byNode.get(node);
+            if (!intervals || intervals.length === 0) continue;
+            const parent = node.parentNode;
+            if (!parent) continue;
+            const value = node.nodeValue ?? "";
+
+            const frag = document.createDocumentFragment();
+            let cursor = 0;
+            for (const [s, e, quote] of intervals) {
+                if (s > cursor)
+                    frag.appendChild(
+                        document.createTextNode(value.slice(cursor, s)),
+                    );
+                const mark = document.createElement("mark");
+                mark.className = "annotation-highlight";
+                const id = quoteToId.get(normalizeQuote(quote));
+                if (id !== undefined)
+                    mark.dataset.annotationId = String(id);
+                mark.textContent = value.slice(s, e);
+                frag.appendChild(mark);
+                cursor = e;
+            }
+            if (cursor < value.length)
+                frag.appendChild(
+                    document.createTextNode(value.slice(cursor)),
+                );
+            parent.replaceChild(frag, node);
+        }
+    }
+
+    // Svelte action: applies highlights to the rendered body and re-applies
+    // them whenever the quote list or the rendered content changes. Reads
+    // the reactive values directly inside $effect so changes are tracked.
+    function highlightAction(node: HTMLElement): void {
+        $effect(() => {
+            const quoteToId = annotationQuoteMap;
+            const contentKey = showContent;
+            // Touch contentKey so this effect re-runs when the article body
+            // is replaced (e.g. "Fetch full content").
+            void contentKey;
+            // Children from {@html} are guaranteed to be present when an
+            // action runs on mount; subsequent updates are also flushed
+            // before effects fire.
+            applyHighlights(node, quoteToId);
+            // Strip our marks on cleanup so the next run starts clean and so
+            // nothing leaks if the element is unmounted.
+            return () => clearHighlights(node);
+        });
+    }
+
+    // Map of normalized quote -> annotation id, so each highlight (including
+    // cross-node fragments) can tag itself with the matching annotation.
+    const annotationQuoteMap = $derived.by<Map<string, number>>(() => {
+        const map = new Map<string, number>();
+        for (const a of annotations) {
+            if (!a.quote || !a.quote.trim()) continue;
+            map.set(normalizeQuote(a.quote), a.id);
+        }
+        return map;
+    });
+
     function goBack() {
         history.back();
     }
@@ -57,6 +260,23 @@
     $effect(() => {
         annotations = data.annotations;
     });
+
+    // Scroll to the annotation card matching a clicked highlight.
+    function onBodyClick(e: MouseEvent) {
+        const target = e.target as HTMLElement | null;
+        const mark = target?.closest("mark.annotation-highlight");
+        if (!(mark instanceof HTMLElement)) return;
+        const idStr = mark.dataset.annotationId;
+        if (!idStr) return;
+        const card = document.getElementById(`annotation-${idStr}`);
+        card?.scrollIntoView({ behavior: "smooth", block: "center" });
+        card?.classList.add("ring-2", "ring-[var(--accent)]");
+        setTimeout(
+            () =>
+                card?.classList.remove("ring-2", "ring-[var(--accent)]"),
+            1600,
+        );
+    }
 
     // Tracks which article id we've already auto-marked read, so the effect
     // fires once per navigation instead of fighting toggleRead's updates.
@@ -361,7 +581,13 @@
             />{/if}
 
         {#if showContent}
-            <div bind:this={bodyEl} class="article-body">
+            <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+            <div
+                bind:this={bodyEl}
+                class="article-body"
+                onclick={onBodyClick}
+                use:highlightAction
+            >
                 <!-- eslint-disable-next-line svelte/no-at-html-tags -->
                 {@html showContent}
             </div>
