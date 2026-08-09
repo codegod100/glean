@@ -302,16 +302,24 @@ func (h *StreamDBHandler) handleStandardDocument(ctx context.Context, event *Eve
 		published := parseRFC3339(doc.PublishedAt)
 		updated := parseRFC3339(doc.UpdatedAt)
 
-		_ = h.articles.UpsertFeed(ctx, &db.Feed{
-			FeedURL:  publicationURI,
-			FeedType: sql.NullString{String: "atproto", Valid: true},
-		})
+		existingFeed, _ := h.articles.GetFeed(ctx, publicationURI)
 
-		var articleURL string
-		if f, err := h.articles.GetFeed(ctx, publicationURI); err == nil && f.SiteURL.Valid {
-			articleURL = f.SiteURL.String + doc.Path
+		publicationURL := ""
+		if existingFeed != nil && existingFeed.SiteURL.Valid {
+			publicationURL = existingFeed.SiteURL.String
+		} else if resolved, err := resolvePublicationURL(ctx, publicationURI); err == nil && resolved != "" {
+			publicationURL = resolved
+			_ = h.articles.UpsertFeed(ctx, &db.Feed{
+				FeedURL:  publicationURI,
+				SiteURL:  db.NullStr(publicationURL),
+				FeedType: sql.NullString{String: "atproto", Valid: true},
+			})
+		} else if err != nil {
+			h.logger.Warn("failed to resolve publication URL", "error", err, "uri", publicationURI)
 		}
-		if related := doc.RelatedLinkURL(); related != "" && articleURL == "" {
+
+		articleURL := publicationURL + doc.Path
+		if related := doc.RelatedLinkURL(); related != "" && publicationURL == "" {
 			articleURL = related
 		}
 

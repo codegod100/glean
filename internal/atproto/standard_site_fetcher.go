@@ -92,7 +92,7 @@ func (f *StandardSiteFetcher) fetchDocuments(ctx context.Context, client *Client
 		updated := parseRFC3339(doc.UpdatedAt)
 
 		articleURL := publicationURL + doc.Path
-		if related := doc.RelatedLinkURL(); related != "" && articleURL == "" {
+		if related := doc.RelatedLinkURL(); related != "" && publicationURL == "" {
 			articleURL = related
 		}
 
@@ -148,4 +148,30 @@ func listAllRecords(ctx context.Context, client *Client, did, collection string)
 func parseRFC3339(s string) time.Time {
 	t, _ := time.Parse(time.RFC3339, s)
 	return t
+}
+
+// resolvePublicationURL returns the site URL for a standard.publication record.
+// It fetches the publication record from the author's PDS when not cached.
+func resolvePublicationURL(ctx context.Context, publicationURI string) (string, error) {
+	parsed, ok := ParseRecordURI(publicationURI)
+	if !ok {
+		return "", fmt.Errorf("invalid publication URI: %s", publicationURI)
+	}
+
+	pdsURL, err := ResolvePDSEndpoint(ctx, parsed.DID)
+	if err != nil {
+		return "", fmt.Errorf("resolving PDS: %w", err)
+	}
+
+	client := NewUnauthenticatedClient(pdsURL)
+	raw, err := client.GetRecord(ctx, parsed.DID, parsed.Collection, parsed.RKey)
+	if err != nil {
+		return "", fmt.Errorf("fetching publication record: %w", err)
+	}
+
+	var pub StandardPublicationRecord
+	if err := json.Unmarshal(raw, &pub); err != nil {
+		return "", fmt.Errorf("parsing publication record: %w", err)
+	}
+	return pub.URL, nil
 }
