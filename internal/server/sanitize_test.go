@@ -206,3 +206,63 @@ func TestSanitizeHTML_PreservesNonMediaLinks(t *testing.T) {
 		t.Fatalf("non-media link was modified: %s", got)
 	}
 }
+
+func TestSanitizeHTMLWithBase_ResolvesRelativeImgSrc(t *testing.T) {
+	input := `<img src="photo.jpg" alt="photo">`
+	got := sanitizeHTMLWithBase(input, "https://example.com/posts/123")
+	want := `<img src="https://example.com/posts/photo.jpg" alt="photo">`
+	if got != want {
+		t.Fatalf("relative img src not resolved:\ngot:  %s\nwant: %s", got, want)
+	}
+}
+
+func TestSanitizeHTMLWithBase_ResolvesRelativeVideoSource(t *testing.T) {
+	input := `<video><source src="clip.mp4" type="video/mp4"></video>`
+	got := sanitizeHTMLWithBase(input, "https://example.com/a/b")
+	want := `<video><source src="https://example.com/a/clip.mp4" type="video/mp4"></video>`
+	if got != want {
+		t.Fatalf("relative source src not resolved:\ngot:  %s\nwant: %s", got, want)
+	}
+}
+
+func TestSanitizeHTMLWithBase_PreservesAbsoluteHttpURL(t *testing.T) {
+	input := `<img src="https://cdn.example.com/photo.jpg" alt="photo">`
+	got := sanitizeHTMLWithBase(input, "https://example.com/post")
+	if got != input {
+		t.Fatalf("absolute http url modified:\ngot:  %s\nwant: %s", got, input)
+	}
+}
+
+func TestSanitizeHTMLWithBase_PreservesDataURI(t *testing.T) {
+	input := `<img src="data:image/png;base64,iVBORw0KGgo=">`
+	got := sanitizeHTMLWithBase(input, "https://example.com/post")
+	if got != input {
+		t.Fatalf("data uri modified:\ngot:  %s\nwant: %s", got, input)
+	}
+}
+
+func TestSanitizeHTMLWithBase_PreservesAnchor(t *testing.T) {
+	input := `<a href="#section">jump</a>`
+	got := sanitizeHTMLWithBase(input, "https://example.com/post")
+	if got != input {
+		t.Fatalf("anchor modified:\ngot:  %s\nwant: %s", got, input)
+	}
+}
+
+func TestSanitizeHTMLWithBase_ResolvesRootRelative(t *testing.T) {
+	input := `<img src="/assets/photo.jpg">`
+	got := sanitizeHTMLWithBase(input, "https://example.com/posts/123")
+	want := `<img src="https://example.com/assets/photo.jpg">`
+	if got != want {
+		t.Fatalf("root-relative src not resolved:\ngot:  %s\nwant: %s", got, want)
+	}
+}
+
+func TestSanitizeHTMLWithBase_NoBasePreservesRelative(t *testing.T) {
+	// Without a base URL, relative URLs are left untouched (legacy behavior).
+	input := `<img src="photo.jpg" alt="photo">`
+	got := sanitizeHTML(input)
+	if got != input {
+		t.Fatalf("relative img src modified without base:\ngot:  %s\nwant: %s", got, input)
+	}
+}

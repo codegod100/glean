@@ -421,7 +421,7 @@ func (s *Server) handleFetchContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cleaned := sanitizeHTML(content)
+	cleaned := sanitizeHTMLWithBase(content, article.URL.String)
 	if cleaned != "" {
 		if err := s.dbs.Articles.UpdateArticleFullContent(ctx, id, cleaned); err != nil {
 			s.logger.Error("failed to save full content", "error", err, "id", id)

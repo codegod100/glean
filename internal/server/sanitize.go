@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -53,6 +54,14 @@ func isAllowedIframe(tag string) bool {
 }
 
 func sanitizeHTML(input string) string {
+	return sanitizeHTMLWithBase(input, "")
+}
+
+// sanitizeHTMLWithBase runs sanitizeHTML and additionally resolves relative
+// URLs in url-bearing attributes (src, href, data, poster, srcset) against
+// baseURL. An empty baseURL leaves relative URLs untouched. Non-http(s)
+// schemes (data:, javascript:, mailto:, anchors, etc.) are preserved as-is.
+func sanitizeHTMLWithBase(input, baseURL string) string {
 	s := input
 	s = scriptRe.ReplaceAllString(s, "")
 
@@ -71,7 +80,86 @@ func sanitizeHTML(input string) string {
 	s = jsHrefSRe.ReplaceAllString(s, `href="#"`)
 	s = styleExprRe.ReplaceAllString(s, "")
 	s = styleUrlRe.ReplaceAllString(s, "")
+
+	if baseURL != "" {
+		if base, err := url.Parse(baseURL); err == nil && base.IsAbs() {
+			s = resolveURLAttrs(s, base)
+		}
+	}
+
 	return strings.TrimSpace(s)
+}
+
+// urlAttrRe matches a url-bearing attribute (src, href, data, poster) with
+// its quoted value. Capture group 1 is the opening quote, group 2 the URL.
+var urlAttrRe = regexp.MustCompile(`(?i)\b(src|href|data|poster)\s*=\s*("([^"]*)"|'([^']*)')`)
+
+// srcsetAttrRe matches a srcset attribute value (double-quoted only for now).
+var srcsetAttrRe = regexp.MustCompile(`(?i)\bsrcset\s*=\s*"([^"]*)"`)
+
+// resolveURLAttrs rewrites relative URLs in url-bearing attributes to be
+// absolute, resolved against base. Already-absolute URLs and non-http(s)
+// schemes (data:, mailto:, #anchors) are left untouched.
+func resolveURLAttrs(s string, base *url.URL) string {
+	s = urlAttrRe.ReplaceAllStringFunc(s, func(match string) string {
+		m := urlAttrRe.FindStringSubmatch(match)
+		if m == nil {
+			return match
+		}
+		raw := m[3]
+		if raw == "" {
+			raw = m[4]
+		}
+		resolved, ok := resolveURL(raw, base)
+		if !ok {
+			return match
+		}
+		// Preserve the original quote style.
+		if m[3] != "" {
+			return m[1] + `="` + resolved + `"`
+		}
+		return m[1] + `='` + resolved + `'`
+	})
+
+	s = srcsetAttrRe.ReplaceAllStringFunc(s, func(match string) string {
+		m := srcsetAttrRe.FindStringSubmatch(match)
+		if m == nil {
+			return match
+		}
+		value := m[1]
+		parts := strings.Split(value, ",")
+		for i, p := range parts {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			fields := strings.Fields(p)
+			if resolved, ok := resolveURL(fields[0], base); ok {
+				fields[0] = resolved
+				parts[i] = strings.Join(fields, " ")
+			}
+		}
+		return `srcset="` + strings.Join(parts, ", ") + `"`
+	})
+
+	return s
+}
+
+// resolveURL resolves raw against base. Returns false when raw is already
+// absolute with a non-http(s) scheme, or is empty, or is a fragment-only URL.
+func resolveURL(raw string, base *url.URL) (string, bool) {
+	if raw == "" || strings.HasPrefix(raw, "#") {
+		return raw, false
+	}
+	ref, err := url.Parse(raw)
+	if err != nil {
+		return raw, false
+	}
+	if ref.IsAbs() {
+		// Keep http(s) as-is; preserve other schemes (data:, mailto:, etc.).
+		return raw, ref.Scheme == "http" || ref.Scheme == "https"
+	}
+	return base.ResolveReference(ref).String(), true
 }
 
 func convertMediaLinks(s string) string {

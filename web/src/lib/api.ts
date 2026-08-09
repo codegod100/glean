@@ -29,7 +29,7 @@ export function setCsrfToken(token: string) {
   cachedCsrf = token;
 }
 
-function readCsrfCookie(): string {
+function readCsrfToken(): string {
   if (cachedCsrf) return cachedCsrf;
   if (typeof document !== "undefined") {
     const match = document.cookie.match(/(?:^|;\s*)glean_csrf=([^;]+)/);
@@ -40,67 +40,46 @@ function readCsrfCookie(): string {
 
 type FetchFn = typeof fetch;
 
-export const api = {
-  get: <T>(
-    path: string,
-    query?: Record<string, string>,
-    fetchFn: FetchFn = fetch,
-  ) => request<T>("GET", path, { query }, fetchFn),
-  post: <T>(
-    path: string,
-    body?: Record<string, unknown>,
-    fetchFn: FetchFn = fetch,
-  ) => request<T>("POST", path, { body }, fetchFn),
-  postForm: <T>(path: string, form: FormData, fetchFn: FetchFn = fetch) =>
-    request<T>("POST", path, { body: form }, fetchFn),
-  del: <T>(
-    path: string,
-    body?: Record<string, unknown>,
-    fetchFn: FetchFn = fetch,
-  ) => request<T>("DELETE", path, { body }, fetchFn),
-};
+// Encode a body for the Go handlers, which read inputs via r.FormValue.
+function encodeBody(
+  body: Record<string, unknown> | FormData | undefined,
+): { body: BodyInit | undefined; contentType?: string } {
+  if (!body) return { body: undefined };
+  if (body instanceof FormData) return { body };
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(body)) {
+    if (Array.isArray(v)) {
+      for (const item of v) params.append(k, String(item));
+    } else if (v !== undefined && v !== null) {
+      params.set(k, String(v));
+    }
+  }
+  return { body: params, contentType: "application/x-www-form-urlencoded" };
+}
 
 async function request<T>(
   method: string,
   path: string,
-  opts: {
-    body?: Record<string, unknown> | FormData;
-    query?: Record<string, string>;
-  } = {},
-  fetchFn: FetchFn = fetch,
+  fetchFn: FetchFn,
+  opts: { body?: Record<string, unknown> | FormData; query?: Record<string, string> } = {},
 ): Promise<T> {
-  const url = new URL(path, "http://placeholder");
+  const search = new URLSearchParams();
   if (opts.query) {
     for (const [k, v] of Object.entries(opts.query)) {
-      if (v !== "" && v != null) url.searchParams.set(k, v);
+      if (v !== "" && v != null) search.set(k, v);
     }
   }
-  const search = url.search;
+  const qs = search.toString();
+  const { body, contentType } = encodeBody(opts.body);
 
-  let body: BodyInit | undefined;
   const headers: Record<string, string> = {};
-  if (opts.body && !(opts.body instanceof FormData)) {
-    // The Go handlers read inputs via r.FormValue, so send form-encoded bodies.
-    headers["Content-Type"] = "application/x-www-form-urlencoded";
-    const params = new URLSearchParams();
-    for (const [k, v] of Object.entries(opts.body)) {
-      if (Array.isArray(v)) {
-        for (const item of v) params.append(k, String(item));
-      } else if (v !== undefined && v !== null) {
-        params.set(k, String(v));
-      }
-    }
-    body = params;
-  } else if (opts.body instanceof FormData) {
-    body = opts.body;
-  }
-
+  if (contentType) headers["Content-Type"] = contentType;
   if (method !== "GET" && method !== "HEAD") {
-    const token = readCsrfCookie();
+    const token = readCsrfToken();
     if (token) headers["X-CSRF-Token"] = token;
   }
 
-  const res = await fetchFn(`/api${path}${search}`, {
+  const res = await fetchFn(`/api${path}${qs ? `?${qs}` : ""}`, {
     method,
     headers,
     body,
@@ -121,9 +100,7 @@ async function request<T>(
   }
 
   const ct = res.headers.get("content-type") ?? "";
-  if (ct.includes("application/json")) {
-    return (await res.json()) as T;
-  }
+  if (ct.includes("application/json")) return (await res.json()) as T;
   return (await res.text()) as unknown as T;
 }
 
@@ -223,113 +200,82 @@ export interface FeedRecs {
 type Endpoints = ReturnType<typeof createEndpoints>;
 
 function createEndpoints(fetchFn: FetchFn) {
-  const a = {
-    get: <T>(path: string, query?: Record<string, string>) =>
-      request<T>("GET", path, { query }, fetchFn),
-    post: <T>(path: string, body?: Record<string, unknown>) =>
-      request<T>("POST", path, { body }, fetchFn),
-    postForm: <T>(path: string, form: FormData) =>
-      request<T>("POST", path, { body: form }, fetchFn),
-    del: <T>(path: string, body?: Record<string, unknown>) =>
-      request<T>("DELETE", path, { body }, fetchFn),
-  };
+  const get = <T>(path: string, query?: Record<string, string>) =>
+    request<T>("GET", path, fetchFn, { query });
+  const post = <T>(path: string, body?: Record<string, unknown> | FormData) =>
+    request<T>("POST", path, fetchFn, { body });
+  const del = <T>(path: string, body?: Record<string, unknown>) =>
+    request<T>("DELETE", path, fetchFn, { body });
+
   return {
-    me: () => a.get<MeResponse>("/me"),
-    dashboard: () => a.get<DashboardData>("/dashboard"),
-    articles: (params: Record<string, string>) =>
-      a.get<ArticlesData>("/articles", params),
+    me: () => get<MeResponse>("/me"),
+    dashboard: () => get<DashboardData>("/dashboard"),
+    articles: (params: Record<string, string>) => get<ArticlesData>("/articles", params),
     article: (id: number, params: Record<string, string>) =>
-      a.get<ArticleDetailData>(`/articles/${id}`, params),
+      get<ArticleDetailData>(`/articles/${id}`, params),
     newArticleCount: (since: number) =>
-      a.get<{ count: number }>("/articles/new-count", { since: String(since) }),
-    markRead: (id: number) =>
-      a.post<{ id: number; is_read: boolean }>(`/articles/${id}/read`),
+      get<{ count: number }>("/articles/new-count", { since: String(since) }),
+    markRead: (id: number) => post<{ id: number; is_read: boolean }>(`/articles/${id}/read`),
     markUnread: (id: number) =>
-      a.post<{ id: number; is_read: boolean }>(`/articles/${id}/unread`),
+      post<{ id: number; is_read: boolean }>(`/articles/${id}/unread`),
     toggleLike: (id: number) =>
-      a.post<{ id: number; liked: boolean; like_count: number }>(
-        `/articles/${id}/like`,
-      ),
+      post<{ id: number; liked: boolean; like_count: number }>(`/articles/${id}/like`),
     fetchContent: (id: number) =>
-      a.post<{ id: number; full_content: string }>(
-        `/articles/${id}/fetch-content`,
-      ),
+      post<{ id: number; full_content: string }>(`/articles/${id}/fetch-content`),
     markAllRead: (feed?: string) =>
-      a.post<void>("/articles/mark-all-read", feed ? { feed } : {}),
+      post<void>("/articles/mark-all-read", feed ? { feed } : {}),
 
-    feeds: (category?: string) =>
-      a.get<FeedsData>("/feeds", category ? { category } : {}),
+    feeds: (category?: string) => get<FeedsData>("/feeds", category ? { category } : {}),
     addFeed: (feed_url: string, category?: string) =>
-      a.post<{ subscription: Subscription }>("/feeds/add", {
-        feed_url,
-        category,
-      }),
+      post<{ subscription: Subscription }>("/feeds/add", { feed_url, category }),
     editFeed: (feed_url: string, category: string) =>
-      a.post<{ subscription: Subscription }>("/feeds/edit", {
-        feed_url,
-        category,
-      }),
-    removeFeed: (url: string) => a.del<void>("/feeds/remove", { url }),
-    feedList: (category?: string) =>
-      a.get<{ subscriptions: Subscription[] }>(
-        "/feeds/list",
-        category ? { category } : {},
-      ),
+      post<{ subscription: Subscription }>("/feeds/edit", { feed_url, category }),
+    removeFeed: (url: string) => del<void>("/feeds/remove", { url }),
     refreshFeeds: (category?: string) =>
-      a.post<{ subscriptions: Subscription[] }>(
-        "/feeds/refresh",
-        category ? { category } : {},
-      ),
-    retryFeed: (url: string) =>
-      a.post<{ dead_feeds: Feed[] }>("/feeds/retry", { url }),
-    clearFeeds: () => a.post<void>("/feeds/clear", {}),
-    uploadOpml: (form: FormData) =>
-      a.postForm<{ added: number }>("/feeds/opml/upload", form),
+      post<{ subscriptions: Subscription[] }>("/feeds/refresh", category ? { category } : {}),
+    retryFeed: (url: string) => post<{ dead_feeds: Feed[] }>("/feeds/retry", { url }),
+    clearFeeds: () => post<void>("/feeds/clear", {}),
+    uploadOpml: (form: FormData) => post<{ added: number }>("/feeds/opml/upload", form),
 
-    trending: (params: Record<string, string>) =>
-      a.get<TrendingData>("/trending", params),
+    trending: (params: Record<string, string>) => get<TrendingData>("/trending", params),
 
-    library: (params: Record<string, string>) =>
-      a.get<LibraryData>("/library", params),
+    library: (params: Record<string, string>) => get<LibraryData>("/library", params),
     createAnnotation: (body: Record<string, unknown>) =>
-      a.post<{ annotation: Annotation }>("/library/create", body),
-    deleteAnnotation: (id: number) => a.post<void>(`/library/${id}/delete`),
+      post<{ annotation: Annotation }>("/library/create", body),
+    deleteAnnotation: (id: number) => post<void>(`/library/${id}/delete`),
 
-    profile: (did: string) => a.get<ProfileData>(`/profile/${did}`),
+    profile: (did: string) => get<ProfileData>(`/profile/${did}`),
 
-    articleRecs: () => a.get<{ articles: Article[] }>("/recs/articles"),
-    feedRecs: () => a.get<FeedRecs>("/recs/feeds"),
-    peopleRecs: () => a.get<PeopleRecs>("/recs/people"),
-    dismissFeed: (feed_url: string) =>
-      a.post<void>("/recs/dismiss-feed", { feed_url }),
+    articleRecs: () => get<{ articles: Article[] }>("/recs/articles"),
+    feedRecs: () => get<FeedRecs>("/recs/feeds"),
+    peopleRecs: () => get<PeopleRecs>("/recs/people"),
+    dismissFeed: (feed_url: string) => post<void>("/recs/dismiss-feed", { feed_url }),
     dismissArticle: (article_url: string) =>
-      a.post<void>("/recs/dismiss-article", { article_url }),
+      post<void>("/recs/dismiss-article", { article_url }),
     dismissPerson: (target_did: string) =>
-      a.post<void>("/recs/dismiss-person", { target_did }),
+      post<void>("/recs/dismiss-person", { target_did }),
 
     toggleLanguage: (code: string) =>
-      a.post<{ languages: string[] }>(`/settings/languages/${code}`),
+      post<{ languages: string[] }>(`/settings/languages/${code}`),
     toggleExpandedView: (expanded_view: boolean) =>
-      a.post<{ expanded_view: boolean }>("/settings/expanded-view", {
+      post<{ expanded_view: boolean }>("/settings/expanded-view", {
         expanded_view: expanded_view ? "1" : "0",
       }),
     toggleDigest: (digest_enabled: boolean) =>
-      a.post<{ digest_enabled: boolean }>("/settings/digest-enabled", {
+      post<{ digest_enabled: boolean }>("/settings/digest-enabled", {
         digest_enabled: digest_enabled ? "1" : "0",
       }),
 
-    digest: () => a.get<Digest | null>("/digest"),
+    digest: () => get<Digest | null>("/digest"),
     markDigestRead: (ids: number[]) =>
-      a.post<Digest>("/digest/mark-read", { ids: ids.map(String) }),
+      post<Digest>("/digest/mark-read", { ids: ids.map(String) }),
 
-    authActors: (q: string) =>
-      a.get<{ actors: Actor[] }>("/auth/actors", { q }),
-    authStart: (handle: string) =>
-      a.post<{ redirect: string }>("/auth/start", { handle }),
-    authRegister: () => a.get<{ redirect: string }>("/auth/register"),
-    authLogout: () => a.post<{ redirect: string }>("/auth/logout"),
+    authActors: (q: string) => get<{ actors: Actor[] }>("/auth/actors", { q }),
+    authStart: (handle: string) => post<{ redirect: string }>("/auth/start", { handle }),
+    authRegister: () => get<{ redirect: string }>("/auth/register"),
+    authLogout: () => post<{ redirect: string }>("/auth/logout"),
 
-    stats: () => a.get<StatsData>("/stats"),
+    stats: () => get<StatsData>("/stats"),
   };
 }
 
