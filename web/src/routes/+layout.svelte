@@ -1,7 +1,7 @@
 <script lang="ts">
     import "../app.css";
     import { page } from "$app/state";
-    import { goto } from "$app/navigation";
+    import { goto, afterNavigate } from "$app/navigation";
     import type { LayoutData } from "./$types";
     import Logo from "$lib/components/Logo.svelte";
     import Icon from "$lib/components/Icon.svelte";
@@ -20,6 +20,11 @@
         setCsrfToken(data.csrfToken);
     });
 
+    afterNavigate(() => {
+        menuOpen = false;
+        navOpen = false;
+    });
+
     const chromeless = $derived(
         page.url.pathname === "/" ||
             page.url.pathname.startsWith("/auth/") ||
@@ -27,6 +32,7 @@
     );
 
     let menuOpen = $state(false);
+    let navOpen = $state(false);
     let showShortcuts = $state(false);
     let showInstall = $state(false);
 
@@ -94,6 +100,7 @@
             // ignore
         }
         menuOpen = false;
+        navOpen = false;
         goto("/", { invalidateAll: true });
     }
 
@@ -174,6 +181,49 @@
                         >
                             <Icon name="keyboard" class="h-4 w-4" />
                         </button>
+
+                        <!-- Mobile hamburger nav -->
+                        <div class="relative md:hidden">
+                            <button
+                                class="btn btn-ghost px-2"
+                                onclick={() => (navOpen = !navOpen)}
+                                title="Menu"
+                                aria-label="Menu"
+                                aria-expanded={navOpen}
+                            >
+                                <Icon name="menu" class="h-4 w-4" />
+                            </button>
+                            {#if navOpen}
+                                <button
+                                    class="fixed inset-0 z-40 cursor-default"
+                                    onclick={() => (navOpen = false)}
+                                    aria-label="Close menu"
+                                    tabindex="-1"
+                                ></button>
+                                <nav
+                                    class="absolute right-0 top-full z-50 mt-1 w-48 border-2 border-[var(--border)] bg-[var(--bg)] shadow-[4px_4px_0_0_var(--border)]"
+                                >
+                                    {#each navItems as item}
+                                        <a
+                                            href={item.href}
+                                            class="flex items-center gap-2 border-b-2 border-[var(--border)] px-4 py-2.5 text-xs font-bold uppercase {isActive(
+                                                item.match,
+                                            )
+                                                ? 'text-[var(--accent)]'
+                                                : 'text-[var(--muted)] hover:text-[var(--fg)] hover:bg-[var(--surface)]'}"
+                                            onclick={() => (navOpen = false)}
+                                        >
+                                            <Icon
+                                                name={item.icon}
+                                                class="h-3.5 w-3.5"
+                                            />
+                                            {item.label}
+                                        </a>
+                                    {/each}
+                                </nav>
+                            {/if}
+                        </div>
+
                         {#if data.user}
                             <div class="relative">
                                 <button
@@ -237,27 +287,6 @@
                     </div>
                 {/if}
             </div>
-
-            <!-- Mobile nav row -->
-            {#if !chromeless}
-                <nav
-                    class="flex items-center gap-1 overflow-x-auto border-t-2 border-[var(--border)] px-2 py-1 md:hidden"
-                >
-                    {#each navItems as item}
-                        <a
-                            href={item.href}
-                            class="inline-flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-[0.7rem] font-bold uppercase {isActive(
-                                item.match,
-                            )
-                                ? 'bg-[var(--fg)] text-[var(--bg)]'
-                                : 'text-[var(--muted)]'}"
-                        >
-                            <Icon name={item.icon} class="h-3.5 w-3.5" />
-                            {item.label}
-                        </a>
-                    {/each}
-                </nav>
-            {/if}
         </header>
     {/if}
 
