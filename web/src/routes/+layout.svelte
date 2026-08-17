@@ -121,14 +121,6 @@
 </script>
 
 <svelte:head>
-    <title>Glean</title>
-    <meta property="og:title" content="Glean" />
-    <meta
-        property="og:description"
-        content="The social RSS reader built on AT Protocol."
-    />
-    <meta property="og:image" content="/banner.png" />
-    <meta property="og:type" content="website" />
     <meta name="theme-color" content="#00754A" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.json" />

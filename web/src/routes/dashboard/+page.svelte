@@ -7,6 +7,7 @@
     import EmptyState from "$lib/components/EmptyState.svelte";
     import Icon from "$lib/components/Icon.svelte";
     import NewArticlesBanner from "$lib/components/NewArticlesBanner.svelte";
+    import Seo from "$lib/components/Seo.svelte";
     import { invalidateAll } from "$app/navigation";
     import { endpoints } from "$lib/api";
     import type {
@@ -87,6 +88,8 @@
         ...(data.personal_trending ?? []),
     ]);
 </script>
+
+<Seo title="Dashboard" />
 
 <!-- Header -->
 <div

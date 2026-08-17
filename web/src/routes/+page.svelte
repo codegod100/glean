@@ -2,7 +2,12 @@
     // Landing page is static; auth gating happens in +page.server.ts.
     import Logo from "$lib/components/Logo.svelte";
     import Icon from "$lib/components/Icon.svelte";
+    import Seo from "$lib/components/Seo.svelte";
 </script>
+
+<Seo
+    description="The social RSS reader built on AT Protocol. Read your feeds, see what your circle reads, and discover new sources through personalized recommendations."
+/>
 
 <!-- HERO -->
 <section class="border-b-2 border-[var(--border)]">

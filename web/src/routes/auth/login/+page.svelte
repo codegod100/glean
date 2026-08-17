@@ -1,6 +1,7 @@
 <script lang="ts">
     import { endpoints } from "$lib/api";
     import Logo from "$lib/components/Logo.svelte";
+    import Seo from "$lib/components/Seo.svelte";
     import type { Actor } from "$lib/types";
 
     let handle = $state("");
@@ -69,6 +70,11 @@
         }
     }
 </script>
+
+<Seo
+    title="Sign in"
+    description="Sign in to Glean with your Bluesky handle or any AT Protocol account."
+/>
 
 <div class="flex min-h-screen items-center justify-center px-4 py-12">
     <div class="w-full max-w-sm">

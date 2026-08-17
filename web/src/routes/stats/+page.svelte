@@ -1,11 +1,14 @@
 <script lang="ts">
     import type { PageData } from "./$types";
     import EmptyState from "$lib/components/EmptyState.svelte";
+    import Seo from "$lib/components/Seo.svelte";
 
     let { data }: { data: PageData } = $props();
 
     const categories = $derived(Object.keys(data.metrics));
 </script>
+
+<Seo title="Stats" />
 
 <h1 class="text-2xl font-extrabold uppercase tracking-tight mb-2">Stats</h1>
 <p class="mb-6 text-xs uppercase tracking-widest text-[var(--muted)]">

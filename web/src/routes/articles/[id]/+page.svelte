@@ -4,6 +4,7 @@
     import Favicon from "$lib/components/Favicon.svelte";
     import AnnotationCard from "$lib/components/AnnotationCard.svelte";
     import Icon from "$lib/components/Icon.svelte";
+    import Seo from "$lib/components/Seo.svelte";
     import BlueskyLogo from "$lib/components/BlueskyLogo.svelte";
     import { endpoints } from "$lib/api";
     import { youtubeID, isEmbedURL } from "$lib/format";
@@ -450,6 +451,12 @@
         });
     }
 </script>
+
+<Seo
+    title={data.article.title}
+    description={data.article.summary}
+    type="article"
+/>
 
 <svelte:window
     onmouseup={onMouseUp}

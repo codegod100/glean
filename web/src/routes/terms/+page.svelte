@@ -1,3 +1,12 @@
+<script lang="ts">
+    import Seo from "$lib/components/Seo.svelte";
+</script>
+
+<Seo
+    title="Terms of Service"
+    description="Terms of service for Glean, the social RSS reader built on AT Protocol."
+/>
+
 <div class="mx-auto max-w-2xl px-4 py-12">
     <h1 class="text-2xl font-extrabold uppercase tracking-tight">
         Terms of Service

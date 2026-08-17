@@ -3,6 +3,7 @@
     import ArticleCard from "$lib/components/ArticleCard.svelte";
     import AnnotationCard from "$lib/components/AnnotationCard.svelte";
     import EmptyState from "$lib/components/EmptyState.svelte";
+    import Seo from "$lib/components/Seo.svelte";
 
     let { data }: { data: PageData } = $props();
 
@@ -21,6 +22,8 @@
         return "/library" + (p.toString() ? "?" + p.toString() : "");
     }
 </script>
+
+<Seo title="Library" />
 
 <h1 class="text-2xl font-extrabold uppercase tracking-tight mb-2">Library</h1>
 <p class="mb-6 text-xs uppercase tracking-widest text-[var(--muted)]">

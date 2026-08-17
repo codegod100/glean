@@ -7,6 +7,7 @@
     import EmptyState from "$lib/components/EmptyState.svelte";
     import Icon from "$lib/components/Icon.svelte";
     import NewArticlesBanner from "$lib/components/NewArticlesBanner.svelte";
+    import Seo from "$lib/components/Seo.svelte";
     import { endpoints } from "$lib/api";
 
     let { data }: { data: PageData } = $props();
@@ -87,6 +88,8 @@
         };
     }
 </script>
+
+<Seo title={data.feed?.title || "Articles"} />
 
 {#if data.feed}
     <!-- Feed header -->

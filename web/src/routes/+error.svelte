@@ -1,7 +1,13 @@
 <script lang="ts">
     import { page } from "$app/state";
     import Logo from "$lib/components/Logo.svelte";
+    import Seo from "$lib/components/Seo.svelte";
 </script>
+
+<Seo
+    title={page.status === 404 ? "Not found" : "Error " + page.status}
+    noindex
+/>
 
 <div class="flex min-h-screen flex-col items-center justify-center px-4 py-12">
     <div class="w-full max-w-sm text-center">

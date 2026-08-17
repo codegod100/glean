@@ -6,6 +6,7 @@
     import EmptyState from "$lib/components/EmptyState.svelte";
     import FeedRecommendationCard from "$lib/components/FeedRecommendationCard.svelte";
     import Icon from "$lib/components/Icon.svelte";
+    import Seo from "$lib/components/Seo.svelte";
     import { endpoints } from "$lib/api";
     import { invalidateAll } from "$app/navigation";
     import type { FeedRecommendation } from "$lib/types";
@@ -89,6 +90,8 @@
         feedRecs = (feedRecs ?? []).filter((f) => f.feed_url !== url);
     }
 </script>
+
+<Seo title="Discover feeds" />
 
 <div class="flex items-center justify-between gap-3 mb-2 flex-wrap">
     <h1 class="text-2xl font-extrabold uppercase tracking-tight">

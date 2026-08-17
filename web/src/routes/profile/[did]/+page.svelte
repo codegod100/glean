@@ -6,6 +6,7 @@
     import Icon from "$lib/components/Icon.svelte";
     import BlueskyLogo from "$lib/components/BlueskyLogo.svelte";
     import { endpoints } from "$lib/api";
+    import Seo from "$lib/components/Seo.svelte";
     import { invalidateAll } from "$app/navigation";
 
     let { data }: { data: PageData } = $props();
@@ -38,6 +39,8 @@
         await invalidateAll();
     }
 </script>
+
+<Seo title={data.profile_user.display_name || data.profile_user.handle} />
 
 <div class="mx-auto max-w-2xl">
     <section class="panel mb-6 p-4 sm:p-6">

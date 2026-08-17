@@ -3,11 +3,17 @@
     import TrendingCard from "$lib/components/TrendingCard.svelte";
     import Pagination from "$lib/components/Pagination.svelte";
     import EmptyState from "$lib/components/EmptyState.svelte";
+    import Seo from "$lib/components/Seo.svelte";
 
     let { data }: { data: PageData } = $props();
 
     const scope = $derived(data.scope);
 </script>
+
+<Seo
+    title="Trending"
+    description="What the Glean community is reading right now."
+/>
 
 {#if !data.user}
     <div
