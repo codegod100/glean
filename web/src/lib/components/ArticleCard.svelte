@@ -169,8 +169,13 @@
             </div>
         {:else}
             <div class="p-4 pt-0">
-                <a href="/articles/{article.id}{navSuffix}" class="btn"
-                    >Read full &rarr;</a
+                <a
+                    href={linkToOriginal
+                        ? article.url
+                        : `/articles/${article.id}${navSuffix}`}
+                    target={linkToOriginal ? "_blank" : undefined}
+                    rel={linkToOriginal ? "noopener noreferrer" : undefined}
+                    class="btn">Read full &rarr;</a
                 >
             </div>
         {/if}

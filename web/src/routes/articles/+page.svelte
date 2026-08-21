@@ -311,6 +311,7 @@
                     article={a}
                     expanded={data.expanded_view}
                     navSuffix="?liked=1"
+                    linkToOriginal
                 />
             </div>
         {/each}
