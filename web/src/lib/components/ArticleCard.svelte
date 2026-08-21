@@ -12,6 +12,7 @@
         navSuffix?: string;
         dismissible?: boolean;
         onDismiss?: () => void;
+        linkToOriginal?: boolean;
     }
     let {
         article,
@@ -19,6 +20,7 @@
         navSuffix = "",
         dismissible = false,
         onDismiss,
+        linkToOriginal = false,
     }: Props = $props();
 
     {
@@ -83,7 +85,11 @@
         <div class="flex items-start justify-between gap-4">
             <div class="min-w-0 flex-1">
                 <a
-                    href="/articles/{article.id}{navSuffix}"
+                    href={linkToOriginal
+                        ? article.url
+                        : `/articles/${article.id}${navSuffix}`}
+                    target={linkToOriginal ? "_blank" : undefined}
+                    rel={linkToOriginal ? "noopener noreferrer" : undefined}
                     class="block {read
                         ? 'text-[var(--muted)]'
                         : 'text-[var(--fg)]'} hover:text-[var(--accent)]"

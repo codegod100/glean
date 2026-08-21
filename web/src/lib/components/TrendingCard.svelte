@@ -7,15 +7,20 @@
 
     interface Props {
         item: TrendingItem;
+        linkToOriginal?: boolean;
     }
-    let { item }: Props = $props();
+    let { item, linkToOriginal = false }: Props = $props();
 </script>
 
 <div class="panel panel-press p-4">
     <div class="flex items-start justify-between gap-4">
         <div class="min-w-0 flex-1">
             <a
-                href="/articles/{item.article_id}"
+                href={linkToOriginal
+                    ? item.url
+                    : `/articles/${item.article_id}`}
+                target={linkToOriginal ? "_blank" : undefined}
+                rel={linkToOriginal ? "noopener noreferrer" : undefined}
                 class="block text-base font-bold leading-snug hover:text-[var(--accent)]"
                 >{item.title}</a
             >

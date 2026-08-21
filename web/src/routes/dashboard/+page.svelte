@@ -147,6 +147,7 @@
                         article={a}
                         dismissible
                         onDismiss={() => dismissArticle(a.url)}
+                        linkToOriginal
                     />
                 {/each}
             </div>
@@ -228,7 +229,7 @@
         </div>
         <div class="space-y-3">
             {#each unreadArticles as a (a.id)}
-                <ArticleCard article={a} />
+                <ArticleCard article={a} linkToOriginal />
             {/each}
         </div>
         {#if data.unread_count > 5}
@@ -255,6 +256,7 @@
                         article={a}
                         dismissible
                         onDismiss={() => dismissArticle(a.url)}
+                        linkToOriginal
                     />
                 {/each}
             </div>
@@ -295,7 +297,7 @@
         </div>
         <div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
             {#each trending as t (t.article_id)}
-                <TrendingCard item={t} />
+                <TrendingCard item={t} linkToOriginal />
             {/each}
         </div>
     </section>
