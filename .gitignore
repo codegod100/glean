@@ -31,5 +31,8 @@ web/node_modules/
 web/build/
 web/.svelte-kit/
 
+# buck2
+/buck-out
+
 # todo
 todo.md
