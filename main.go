@@ -119,52 +119,52 @@ func main() {
 	// unbounded.
 	jetstream := atproto.NewJetstreamConsumer(*jetstreamURL, handler.Handle, logger, dbs.CursorStore(), dbs.Users.UserDIDList)
 
-	// Purge and reclaim disk space before the streaming jobs start writing
-	// again: once the volume is full every SQLite write fails, including
-	// OAuth sign-in.
-	retentionCtx, cancelRetention := context.WithTimeout(context.Background(), 30*time.Minute)
-	start := time.Now()
-	unknownStats, err := dbs.PurgeUnknownUserRows(retentionCtx)
-	if err != nil {
-		logger.Error("initial purge of unknown-user rows failed", "error", err)
-	} else if unknownStats.Total() > 0 {
-		logger.Info("purged rows of unknown users", "stats", unknownStats)
-	}
-	expired, err := dbs.PurgeExpiredArticles(retentionCtx, *articleRetentionDays)
-	if err != nil {
-		logger.Error("initial article retention purge failed", "error", err)
-	} else if expired > 0 {
-		logger.Info("purged expired articles", "count", expired)
-	}
-	if unknownStats.Total()+expired > 0 {
-		if err := dbs.ReclaimSpace(retentionCtx); err != nil {
-			logger.Error("reclaiming database space incomplete", "error", err)
-		} else {
-			logger.Info("reclaimed database space")
-		}
-	}
-	cancelRetention()
-	logger.Info("initial retention complete", "elapsed", time.Since(start).Round(time.Second))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Serve HTTP first so sign-in works while the one-time purge is still
+	// deleting network-wide rows. Jobs that write wait until that pass finishes.
 	go func() {
-		if err := scheduler.Run(ctx); err != nil && ctx.Err() == nil {
-			logger.Error("scheduler error", "error", err)
+		retentionCtx, cancelRetention := context.WithTimeout(ctx, 30*time.Minute)
+		defer cancelRetention()
+		start := time.Now()
+		unknownStats, err := dbs.PurgeUnknownUserRows(retentionCtx)
+		if err != nil {
+			logger.Error("initial purge of unknown-user rows failed", "error", err)
+		} else if unknownStats.Total() > 0 {
+			logger.Info("purged rows of unknown users", "stats", unknownStats)
 		}
-	}()
-	go func() {
-		if err := cron.Run(ctx); err != nil && ctx.Err() == nil {
-			logger.Error("cron error", "error", err)
+		expired, err := dbs.PurgeExpiredArticles(retentionCtx, *articleRetentionDays)
+		if err != nil {
+			logger.Error("initial article retention purge failed", "error", err)
+		} else if expired > 0 {
+			logger.Info("purged expired articles", "count", expired)
 		}
-	}()
-	go func() {
-		srv.PeriodicSync(ctx, *syncInterval)
-	}()
-	go func() {
-		srv.BackfillFromCollectionDir(ctx, *collectionDirURL, *backfillConcurrency)
-	}()
-	go func() {
+		if unknownStats.Total()+expired > 0 {
+			if err := dbs.ReclaimSpace(retentionCtx); err != nil {
+				logger.Error("reclaiming database space incomplete", "error", err)
+			} else {
+				logger.Info("reclaimed database space")
+			}
+		}
+		logger.Info("initial retention complete", "elapsed", time.Since(start).Round(time.Second))
+
+		go func() {
+			if err := scheduler.Run(ctx); err != nil && ctx.Err() == nil {
+				logger.Error("scheduler error", "error", err)
+			}
+		}()
+		go func() {
+			if err := cron.Run(ctx); err != nil && ctx.Err() == nil {
+				logger.Error("cron error", "error", err)
+			}
+		}()
+		go func() {
+			srv.PeriodicSync(ctx, *syncInterval)
+		}()
+		go func() {
+			srv.BackfillFromCollectionDir(ctx, *collectionDirURL, *backfillConcurrency)
+		}()
 		if err := jetstream.Start(ctx); err != nil && ctx.Err() == nil {
 			logger.Error("jetstream error", "error", err)
 		}
