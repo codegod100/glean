@@ -13,19 +13,22 @@ import (
 // follow distances, signal profiles, auto-dismiss, recommendation precomputation)
 // on a fixed interval.
 type Cron struct {
-	engine   *Engine
-	interval time.Duration
-	logger   *slog.Logger
-	dbs      *db.Store
+	engine               *Engine
+	interval             time.Duration
+	articleRetentionDays int
+	logger               *slog.Logger
+	dbs                  *db.Store
 }
 
 // NewCron creates a new cron runner with the given engine and interval.
-func NewCron(engine *Engine, interval time.Duration, logger *slog.Logger, dbs *db.Store) *Cron {
+// articleRetentionDays bounds how long articles are kept.
+func NewCron(engine *Engine, interval time.Duration, logger *slog.Logger, dbs *db.Store, articleRetentionDays int) *Cron {
 	return &Cron{
-		engine:   engine,
-		interval: interval,
-		logger:   logger,
-		dbs:      dbs,
+		engine:               engine,
+		interval:             interval,
+		articleRetentionDays: articleRetentionDays,
+		logger:               logger,
+		dbs:                  dbs,
 	}
 }
 
@@ -71,7 +74,7 @@ func (c *Cron) Run(ctx context.Context) error {
 			c.engine.mu.Unlock()
 		}
 
-		if err := c.dbs.RunMaintenance(ctx, 90); err != nil {
+		if err := c.dbs.RunMaintenance(ctx, 90, c.articleRetentionDays); err != nil {
 			c.logger.Error("db maintenance failed", "error", err)
 		}
 

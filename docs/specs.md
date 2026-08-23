@@ -299,6 +299,11 @@ Glean subscribes to a Jetstream endpoint (`GLEAN_JETSTREAM`, default `wss://jets
 SUBSCRIBE collections: ["at.glean.subscription", "at.glean.annotation", "at.glean.like", "app.bsky.graph.follow", "sh.tangled.graph.follow", "at.margin.note", "app.skyreader.feed.subscription"]
 ```
 
+The subscription is scoped with `wantedDids` to the DIDs of known users
+(the `users` table): events of the wider network are never delivered or
+stored. The filter is refreshed on every reconnect, and connections are
+rotated periodically so newly signed-up users start streaming.
+
 On each event:
 
 - **create**: Insert record into local SQLite, update materialized counts

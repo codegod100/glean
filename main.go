@@ -33,6 +33,7 @@ func main() {
 	fetchInterval := flag.Duration("fetch-interval", envDuration("GLEAN_FETCH_INTERVAL", 15*time.Minute), "feed fetch tick interval")
 	collectionDirURL := flag.String("collection-dir", envOr("GLEAN_COLLECTION_DIR_URL", ""), "collection directory URL for startup backfill")
 	backfillConcurrency := flag.Int("backfill-concurrency", envInt("GLEAN_BACKFILL_CONCURRENCY", 5), "max concurrent backfill workers")
+	articleRetentionDays := flag.Int("article-retention-days", envInt("GLEAN_ARTICLE_RETENTION_DAYS", 30), "delete articles older than this many days")
 	sessionKey := envOr("GLEAN_SESSION_KEY", "")
 	flag.Parse()
 
@@ -110,11 +111,40 @@ func main() {
 	fetcher := feed.NewFetcher(siteFetcher)
 	srv := server.New(dbs, clientID, frontendURL, scheduler, fetcher, engine, logger, []byte(sessionKey), llm)
 
-	cron := cluster.NewCron(engine, *clusterInterval, logger, dbs)
+	cron := cluster.NewCron(engine, *clusterInterval, logger, dbs, *articleRetentionDays)
 
 	handler := atproto.NewStreamDBHandler(dbs.Articles, dbs.Users, logger)
-	jetstream := atproto.NewJetstreamConsumer(*jetstreamURL, handler.Handle, logger, dbs.CursorStore())
+	// Only stream events of known users; without this filter jetstream
+	// delivers every matching record on the network and the database grows
+	// unbounded.
+	jetstream := atproto.NewJetstreamConsumer(*jetstreamURL, handler.Handle, logger, dbs.CursorStore(), dbs.Users.UserDIDList)
 
+	// Purge and reclaim disk space before the streaming jobs start writing
+	// again: once the volume is full every SQLite write fails, including
+	// OAuth sign-in.
+	retentionCtx, cancelRetention := context.WithTimeout(context.Background(), 30*time.Minute)
+	start := time.Now()
+	unknownStats, err := dbs.PurgeUnknownUserRows(retentionCtx)
+	if err != nil {
+		logger.Error("initial purge of unknown-user rows failed", "error", err)
+	} else if unknownStats.Total() > 0 {
+		logger.Info("purged rows of unknown users", "stats", unknownStats)
+	}
+	expired, err := dbs.PurgeExpiredArticles(retentionCtx, *articleRetentionDays)
+	if err != nil {
+		logger.Error("initial article retention purge failed", "error", err)
+	} else if expired > 0 {
+		logger.Info("purged expired articles", "count", expired)
+	}
+	if unknownStats.Total()+expired > 0 {
+		if err := dbs.ReclaimSpace(retentionCtx); err != nil {
+			logger.Error("reclaiming database space incomplete", "error", err)
+		} else {
+			logger.Info("reclaimed database space")
+		}
+	}
+	cancelRetention()
+	logger.Info("initial retention complete", "elapsed", time.Since(start).Round(time.Second))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

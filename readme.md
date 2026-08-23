@@ -74,6 +74,7 @@ Then open `http://localhost:3000`.
 | `GLEAN_FETCH_INTERVAL`       | `15m`                              | Feed fetch scheduler tick interval (Go duration)                                                                                                |
 | `GLEAN_COLLECTION_DIR_URL`   | _(empty)_                          | Collection directory URL for startup backfill                                                                                                   |
 | `GLEAN_BACKFILL_CONCURRENCY` | `5`                                | Max concurrent backfill workers                                                                                                                 |
+| `GLEAN_ARTICLE_RETENTION_DAYS` | `30`                               | Delete articles older than this many days; jetstream only streams events of known users |
 | `GLEAN_PLC_URL`              | `https://plc.eurosky.network`      | PLC directory URL for DID resolution                                                                                                            |
 | `GLEAN_OAUTH_CLIENT_ID`      | _(empty)_                          | OAuth client-metadata URL; enables production OAuth (leave empty for localhost dev). Must resolve to this server's `/api/oauth/client-metadata` |
 | `GLEAN_FRONTEND_URL`         | _(required)_                       | Public origin of the SvelteKit frontend (e.g. `https://glean.at`); `make dev` defaults this to `http://localhost:3000`                          |

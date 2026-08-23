@@ -126,10 +126,17 @@ func Open(basePath string) (*Store, error) {
 	}, nil
 }
 
-func (s *Store) RunMaintenance(ctx context.Context, impressionMaxAgeDays int) error {
+// RunMaintenance prunes data that is no longer needed: recommendation
+// impressions older than impressionMaxAgeDays, articles older than
+// articleRetentionDays, and freed pages (incremental vacuum).
+func (s *Store) RunMaintenance(ctx context.Context, impressionMaxAgeDays, articleRetentionDays int) error {
 	cutoff := time.Now().AddDate(0, 0, -impressionMaxAgeDays).Format(time.RFC3339)
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM main.recommendation_impressions WHERE first_shown_at < ?`, cutoff); err != nil {
 		return fmt.Errorf("prune impressions: %w", err)
+	}
+
+	if _, err := s.PurgeExpiredArticles(ctx, articleRetentionDays); err != nil {
+		return fmt.Errorf("purge expired articles: %w", err)
 	}
 
 	for _, schema := range []string{"main", "articles", "recs"} {

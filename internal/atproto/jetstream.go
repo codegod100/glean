@@ -76,15 +76,29 @@ func (s *jetstreamScheduler) AddWork(ctx context.Context, _ string, evt *models.
 
 func (s *jetstreamScheduler) Shutdown() {}
 
+// KnownDIDsProvider returns the DIDs of all users Glean currently knows.
+type KnownDIDsProvider func(ctx context.Context) ([]string, error)
+
+const (
+	defaultRewind = 5 * time.Second
+	// Connections are rotated regularly so an updated known-user filter takes
+	// effect: wantedDids is fixed per websocket connection.
+	defaultRotateEvery   = 15 * time.Minute
+	emptyUserListBackoff = 30 * time.Second
+)
+
 type JetstreamConsumer struct {
 	client      *jsc.Client
+	cfg         *jsc.ClientConfig
 	logger      *slog.Logger
 	sched       *jetstreamScheduler
 	cursorStore *BatchCursorStore
+	didProvider KnownDIDsProvider
 	rewind      time.Duration
+	rotateEvery time.Duration
 }
 
-func NewJetstreamConsumer(jetstreamURL string, handler EventHandler, logger *slog.Logger, cursorStore CursorStore) *JetstreamConsumer {
+func NewJetstreamConsumer(jetstreamURL string, handler EventHandler, logger *slog.Logger, cursorStore CursorStore, didProvider KnownDIDsProvider) *JetstreamConsumer {
 	batchCursor := NewBatchCursorStore(cursorStore, 5*time.Second, logger)
 
 	sched := &jetstreamScheduler{
@@ -122,37 +136,72 @@ func NewJetstreamConsumer(jetstreamURL string, handler EventHandler, logger *slo
 		return nil
 	}
 
-	rewind := 5 * time.Second
+	rewind := defaultRewind
 	if cursorStore == nil {
 		rewind = 0
 	}
 
 	return &JetstreamConsumer{
 		client:      c,
+		cfg:         config,
 		logger:      logger,
 		sched:       sched,
 		cursorStore: batchCursor,
+		didProvider: didProvider,
 		rewind:      rewind,
+		rotateEvery: defaultRotateEvery,
 	}
+}
+
+// refreshWantedDIDs narrows the subscription to the current set of known
+// users. The jetstream client reads its config on every dial, so updates take
+// effect on the next (re)connect; until then events of newly signed-up users
+// are covered by PDS sync instead.
+func (jc *JetstreamConsumer) refreshWantedDIDs(ctx context.Context) error {
+	if jc.didProvider == nil {
+		return nil
+	}
+	dids, err := jc.didProvider(ctx)
+	if err != nil {
+		return fmt.Errorf("listing known users: %w", err)
+	}
+	jc.cfg.WantedDids = dids
+	jc.logger.Info("jetstream subscribed to known users", "count", len(dids))
+	return nil
 }
 
 func (jc *JetstreamConsumer) Start(ctx context.Context) error {
 	go jc.cursorStore.Run(ctx)
 
 	for {
-		var cursorPtr *int64
-		if jc.cursorStore != nil {
-			cur, err := jc.cursorStore.LoadCursor(ctx)
-			if err != nil {
-				jc.logger.Warn("failed to load cursor, starting from now", "error", err)
-			} else if cur != nil {
-				rewound := max(*cur-int64(jc.rewind/time.Microsecond), 0)
-				cursorPtr = &rewound
-				jc.logger.Info("resuming jetstream", "cursor_us", *cur, "rewound_us", rewound)
+		if jc.didProvider != nil {
+			if err := jc.refreshWantedDIDs(ctx); err != nil {
+				jc.logger.Warn("keeping previous known-user filter", "error", err)
+			} else if len(jc.cfg.WantedDids) == 0 {
+				// Subscribing to nobody is pointless and would spin; wait for
+				// users instead (backfill or sign-up creates them).
+				jc.logger.Info("no known users yet; waiting before subscribing")
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(emptyUserListBackoff):
+				}
+				continue
 			}
 		}
 
-		err := jc.client.ConnectAndRead(ctx, cursorPtr)
+		var cursorPtr *int64
+		if cur, err := jc.cursorStore.LoadCursor(ctx); err != nil {
+			jc.logger.Warn("failed to load cursor, starting from now", "error", err)
+		} else if cur != nil {
+			rewound := max(*cur-int64(jc.rewind/time.Microsecond), 0)
+			cursorPtr = &rewound
+			jc.logger.Info("resuming jetstream", "cursor_us", *cur, "rewound_us", rewound)
+		}
+
+		connCtx, cancel := context.WithTimeout(ctx, jc.rotateEvery)
+		err := jc.client.ConnectAndRead(connCtx, cursorPtr)
+		cancel()
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}

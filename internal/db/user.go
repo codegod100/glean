@@ -87,6 +87,25 @@ func (s *UserStore) UserDIDs(ctx context.Context) (map[string]bool, error) {
 	return dids, rows.Err()
 }
 
+// UserDIDList returns the DIDs of all known users.
+func (s *UserStore) UserDIDList(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT did FROM users`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var dids []string
+	for rows.Next() {
+		var did string
+		if err := rows.Scan(&did); err != nil {
+			return nil, err
+		}
+		dids = append(dids, did)
+	}
+	return dids, rows.Err()
+}
+
 func (s *UserStore) ListUsers(ctx context.Context) ([]*User, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT did, indexed_at, updated_at, follows_dirty
