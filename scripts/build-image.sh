@@ -1,29 +1,33 @@
 #!/bin/bash
 # Builds the glean container image with Nix (pkgs.dockerTools.streamLayeredImage,
-# defined in flake.nix) on a remote builder over SSH -- this dev machine has no
-# `nix` installed, so the actual build can't happen locally. Side-effecting (rsync
-# + ssh) on purpose: buck2's genrule for :image just calls this script and stays
-# pure/uninvolved in how the remote build actually happens.
+# defined in flake.nix). If `nix` is available locally the build happens here;
+# otherwise the repo is rsync'd to a remote builder over SSH and built there,
+# with the resulting docker-archive tarball streamed back.
 #
-# Usage: scripts/build-image.sh <srcdir> <output-tar-path>
+# Usage: scripts/build-image.sh [output-tar-path]   (default: glean-image.tar)
 set -euo pipefail
-# $SRCDIR is populated by the genrule's `srcs = glob(...)` as a symlink farm
-# mirroring the repo tree -- NOT this script's own location (which, after
-# export_file, is a buck-out copy) and NOT $PWD (buck2 runs genrule cmds with
-# cwd at a srcs scratch dir, not the project root).
-DIR="$1"
-OUT="$2"
+
+OUT="${1:-glean-image.tar}"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if command -v nix >/dev/null 2>&1; then
+  echo "==> building .#image locally" >&2
+  nix build "$DIR#image" --print-out-paths --no-link -L | {
+    read -r store_path
+    echo "==> streaming image (docker-archive tar) to $OUT" >&2
+    "$store_path" > "$OUT"
+  }
+  echo "==> wrote $OUT" >&2
+  exit 0
+fi
 
 NIX_VM="${GLEAN_NIX_VM:-nix-vm}"
 REMOTE_DIR="${GLEAN_NIX_VM_DIR:-~/builds/glean}"
 
-echo "==> syncing source to $NIX_VM:$REMOTE_DIR" >&2
+echo "==> no local nix; syncing source to $NIX_VM:$REMOTE_DIR" >&2
 ssh "$NIX_VM" "mkdir -p $REMOTE_DIR"
-# -L dereferences $SRCDIR's symlinks (they point back at buck2's srcs farm,
-# which doesn't exist on the remote host) so real file content gets copied.
-rsync -aL --delete \
+rsync -a --delete \
   --exclude .git \
-  --exclude buck-out \
   --exclude web/node_modules \
   --exclude web/.svelte-kit \
   --exclude web/build \

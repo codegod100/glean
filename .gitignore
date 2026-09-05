@@ -31,8 +31,8 @@ web/node_modules/
 web/build/
 web/.svelte-kit/
 
-# buck2
-/buck-out
+# container image tarball
+/glean-image.tar
 
 # todo
 todo.md
