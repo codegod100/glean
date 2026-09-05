@@ -11,6 +11,9 @@ clone:
   skip: false
   depth: 1
 
+# The repo is a nix flake (flake.nix): `nix build`/`nix develop` reproduce this
+# environment exactly. The nixery engine has no `nix` of its own, so CI pulls
+# the same toolchain the devShell declares and drives the Makefile directly.
 dependencies:
   nixpkgs:
     - go

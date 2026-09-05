@@ -39,11 +39,31 @@ The system improves over time: as you subscribe to feeds and like articles, Glea
 docker run -p 3000:3000 -e GLEAN_SESSION_KEY=changeme -v glean-data:/data atcr.io/julien.rbrt.fr/glean:latest
 ```
 
+The published image is built from this repo's flake — `nix build .#image`
+produces a script that streams a docker-archive tarball:
+
+```bash
+nix run .#image > glean-image.tar && docker load < glean-image.tar
+```
+
+`make image` wraps that, and falls back to building on a remote nix builder
+(`$GLEAN_NIX_VM`, default `nix-vm`) when the local machine has no `nix`.
+
 ### From source
 
 The frontend is a SvelteKit app in `web/`; the Go binary serves a JSON API.
 SvelteKit runs the SSR server (port 3000) and proxies `/api` to the Go API
 (port 8080).
+
+Everything is packaged as a nix flake, so with nix installed:
+
+```bash
+nix build .#glean      # the Go binary
+nix build .#frontend   # the built SvelteKit app
+nix develop            # a shell with go, gcc, bun, node and the CGO flags set
+```
+
+Without nix, the Makefile does the same thing against your own toolchain:
 
 ```bash
 git clone https://github.com/anomalyco/glean.git

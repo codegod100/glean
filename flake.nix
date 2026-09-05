@@ -7,17 +7,17 @@
 
   outputs = { self, nixpkgs }:
     let
-      system = "x86_64-linux";
-      pkgs = import nixpkgs { inherit system; };
-      lib = pkgs.lib;
+      systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ];
+      forEachSystem = f: nixpkgs.lib.genAttrs systems (system:
+        f (import nixpkgs { inherit system; }));
 
       # --- Go API binary -----------------------------------------------------
-      # Mirrors the Dockerfile's CGO setup: mattn/go-sqlite3 vendors its own
-      # sqlite3 amalgamation, but sqlite-vec-go-bindings' cgo code expects a
-      # plain `sqlite3.h` on the include path. internal/db/include/sqlite3.h
-      # is that header; go-sqlite3's own module dir is added too so the
-      # u_intN_t compat defines line up with the same sqlite3 version.
-      glean = pkgs.buildGoModule {
+      # Mirrors the historical Dockerfile's CGO setup: mattn/go-sqlite3 vendors
+      # its own sqlite3 amalgamation, but sqlite-vec-go-bindings' cgo code
+      # expects a plain `sqlite3.h` on the include path. internal/db/include/
+      # sqlite3.h is that header; go-sqlite3's own module dir is added too so
+      # the u_intN_t compat defines line up with the same sqlite3 version.
+      mkGlean = pkgs: pkgs.buildGoModule {
         pname = "glean";
         version = "0.0.1";
         src = ./.;
@@ -42,7 +42,7 @@
       # normal derivation -- split into a fixed-output "fetch deps" step
       # (network allowed, output hash pinned) and a sandboxed "build" step
       # that only ever sees the already-fetched node_modules.
-      webDeps = pkgs.stdenvNoCC.mkDerivation {
+      mkWebDeps = pkgs: pkgs.stdenvNoCC.mkDerivation {
         pname = "glean-web-deps";
         version = "0.0.1";
         src = ./web;
@@ -63,7 +63,7 @@
         outputHash = "sha256-q/VJbH1rWCsxf3A3RYb22t2RrtjUm4xCCrCZkLkAFFY=";
       };
 
-      frontend = pkgs.stdenvNoCC.mkDerivation {
+      mkFrontend = pkgs: webDeps: pkgs.stdenvNoCC.mkDerivation {
         pname = "glean-web";
         version = "0.0.1";
         src = ./web;
@@ -92,7 +92,7 @@
       # Runs both processes the same way the Dockerfile's CMD did: the Go API
       # in the background on loopback:8080, the SvelteKit Node server in front
       # on $PORT, proxying /api to it.
-      entrypoint = pkgs.writeShellScriptBin "glean-entrypoint" ''
+      mkEntrypoint = pkgs: glean: frontend: pkgs.writeShellScriptBin "glean-entrypoint" ''
         set -euo pipefail
         export GLEAN_ADDR="127.0.0.1:8080"
         export GLEAN_API_URL="http://127.0.0.1:8080"
@@ -103,19 +103,88 @@
       '';
     in
     {
-      packages.${system} = {
-        inherit glean frontend webDeps;
-
-        image = pkgs.dockerTools.streamLayeredImage {
-          name = "glean";
-          tag = "latest";
-          contents = [ pkgs.cacert pkgs.tzdata pkgs.dockerTools.fakeNss entrypoint ];
-          config = {
-            Cmd = [ "${entrypoint}/bin/glean-entrypoint" ];
-            Env = [ "PORT=3000" ];
-            ExposedPorts = { "3000/tcp" = { }; };
+      packages = forEachSystem (pkgs:
+        let
+          glean = mkGlean pkgs;
+          webDeps = mkWebDeps pkgs;
+          frontend = mkFrontend pkgs webDeps;
+          entrypoint = mkEntrypoint pkgs glean frontend;
+        in
+        {
+          inherit glean frontend webDeps;
+          default = glean;
+        }
+        # dockerTools images are Linux-only; on darwin the attribute is simply
+        # absent rather than a derivation that fails at build time.
+        // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          image = pkgs.dockerTools.streamLayeredImage {
+            name = "glean";
+            tag = "latest";
+            contents = [ pkgs.cacert pkgs.tzdata pkgs.dockerTools.fakeNss entrypoint ];
+            config = {
+              Cmd = [ "${entrypoint}/bin/glean-entrypoint" ];
+              Env = [ "PORT=3000" ];
+              ExposedPorts = { "3000/tcp" = { }; };
+            };
           };
+        });
+
+      # `nix run .#glean` runs the API; `nix run .#image > glean-image.tar`
+      # streams the docker-archive tarball to stdout.
+      apps = forEachSystem (pkgs:
+        let
+          system = pkgs.stdenv.hostPlatform.system;
+          pkgsFor = self.packages.${system};
+        in
+        {
+          default = { type = "app"; program = "${pkgsFor.glean}/bin/glean"; };
+          glean = { type = "app"; program = "${pkgsFor.glean}/bin/glean"; };
+        }
+        // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          # streamLayeredImage's output *is* the streaming script.
+          image = { type = "app"; program = "${pkgsFor.image}"; };
+        });
+
+      # Everything the Makefile targets need: Go with cgo, bun/node for the
+      # frontend, and the image/lexicon tooling.
+      devShells = forEachSystem (pkgs: {
+        default = pkgs.mkShell {
+          packages = with pkgs; [
+            go
+            gcc
+            gnumake
+            bun
+            nodejs_22
+            sqlite
+            golangci-lint
+            rsync
+            openssh
+          ];
+
+          # Same include flags the Makefile computes, so `go build -tags fts5`
+          # works inside the shell without the module cache lookup.
+          shellHook = ''
+            export CGO_ENABLED=1
+            export CGO_CFLAGS="-I$PWD/internal/db/include -I$(go env GOMODCACHE)/$(grep 'mattn/go-sqlite3' go.mod | awk '{print $1 "@" $2}')"
+          '';
         };
-      };
+      });
+
+      # `nix flake check` builds the binary and the frontend and runs the Go
+      # tests.
+      checks = forEachSystem (pkgs:
+        let
+          system = pkgs.stdenv.hostPlatform.system;
+        in
+        {
+          glean = self.packages.${system}.glean;
+          frontend = self.packages.${system}.frontend;
+          tests = (mkGlean pkgs).overrideAttrs (_: {
+            pname = "glean-tests";
+            doCheck = true;
+          });
+        });
+
+      formatter = forEachSystem (pkgs: pkgs.nixpkgs-fmt);
     };
 }

@@ -83,13 +83,24 @@ check:
 
 .PHONY: clean
 clean:
-	rm -f glean glean.db
+	rm -f glean glean.db $(IMAGE_TAR)
 	rm -rf web/build web/.svelte-kit
 
-.PHONY: docker-build
-docker-build:
-	docker build -t glean:latest -t atcr.io/julien.rbrt.fr/glean:latest .
+# Container image: built by Nix (flake.nix `image` output, dockerTools
+# streamLayeredImage). scripts/build-image.sh builds locally when `nix` is
+# present and otherwise on the remote builder in $GLEAN_NIX_VM.
+IMAGE ?= atcr.io/julien.rbrt.fr/glean:latest
+IMAGE_TAR ?= glean-image.tar
 
-.PHONY: docker-push
-docker-push:
-	docker push atcr.io/julien.rbrt.fr/glean:latest
+.PHONY: image
+image:
+	scripts/build-image.sh $(IMAGE_TAR)
+
+.PHONY: image-load
+image-load: image
+	docker load < $(IMAGE_TAR)
+	docker tag glean:latest $(IMAGE)
+
+.PHONY: image-push
+image-push: image-load
+	docker push $(IMAGE)
