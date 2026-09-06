@@ -30,14 +30,15 @@ build_image:
       nix build .#image --print-out-paths --no-link -L > store-path
       "$(cat store-path)" > glean-image.tar
     # skopeo pushes the docker-archive straight to the registry: no docker
-    # daemon, so this works on a plain shared runner.
+    # daemon, so this works on a plain shared runner. --insecure-policy skips
+    # the signature trust policy, which the nix image does not ship.
     - |
-      nix shell nixpkgs#skopeo -c skopeo copy \
+      nix shell nixpkgs#skopeo -c skopeo --insecure-policy copy \
         --dest-creds "gitlab-ci-token:$CI_JOB_TOKEN" \
         docker-archive:glean-image.tar \
         "docker://$IMAGE"
     - |
-      nix shell nixpkgs#skopeo -c skopeo copy \
+      nix shell nixpkgs#skopeo -c skopeo --insecure-policy copy \
         --dest-creds "gitlab-ci-token:$CI_JOB_TOKEN" \
         "docker://$IMAGE" "docker://$IMAGE_LATEST"
 
