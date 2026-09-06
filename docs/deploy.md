@@ -1,39 +1,51 @@
 # Deploying
 
-The canonical build is the Nix flake (`flake.nix`): `nix build .#image` produces
-the container image, and `make image-push IMAGE=<ref>` publishes it. That path
-still works and is the reproducible one.
+The Nix flake is the build. `nix build .#image` (flake.nix, dockerTools
+`streamLayeredImage`) produces the container image, and the same command runs
+locally and in CI, so a local build and a deployed build are the same artifact.
 
-## Railway (production)
+## Pipeline
 
-The `glean` service in the `glean` project builds **from source** on
-`railway up`, rather than running a prebuilt image. Railway ignores in-repo
-build config here — `railway.toml`, `nixpacks.toml` and a start script in
-`scripts/` were all silently skipped — so the configuration lives in the
-service settings and environment variables instead:
+Railway has no GitLab repo integration — it deploys from a GitHub repo, a local
+directory, or a container image — so it cannot watch this repo. `.gitlab-ci.yml`
+closes that gap on every push to `main`:
 
-| Setting | Value |
-|---|---|
-| Builder | `NIXPACKS` (the Railpack default cannot build this repo) |
-| Build command | `cd web && bun install && cd .. && make build` |
-| Start command | `sh -c "GLEAN_API_URL=http://127.0.0.1:8080 GLEAN_ADDR=127.0.0.1:8080 /app/glean & exec node /app/web/build/index.js"` |
-| `NIXPACKS_PKGS` | `bun nodejs gnumake gcc gawk gnugrep` |
-| `CGO_ENABLED` | `1` |
+1. `build_image` builds `.#image` with Nix and pushes it to this project's own
+   container registry as `$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA` (and
+   `:latest`). skopeo pushes the docker-archive directly, so no Docker daemon
+   is needed on the runner.
+2. `deploy_railway` points the Railway service at that tag
+   (`serviceInstanceUpdate`) and rolls it out (`serviceInstanceDeploy`).
 
-Notes on why each is needed:
+The project is public, so the registry allows anonymous pulls and Railway needs
+no registry credentials. Making it private again would require registry
+credentials on the Railway side, and a paid plan — private registry sources are
+a Pro feature.
 
-- **`CGO_ENABLED=1`** — `sqlite-vec-go-bindings/cgo` and `mattn/go-sqlite3` are
-  cgo packages. The builder defaults to cgo off, which fails with "build
-  constraints exclude all Go files".
-- **`NIXPACKS_PKGS`** — the Go provider installs only Go. The frontend needs
-  `bun` to build and `nodejs` to serve; `make build` needs make/grep/awk. This
-  mirrors the dependency list in `.tangled/workflows`. Use `nodejs`, not
-  `nodejs_22`: the pinned nixpkgs has no such attribute.
-- **Build command** — the builder's default `go build -o out` skips both the
-  `fts5` tag and the SvelteKit build. `make build` does both.
-- **Start command** — mirrors the flake's `mkEntrypoint`: the Go API on
-  loopback:8080 with the SvelteKit Node server in front on `$PORT`. It is
-  inline rather than a script file because the runtime image does not carry
-  `scripts/`.
+### Required CI variable
 
-Deploy with `railway up` from the repo root.
+`deploy_railway` needs `RAILWAY_TOKEN`, a Railway **project token** for the
+`glean` project, set under Settings → CI/CD → Variables (protected, masked).
+Without it the deploy job is skipped rather than failing: the image is still
+built and published, and can be rolled out by hand.
+
+The service and environment IDs are not secret and are inlined in
+`.gitlab-ci.yml`.
+
+## Deploying by hand
+
+```
+make image-push IMAGE=registry.gitlab.com/nandithebull/glean:<tag>
+```
+
+Then point the service at `<tag>` in the Railway dashboard, or re-run the
+`deploy_railway` job.
+
+## History
+
+The service briefly built from source on `railway up` with Nixpacks. That
+needed `CGO_ENABLED=1` (the sqlite cgo packages), a `NIXPACKS_PKGS` toolchain
+list, and an overridden build command, because Railway ignores in-repo
+`railway.toml` / `nixpacks.toml` here. It also deployed the working tree rather
+than a commit. The image pipeline above replaces it; those service settings
+have been removed.
