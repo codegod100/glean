@@ -68,6 +68,9 @@ func main() {
 		os.Exit(1)
 	}
 	defer dbs.Close()
+	// Ingest must use the same window as the purge, or every fetch re-adds the
+	// articles the last purge deleted.
+	dbs.Articles.SetRetentionDays(*articleRetentionDays)
 
 	clientID := envOr("GLEAN_OAUTH_CLIENT_ID", "")
 	frontendURL := envOr("GLEAN_FRONTEND_URL", "")

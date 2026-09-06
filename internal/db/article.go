@@ -16,10 +16,20 @@ const articlesOrderByAsc = ` ORDER BY (CASE WHEN a.published > 'now' THEN 1 ELSE
 
 type ArticleStore struct {
 	db *DB
+	// retentionDays mirrors the article retention window. Ingest drops entries
+	// already older than it, so the purge is not undone by the next fetch of a
+	// feed that still serves its whole history. Zero disables the cutoff.
+	retentionDays int
 }
 
 func NewArticleStore(db *DB) *ArticleStore {
 	return &ArticleStore{db: db}
+}
+
+// SetRetentionDays sets the ingest age cutoff. It must match the window passed
+// to PurgeExpiredArticles.
+func (s *ArticleStore) SetRetentionDays(days int) {
+	s.retentionDays = days
 }
 
 type Article struct {
@@ -61,6 +71,14 @@ func (s *ArticleStore) BatchUpsertArticles(ctx context.Context, articles []feed.
 		return nil
 	}
 
+	// Anything already past the retention window would be deleted by the next
+	// purge; ingesting it only churns the database and, before read state was
+	// archived, resurfaced long-read articles as unread.
+	var cutoff time.Time
+	if s.retentionDays > 0 {
+		cutoff = time.Now().AddDate(0, 0, -s.retentionDays)
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -77,7 +95,12 @@ func (s *ArticleStore) BatchUpsertArticles(ctx context.Context, articles []feed.
 	}
 	defer stmt.Close()
 
+	feedURLs := make(map[string]struct{}, 1)
 	for _, a := range articles {
+		if !cutoff.IsZero() && !a.Published.IsZero() && a.Published.Before(cutoff) {
+			continue
+		}
+		feedURLs[a.FeedURL] = struct{}{}
 		url := sql.NullString{String: a.URL, Valid: a.URL != ""}
 		author := sql.NullString{String: a.Author, Valid: a.Author != ""}
 		summary := sql.NullString{String: a.Summary, Valid: a.Summary != ""}
@@ -91,6 +114,26 @@ func (s *ArticleStore) BatchUpsertArticles(ctx context.Context, articles []feed.
 		}
 
 		if _, err := stmt.ExecContext(ctx, a.FeedURL, a.GUID, a.Title, url, author, summary, content, published, updated); err != nil {
+			return err
+		}
+	}
+
+	// Restore read state for entries that were purged and have now come back
+	// under a new surrogate id. Without this they would read as unread again.
+	restore, err := tx.PrepareContext(ctx, `
+		INSERT INTO articles.read_state (user_did, article_id, is_read, read_at)
+		SELECT h.user_did, a.id, h.is_read, h.read_at
+		FROM articles.read_state_history h
+		JOIN articles.articles a ON a.feed_url = h.feed_url AND a.guid = h.guid
+		WHERE h.feed_url = ?
+		ON CONFLICT(user_did, article_id) DO NOTHING
+	`)
+	if err != nil {
+		return err
+	}
+	defer restore.Close()
+	for feedURL := range feedURLs {
+		if _, err := restore.ExecContext(ctx, feedURL); err != nil {
 			return err
 		}
 	}

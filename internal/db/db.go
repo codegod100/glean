@@ -348,6 +348,19 @@ var articlesSchema = []string{
 		PRIMARY KEY (user_did, article_id)
 	)`,
 
+	// read_state is keyed on the articles surrogate id, which does not survive
+	// a retention purge and re-fetch of the same feed entry. read_state_history
+	// records the same fact against the article's stable (feed_url, guid)
+	// identity so "read" is not forgotten when a purged article is re-ingested.
+	`CREATE TABLE IF NOT EXISTS articles.read_state_history (
+		user_did TEXT NOT NULL,
+		feed_url TEXT NOT NULL,
+		guid TEXT NOT NULL,
+		is_read BOOLEAN NOT NULL DEFAULT 0,
+		read_at DATETIME,
+		PRIMARY KEY (user_did, feed_url, guid)
+	)`,
+
 	`CREATE TABLE IF NOT EXISTS articles.annotations (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		uri TEXT NOT NULL UNIQUE,

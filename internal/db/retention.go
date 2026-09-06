@@ -83,13 +83,33 @@ func (s *Store) deleteInBatches(ctx context.Context, query string) (int64, error
 
 // PurgeExpiredArticles deletes articles older than maxAgeDays — by published
 // date, falling back to fetched_at for undated items — together with their
-// read-state rows. It returns the number of articles removed.
+// read-state rows, which are first archived to read_state_history so a
+// re-ingested article is not resurrected as unread. It returns the number of
+// articles removed.
 func (s *Store) PurgeExpiredArticles(ctx context.Context, maxAgeDays int) (int64, error) {
 	if maxAgeDays <= 0 {
 		return 0, nil
 	}
 	cutoff := time.Now().AddDate(0, 0, -maxAgeDays)
 	const stale = `(published IS NOT NULL AND published < ?1) OR (published IS NULL AND fetched_at < ?1)`
+	const staleA = `(a.published IS NOT NULL AND a.published < ?1) OR (a.published IS NULL AND a.fetched_at < ?1)`
+
+	// Archive read state against the article's stable identity before dropping
+	// it. Feeds keep serving entries past the retention cutoff, so a purged
+	// article is routinely re-ingested under a fresh surrogate id; without this
+	// the user's "read" mark is lost and the backlog resurfaces as unread.
+	if _, err := s.db.ExecContext(ctx,
+		`INSERT INTO articles.read_state_history (user_did, feed_url, guid, is_read, read_at)
+		SELECT r.user_did, a.feed_url, a.guid, r.is_read, r.read_at
+		FROM articles.read_state r
+		JOIN articles.articles a ON a.id = r.article_id
+		WHERE `+staleA+`
+		ON CONFLICT(user_did, feed_url, guid) DO UPDATE SET
+			is_read = excluded.is_read, read_at = excluded.read_at`,
+		cutoff,
+	); err != nil {
+		return 0, fmt.Errorf("archive read state of old articles: %w", err)
+	}
 
 	if _, err := s.db.ExecContext(ctx,
 		`DELETE FROM articles.read_state WHERE article_id IN (SELECT id FROM articles.articles WHERE `+stale+`)`,

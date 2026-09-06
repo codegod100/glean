@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"gotest.tools/v3/assert"
+
+	"pkg.rbrt.fr/glean/internal/feed"
 )
 
 func seedRetentionFixtures(t *testing.T, ctx context.Context, dbs *Store) {
@@ -130,4 +132,64 @@ func TestRunMaintenance_AppliesArticleRetention(t *testing.T) {
 
 	assert.NilError(t, dbs.RunMaintenance(ctx, 90, 30))
 	assert.Equal(t, int64(1), count(t, ctx, dbs, `SELECT COUNT(*) FROM articles.articles`))
+}
+
+// A feed keeps serving entries past the retention cutoff, so a purged article
+// comes back under a fresh surrogate id. Read state must come back with it.
+func TestPurgeThenReingest_KeepsArticleRead(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+	sqlDB := dbs.SQLDB()
+
+	const did = "did:test:known"
+	_, err := sqlDB.ExecContext(ctx, `INSERT INTO users (did) VALUES (?)`, did)
+	assert.NilError(t, err)
+
+	published := time.Now().AddDate(0, 0, -60)
+	_, err = sqlDB.ExecContext(ctx, `
+		INSERT INTO articles.articles (id, feed_url, guid, title, published)
+		VALUES (1, 'https://f.example/rss', 'weekly-92', 't', ?)`, published)
+	assert.NilError(t, err)
+	assert.NilError(t, dbs.Articles.MarkArticleRead(ctx, did, 1))
+
+	n, err := dbs.PurgeExpiredArticles(ctx, 30)
+	assert.NilError(t, err)
+	assert.Equal(t, int64(1), n)
+
+	// The feed still lists it; ingest with no cutoff configured re-adds it.
+	assert.NilError(t, dbs.Articles.BatchUpsertArticles(ctx, []feed.Article{{
+		FeedURL:   "https://f.example/rss",
+		GUID:      "weekly-92",
+		Title:     "t",
+		Published: published,
+	}}))
+
+	var id int64
+	var isRead bool
+	err = sqlDB.QueryRowContext(ctx, `
+		SELECT a.id, COALESCE(r.is_read, 0)
+		FROM articles.articles a
+		LEFT JOIN articles.read_state r ON r.user_did = ? AND r.article_id = a.id
+		WHERE a.guid = 'weekly-92'`, did).Scan(&id, &isRead)
+	assert.NilError(t, err)
+	assert.Assert(t, id != 1, "re-ingested article should have a new surrogate id")
+	assert.Equal(t, true, isRead, "read state must survive purge and re-ingest")
+}
+
+func TestBatchUpsertArticles_SkipsArticlesPastRetention(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupTestDB(t)
+	dbs.Articles.SetRetentionDays(30)
+
+	now := time.Now()
+	assert.NilError(t, dbs.Articles.BatchUpsertArticles(ctx, []feed.Article{
+		{FeedURL: "https://f.example/rss", GUID: "old", Title: "t", Published: now.AddDate(0, 0, -60)},
+		{FeedURL: "https://f.example/rss", GUID: "fresh", Title: "t", Published: now.AddDate(0, 0, -5)},
+		{FeedURL: "https://f.example/rss", GUID: "undated", Title: "t"},
+	}))
+
+	assert.Equal(t, int64(0), count(t, ctx, dbs, `SELECT COUNT(*) FROM articles.articles WHERE guid = 'old'`))
+	assert.Equal(t, int64(1), count(t, ctx, dbs, `SELECT COUNT(*) FROM articles.articles WHERE guid = 'fresh'`))
+	// Undated entries have no age to judge, so they are still ingested.
+	assert.Equal(t, int64(1), count(t, ctx, dbs, `SELECT COUNT(*) FROM articles.articles WHERE guid = 'undated'`))
 }
