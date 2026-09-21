@@ -84,18 +84,44 @@ proc signEs256*(k: P256Key, rng: var HmacDrbgContext, signingInput: string): seq
   doAssert n == 64, &"expected a 64-byte raw signature, got {n}"
   result = sig.toSeq
 
+proc b64uDecode*(s: string): string =
+  ## Inverse of b64u: restore the padding base64url drops, then decode.
+  var t = s.replace('-', '+').replace('_', '/')
+  while t.len mod 4 != 0: t.add '='
+  base64.decode(t)
+
+proc accessTokenHash*(accessToken: string): string =
+  ## The `ath` claim: base64url(SHA-256(access token)).
+  ##
+  ## This is what binds a proof to one specific token. A resource-server proof
+  ## without it is rejected, and a proof carrying the wrong one lets a stolen
+  ## token be replayed with a fresh proof -- which is the whole thing DPoP
+  ## exists to prevent.
+  b64u(sha256.digest(accessToken).data)
+
 proc dpopProof*(k: P256Key, rng: var HmacDrbgContext, htm, htu: string,
-                nonce = ""): string =
-  ## A DPoP proof JWT (RFC 9449) as an ATProto PDS expects it.
+                nonce = "", accessToken = "", issuer = ""): string =
+  ## A DPoP proof JWT (RFC 9449).
+  ##
+  ## Auth-server and resource-server proofs differ, even when the same host
+  ## fills both roles: a request to a PDS carries `ath` (bound to the access
+  ## token) and `iss` (the auth server that issued it), while the PAR and
+  ## token requests that mint that token carry neither.
   let header = %*{"typ": "dpop+jwt", "alg": "ES256", "jwk": k.publicJwk}
+  let issued = now().utc.toTime.toUnix
   var payload = %*{
     "jti": b64u(sha256.digest(&"{htm}{htu}{epochTime()}").data)[0 ..< 16],
     "htm": htm,
     "htu": htu,
-    "iat": now().utc.toTime.toUnix,
+    "iat": issued,
+    "exp": issued + 300,
   }
   if nonce.len > 0:
     payload["nonce"] = %nonce
+  if accessToken.len > 0:
+    payload["ath"] = %accessTokenHash(accessToken)
+  if issuer.len > 0:
+    payload["iss"] = %issuer
 
   let signingInput = b64u($header) & "." & b64u($payload)
   signingInput & "." & b64u(k.signEs256(rng, signingInput))

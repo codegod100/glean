@@ -12,6 +12,7 @@ cd spike/nim
 nim c -r sqlite_probe.nim                                          # storage
 nim c -r dpop_probe.nim && ./dpop_probe | (cd verify && go run .)  # crypto
 nim c -r -d:ssl oauth_probe.nim [handle]                           # the flow
+nim c -r -d:ssl xrpc_probe.nim                                     # signing
 ```
 
 Reusable code lives in `atproto/`; the `*_probe.nim` files are the checks.
@@ -90,6 +91,53 @@ The flow stops at the authorization URL, which is correct — the next step is a
 human granting consent in a browser. `exchangeCode` and `refresh` are
 implemented against that callback but are consequently untested.
 
+## 4. XRPC signing — proof accepted by a real PDS
+
+`atproto/xrpc.nim` makes authenticated calls with a DPoP-bound access token:
+`Authorization: DPoP <token>` (not Bearer), a per-request proof, and the retry
+logic for both failure modes.
+
+Resource-server proofs are **not** the same as auth-server proofs, even when
+one host fills both roles. A PDS request carries `ath` (base64url SHA-256 of
+the access token, which is what binds the proof to that one credential) and
+`iss`; the PAR and token requests that mint the token carry neither. The nonce
+handshake also differs: a PDS answers **401** with `WWW-Authenticate: DPoP
+error="use_dpop_nonce"`, where the auth server used **400** and a JSON body.
+A session therefore tracks two independent nonces.
+
+`xrpc_probe.nim` cannot get a consented token, so it signs a request with a
+deliberately invalid one and reads what a real PDS says. Against
+`bsky.social`'s PDS:
+
+    WWW-Authenticate: DPoP algs="...", error="invalid_token",
+                      error_description="Malformed token"
+
+That is the informative result. `invalid_token` rather than
+`invalid_dpop_proof` means the PDS parsed and accepted the proof — signature,
+claims, `ath`, `htu`, `htm` — and rejected only the credential. The challenge
+scheme coming back as `DPoP` confirms the Authorization scheme too, and the
+response carried a host nonce.
+
+`ath` is pinned against a value computed with `openssl dgst` rather than
+checked for self-consistency, since a self-consistent hash would pass any
+internal assertion and still be refused by every server.
+
+Two bugs the probe caught, both of which would have failed every authenticated
+call in ways that are hard to read from the outside:
+
+- `htm` was built as `($httpMethod)[4..^1]`, assuming the enum stringified to
+  `HttpGet`. It stringifies to `GET`, so this was a range error, not a
+  mis-signed claim — loud, but only once something ran.
+- `hostOf` returned an empty host for a scheme-less input like
+  `public.api.bsky.app`, because `parseUri` files that under `path`. URLs came
+  out as `https:///xrpc/...`.
+
+A third mistake was in the probe rather than the code: the first version
+pointed at `com.atproto.repo.listRecords`, which is **public**. The PDS served
+it with a 200 while ignoring the bogus credential entirely — a passing test
+that tested nothing. `com.atproto.server.getSession` has to evaluate the
+credential.
+
 ## What this does and does not prove
 
 Proven: the cryptography, the storage layer, and the OAuth flow up to user
@@ -98,9 +146,10 @@ consent all work from Nim, in the formats ATProto and real servers accept.
 Not proven, and still ahead:
 
 - **Token exchange and refresh** — written, but needs a browser consent to
-  exercise. This is the one place a real end-to-end test still has to happen.
-- **Session persistence** and the token-refresh lifecycle.
-- **XRPC** request signing with the DPoP-bound access token.
+  exercise. This is the one place a real end-to-end test still has to happen,
+  and it also covers the `invalid_token` refresh-and-retry branch of
+  `xrpc.request`, which is currently unexercised.
+- **Session persistence** across restarts.
 - The **Jetstream** websocket consumer.
 - **CBOR/CAR** parsing for repository records.
 

@@ -138,5 +138,12 @@ proc lookup*(identifier: string, plcUrl = DefaultPlcUrl): Identity =
     raise newException(IdentityError, "identity has no atproto PDS: " & did)
 
 proc hostOf*(url: string): string =
-  let u = parseUri(url)
+  ## Host (with port, if given) from a URL.
+  ##
+  ## parseUri treats a scheme-less string as a path, so "example.com" would
+  ## otherwise yield an empty host and build URLs like "https:///xrpc/...".
+  ## Callers legitimately pass bare hostnames, so assume https when no scheme
+  ## is present.
+  let withScheme = if "://" in url: url else: "https://" & url
+  let u = parseUri(withScheme)
   if u.port.len > 0: u.hostname & ":" & u.port else: u.hostname
