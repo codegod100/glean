@@ -13,6 +13,7 @@ nim c -r sqlite_probe.nim                                          # storage
 nim c -r dpop_probe.nim && ./dpop_probe | (cd verify && go run .)  # crypto
 nim c -r -d:ssl oauth_probe.nim [handle]                           # the flow
 nim c -r -d:ssl xrpc_probe.nim                                     # signing
+nim c -r -d:ssl jetstream_probe.nim                                # firehose
 ```
 
 Reusable code lives in `atproto/`; the `*_probe.nim` files are the checks.
@@ -138,6 +139,41 @@ it with a 200 while ignoring the bogus credential entirely — a passing test
 that tested nothing. `com.atproto.server.getSession` has to evaluate the
 credential.
 
+## 5. Jetstream — works, verified against the live firehose
+
+`atproto/jetstream.nim` consumes the ATProto firehose as JSON over a
+websocket, using `websock` (already vendored via chronos). Jetstream is public
+and unauthenticated, so unlike the OAuth and XRPC probes this one checks the
+real thing end to end: 17/17 against the live network.
+
+Two capabilities that matter to Glean are confirmed rather than assumed:
+
+**Server-side filtering.** The probe subscribes to one collection and asserts
+that nothing else arrives. This is worth checking explicitly because the
+failure mode is invisible: an unfiltered subscription is the entire network,
+so a consumer that loses its query parameters still receives a healthy-looking
+torrent of events that happen to be the wrong ones.
+
+**Cursor replay.** Rewinding to an earlier `time_us` must actually rewind, not
+quietly resume live — that is how a consumer catches up after downtime. The
+probe replays from a cursor it saw and asserts the events *overlap* what it
+already received (25 of 25). Accepting the parameter proves nothing on its
+own.
+
+Two traps:
+
+- **websock's `Uri` overload silently drops the query string.** It forwards
+  only `uri.path`, so every Jetstream filter would vanish and the consumer
+  would subscribe to the whole firehose while looking fine. `connect` uses the
+  host/path form and assembles path-plus-query itself.
+- Jetstream wants `wantedCollections` **repeated per value**, not one
+  comma-joined string. A joined value matches no collection at all.
+
+`websock` pulls in chronicles, which does not compile unless a logging stream
+is configured and resolves it in the *importing* module's scope — hence the
+`import chronicles` in `jetstream.nim` that nothing appears to use, and the
+`chronicles_enabled=off` in `nim.cfg`.
+
 ## What this does and does not prove
 
 Proven: the cryptography, the storage layer, and the OAuth flow up to user
@@ -150,8 +186,10 @@ Not proven, and still ahead:
   and it also covers the `invalid_token` refresh-and-retry branch of
   `xrpc.request`, which is currently unexercised.
 - **Session persistence** across restarts.
-- The **Jetstream** websocket consumer.
-- **CBOR/CAR** parsing for repository records.
+- **CBOR/CAR** parsing for repository records — the last unexplored format,
+  needed for full-repo sync rather than the live stream.
+- **Reconnect and backoff** for a long-lived Jetstream subscription; the
+  consumer reads a stream but does not yet survive the connection dropping.
 
 The honest read: none of the three things that could have sunk the port did.
 What is left is protocol plumbing against well-specified formats — large, but

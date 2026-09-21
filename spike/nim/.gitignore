@@ -4,3 +4,4 @@ sqlite_probe
 dpop_probe
 oauth_probe
 xrpc_probe
+jetstream_probe
