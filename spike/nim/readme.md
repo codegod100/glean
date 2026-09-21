@@ -365,6 +365,47 @@ active set is called out in the code, because "you unliked everything" and
 "the fetch failed" are indistinguishable from inside the store — the caller
 has to not get there.
 
+## 11. Feed parsing
+
+`atproto/feedparser.nim` ports `internal/feed/parser.go`: RSS 2.0, RDF
+(RSS 1.0), Atom and JSON Feed.
+
+The interesting part of a feed parser is not the happy path, it is the
+fallbacks, because feeds in the wild disagree with the spec constantly. A
+missing `guid` falls back to the link — it is what dedupes an article across
+fetches, so an item without one would be re-inserted forever. `rel="self"`
+loses to `rel="alternate"`, or a feed whose first link is itself would point
+every article back at the feed. An unparseable date leaves the article
+undated rather than dropping it. Atom's `updated` stands in for a missing
+`published`, since Atom requires only the former.
+
+Namespaces are matched by local name rather than resolved. Go's decoder maps
+`content:encoded` to its namespace URI; Nim's keeps the literal prefix, and
+feeds are inconsistent enough about prefixes that suffix matching is both
+simpler and more forgiving.
+
+### Two bugs, one of them quiet and severe
+
+**`xmltree.innerText` silently skips CDATA.** RSS ships article bodies inside
+CDATA *precisely because* they contain HTML, so relying on `innerText` loses
+the content of most real feeds while every surrounding field parses
+perfectly — a parser that looks like it works and returns empty articles.
+The parser now walks the tree itself, including `xnCData`.
+
+**Nim's `zzz` requires `-05:00`; `ZZZ` accepts `-0500`.** Feeds use both, so
+both formats are in the list. Without it, every RSS feed using a numeric
+offset — which is most of them — parsed as undated.
+
+Neither would have failed a compile, and neither is visible without a
+fixture that contains the case.
+
+### Beyond fixtures
+
+Fixtures only contain what their author thought of, so the probe also fetches
+four real feeds across two formats (Rust Blog, nim-lang, LWN, Hacker News)
+and asserts every item has a guid and a title. All four parse, 65 items
+between them, all dated and all carrying text.
+
 ## What this does and does not prove
 
 Proven: the cryptography, the storage layer, and the OAuth flow up to user

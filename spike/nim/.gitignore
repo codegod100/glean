@@ -14,3 +14,4 @@ gleandb_probe
 stores_probe
 social_probe
 nimcache/
+feedparser_probe
