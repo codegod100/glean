@@ -108,16 +108,20 @@ def _snapshot_once() -> None:
         live = f"{DB_BASE}{suffix}"
         if not os.path.exists(live):
             continue
-        final = f"{SNAPSHOT_DIR}/glean.db{suffix}"
-        tmp = f"{final}.tmp"
-        if os.path.exists(tmp):
-            os.remove(tmp)
+        # VACUUM INTO writes to local disk, never straight to the Volume:
+        # it journals as it goes, and the Volume is the filesystem this whole
+        # scheme exists to avoid putting SQLite on. Only the finished file is
+        # copied across.
+        staged = f"{LIVE_DIR}/snapshot{suffix}"
+        if os.path.exists(staged):
+            os.remove(staged)
         subprocess.run(
-            ["sqlite3", live, f"VACUUM INTO '{tmp}'"],
+            ["sqlite3", live, f"VACUUM INTO '{staged}'"],
             check=True,
             capture_output=True,
         )
-        os.replace(tmp, final)
+        shutil.copy2(staged, f"{SNAPSHOT_DIR}/glean.db{suffix}")
+        os.remove(staged)
     volume.commit()
 
 
