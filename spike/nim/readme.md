@@ -16,6 +16,7 @@ nim c -r -d:ssl xrpc_probe.nim                                     # signing
 nim c -r -d:ssl jetstream_probe.nim                                # firehose
 nim c -r -d:ssl reconnect_probe.nim                                # supervisor
 nim c -r -d:ssl store_probe.nim                                    # persistence
+nim c -r -d:ssl gleandb_probe.nim                                  # database
 ```
 
 Reusable code lives in `atproto/`; the `*_probe.nim` files are the checks.
@@ -243,6 +244,46 @@ one is a restart that silently drops every session.
 **These rows are key material.** A session holds the DPoP private key and the
 refresh token; together they are the account. The database file wants the
 protection of a password store, not of a cache.
+
+## 8. The database layer — foundation done
+
+`atproto/gleandb.nim` opens Glean's storage the way the Go backend does:
+`<base>_users` as `main`, with `_articles` and `_recs` **attached**, so a
+query can join across them while each file still checkpoints and vacuums
+alone — and so the derived recommendation tables can be dropped and rebuilt
+without touching anything a user wrote. The suffixes match, so a database
+written by either implementation is readable by the other.
+
+Pragmas are repeated per schema rather than set once, which is the detail
+worth knowing: `PRAGMA` applies to one database at a time, so setting WAL on
+`main` leaves `articles` journalling the slow way. The probe asserts WAL on
+all three rather than trusting the call.
+
+`exp()` and `log()` are registered as SQL functions, as the Go connection
+does. Nothing in the current SQL calls either; they exist so a scoring query
+can decay a weight without pulling rows into the application. `log()` returns
+NULL for zero and negatives, since `-inf` and NaN both poison an `ORDER BY`.
+
+**The schema is extracted, not retyped.** `tools/extract_schema.py` pulls all
+44 DDL statements out of `internal/db/db.go` into `atproto/schema.nim`.
+Hand-transcribing them would drift, and a column differing by a default or a
+CHECK constraint surfaces months later as a violation nobody can place.
+
+The probe leans on things that fail quietly: an ATTACH that did not happen, a
+pragma that did not take, FTS5 triggers that never fire. That last one is the
+sharpest — the index is maintained by triggers, so if they were missed,
+search returns nothing while every other query looks healthy. Insert, update
+and delete are each checked against the index.
+
+### Scope
+
+This is the foundation, not the whole layer. Glean's `internal/db` is ~2,800
+lines of non-test code; what is ported here is the connection, the schema and
+the primitives, plus a cross-database join, FTS5 and vec0 proven end to end.
+
+The remaining query surface — `article.go`, `feed.go`, `social.go`,
+`retention.go` and friends — is mechanical against this base, and large. It
+is the first part of the port where the work is volume rather than risk.
 
 ## What this does and does not prove
 
