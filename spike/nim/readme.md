@@ -14,6 +14,7 @@ nim c -r dpop_probe.nim && ./dpop_probe | (cd verify && go run .)  # crypto
 nim c -r -d:ssl oauth_probe.nim [handle]                           # the flow
 nim c -r -d:ssl xrpc_probe.nim                                     # signing
 nim c -r -d:ssl jetstream_probe.nim                                # firehose
+nim c -r -d:ssl reconnect_probe.nim                                # supervisor
 ```
 
 Reusable code lives in `atproto/`; the `*_probe.nim` files are the checks.
@@ -174,6 +175,37 @@ is configured and resolves it in the *importing* module's scope — hence the
 `import chronicles` in `jetstream.nim` that nothing appears to use, and the
 `chronicles_enabled=off` in `nim.cfg`.
 
+## 6. Reconnect and backoff — works
+
+`atproto/jetstream_run.nim` keeps a subscription alive. Three concerns, all
+about not losing events rather than about uptime:
+
+- **Resume from a rewound cursor.** Cursors are persisted in batches, so the
+  last one written always trails the last one seen. Reconnecting rewinds past
+  that gap and accepts re-delivery: duplicates are cheap when handling is
+  idempotent, a hole in the record is not.
+- **Rotate connections on a timer.** Server-side filters are fixed for the
+  life of a connection, so a subscription that never reconnects never learns
+  about newly-known DIDs. Glean's Go consumer rotates every 15 minutes for
+  this reason, not for robustness.
+- **Back off with jitter.** The Go consumer waits a flat 5s, which is fine
+  against one healthy server and unkind to one that is down.
+
+A healthy server proves nothing here, so `reconnect_probe.nim` runs a local
+websocket server that hangs up after three frames. Over two seconds the
+supervisor made 12 connections and received 36 events across them.
+
+The probe checks that the cursor **reaches the server**, not merely that it
+advances locally: a consumer that tracks a cursor it never sends looks
+identical from the inside and silently loses the gap on every reconnect. 11
+of 12 connections carried one, and the first correctly did not — it starts
+live.
+
+One bug worth recording. `delayFor` short-circuited `attempt <= 0` straight
+to the initial delay, skipping jitter on the first retry. That is precisely
+the moment jitter exists for: one server restart drops every consumer at
+once, and un-jittered first retries bring them all back simultaneously.
+
 ## What this does and does not prove
 
 Proven: the cryptography, the storage layer, and the OAuth flow up to user
@@ -186,8 +218,6 @@ Not proven, and still ahead:
   and it also covers the `invalid_token` refresh-and-retry branch of
   `xrpc.request`, which is currently unexercised.
 - **Session persistence** across restarts.
-- **Reconnect and backoff** for a long-lived Jetstream subscription; the
-  consumer reads a stream but does not yet survive the connection dropping.
 
 ### Not needed: DAG-CBOR, CAR and the MST
 
