@@ -45,6 +45,10 @@ proc sqlite3_bind_int64(s: pointer, col: cint, v: int64): cint
 proc sqlite3_bind_blob(s: pointer, col: cint, data: pointer, n: cint,
                        destructor: pointer): cint
 proc sqlite3_libversion(): cstring
+proc sqlite3_column_type(s: pointer, col: cint): cint
+proc sqlite3_last_insert_rowid(db: pointer): int64
+proc sqlite3_changes(db: pointer): cint
+proc sqlite3_clear_bindings(s: pointer): cint
 {.pop.}
 
 proc sqlite3_vec_init(db: pointer, errMsg: ptr cstring,
@@ -163,3 +167,127 @@ iterator rows*(db: Db, sql: string, params: varargs[Param]): seq[string] =
       let raw = sqlite3_column_text(stmt, i.cint)
       row[i] = if raw == nil: "" else: $raw
     yield row
+
+
+# --- typed row access ------------------------------------------------------
+
+const SQLITE_NULL* = 5
+
+type Row* = object
+  ## A cursor positioned on one result row. Valid only until the next step.
+  stmt: pointer
+
+proc isNull*(r: Row, col: int): bool =
+  sqlite3_column_type(r.stmt, col.cint) == SQLITE_NULL
+
+proc str*(r: Row, col: int): string =
+  ## NULL reads as "". Most of Glean's text columns are nullable but mean the
+  ## empty string, and the Go side collapses them the same way at the wire
+  ## boundary (see nullStr in internal/server/api.go).
+  if r.isNull(col): return ""
+  let raw = sqlite3_column_text(r.stmt, col.cint)
+  if raw == nil: "" else: $raw
+
+proc strOpt*(r: Row, col: int): Option[string] =
+  ## For the few places where NULL and "" genuinely differ.
+  if r.isNull(col): none(string) else: some(r.str(col))
+
+proc i64*(r: Row, col: int): int64 =
+  if r.isNull(col): 0'i64 else: sqlite3_column_int64(r.stmt, col.cint)
+
+proc i*(r: Row, col: int): int = r.i64(col).int
+
+proc f*(r: Row, col: int): float =
+  if r.isNull(col): 0.0 else: sqlite3_column_double(r.stmt, col.cint).float
+
+proc b*(r: Row, col: int): bool = r.i64(col) != 0
+
+iterator query*(db: Db, sql: string, params: varargs[Param]): Row =
+  ## Typed row iteration. The Row borrows the statement, so copy anything you
+  ## need out of it before the next iteration.
+  let stmt = prepare(db, sql, @params)
+  defer: discard sqlite3_finalize(stmt)
+  while sqlite3_step(stmt) == SQLITE_ROW:
+    yield Row(stmt: stmt)
+
+proc queryFirst*[T](db: Db, sql: string, params: openArray[Param],
+                    read: proc(r: Row): T): Option[T] =
+  let stmt = prepare(db, sql, params)
+  defer: discard sqlite3_finalize(stmt)
+  if sqlite3_step(stmt) != SQLITE_ROW:
+    return none(T)
+  some(read(Row(stmt: stmt)))
+
+proc queryAll*[T](db: Db, sql: string, params: openArray[Param],
+                  read: proc(r: Row): T): seq[T] =
+  let stmt = prepare(db, sql, params)
+  defer: discard sqlite3_finalize(stmt)
+  while sqlite3_step(stmt) == SQLITE_ROW:
+    result.add read(Row(stmt: stmt))
+
+proc lastInsertId*(db: Db): int64 = sqlite3_last_insert_rowid(db.handle)
+proc changes*(db: Db): int = sqlite3_changes(db.handle).int
+
+# --- transactions ----------------------------------------------------------
+
+template transaction*(db: Db, body: untyped) =
+  ## Run `body` in a transaction, rolling back if it raises.
+  ##
+  ## Batch ingest is the reason this exists: a few thousand inserts outside a
+  ## transaction is a few thousand fsyncs, which turns a feed refresh into a
+  ## minutes-long operation.
+  db.exec "BEGIN IMMEDIATE"
+  try:
+    body
+    db.exec "COMMIT"
+  except CatchableError:
+    try: db.exec "ROLLBACK"
+    except CatchableError: discard
+    raise
+
+# --- reusable prepared statements ------------------------------------------
+
+type Prepared* = object
+  ## A statement prepared once and stepped many times. Worth it inside a
+  ## batch; pointless outside one.
+  stmt: pointer
+  db: pointer
+
+proc prepared*(db: Db, sql: string): Prepared =
+  var stmt: pointer
+  check(db.handle, sqlite3_prepare_v2(db.handle, sql.cstring, -1, stmt, nil),
+        "prepare")
+  Prepared(stmt: stmt, db: db.handle)
+
+proc exec*(ps: Prepared, params: varargs[Param]) =
+  discard sqlite3_reset(ps.stmt)
+  discard sqlite3_clear_bindings(ps.stmt)
+  for i, prm in params:
+    let col = (i + 1).cint
+    let rc =
+      if prm.isNull: SQLITE_OK.cint
+      else:
+        case prm.kind
+        of 0: sqlite3_bind_text(ps.stmt, col, prm.s.cstring, prm.s.len.cint,
+                                SQLITE_TRANSIENT)
+        of 1: sqlite3_bind_int64(ps.stmt, col, prm.i)
+        of 2:
+          if prm.b.len == 0:
+            sqlite3_bind_blob(ps.stmt, col, nil, 0, SQLITE_TRANSIENT)
+          else:
+            sqlite3_bind_blob(ps.stmt, col, prm.b[0].unsafeAddr, prm.b.len.cint,
+                              SQLITE_TRANSIENT)
+    if rc != SQLITE_OK:
+      raise newException(SqliteError, "binding parameter " & $col)
+  check(ps.db, sqlite3_step(ps.stmt), "step")
+
+proc finalize*(ps: var Prepared) =
+  if ps.stmt != nil:
+    discard sqlite3_finalize(ps.stmt)
+    ps.stmt = nil
+
+proc nullParam*(): Param = Param(isNull: true)
+
+proc pOrNull*(s: string): Param =
+  ## Empty text becomes NULL, matching the Go side's nilIfEmpty.
+  if s.len == 0: nullParam() else: p(s)

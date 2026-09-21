@@ -17,6 +17,7 @@ nim c -r -d:ssl jetstream_probe.nim                                # firehose
 nim c -r -d:ssl reconnect_probe.nim                                # supervisor
 nim c -r -d:ssl store_probe.nim                                    # persistence
 nim c -r -d:ssl gleandb_probe.nim                                  # database
+nim c -r -d:ssl stores_probe.nim                                   # queries
 ```
 
 Reusable code lives in `atproto/`; the `*_probe.nim` files are the checks.
@@ -284,6 +285,55 @@ the primitives, plus a cross-database join, FTS5 and vec0 proven end to end.
 The remaining query surface — `article.go`, `feed.go`, `social.go`,
 `retention.go` and friends — is mechanical against this base, and large. It
 is the first part of the port where the work is volume rather than risk.
+
+## 9. Article and feed queries
+
+`atproto/feedstore.nim` and `atproto/articlestore.nim` port the core of
+`internal/db/feed.go` and `internal/db/article.go`, with `sqlite.nim` grown to
+carry them: typed nullable row access, transactions, and prepared statements
+that can be stepped many times.
+
+Read state is the shape everything else follows. It is per-user and lives in
+its own table, so a listing is always a LEFT JOIN and "unread" means *no row*
+— hence `COALESCE(r.is_read, 0)` throughout rather than a column on the
+article.
+
+Two behaviours carried over deliberately, both about not resurfacing things a
+reader has dealt with:
+
+- Articles already older than the retention window are **not ingested**.
+  Writing them only to purge them churns the database.
+- After ingest, read state is **restored from history**, because a purged
+  article that reappears gets a new surrogate id and would otherwise come
+  back unread.
+
+The probe targets the ways these can be quietly wrong: a mark-all-read whose
+scope clears the account instead of one feed, a subscriber count that drifts,
+a listing that leaks another user's feeds, a NULL date sorting to the top.
+
+### Four bugs the probe caught
+
+All four were wrong assumptions about the schema or about SQLite, and none
+would have raised at compile time:
+
+- `likes` keys on **`author_did`**, not `user_did` — a like is an ATProto
+  record with an author, not a user-scoped row.
+- FTS5 requires the **bare table name** on the left of `MATCH`. Neither an
+  alias nor a schema-qualified name is accepted, so the match moved into a
+  subquery, which also carries `rank` out for ordering.
+- The shared feed column list used bare names, which work until a query joins
+  `subscriptions` — which also has `feed_url` — and then fail as ambiguous.
+  Now qualified with the table alias.
+- The probe's own first draft assumed `users` had a `handle` column. It does
+  not; handles are resolved from atproto rather than stored.
+
+### Scope
+
+Roughly the core of the two files by usage: feeds, subscriptions, listing,
+filtering, read state, counts, search, retention, dead feeds. Not ported:
+`BatchReconcileSubscriptions`, OPML-adjacent helpers,
+`GetNextArticleID`'s navigation logic, and the several list variants the
+recommendation engine uses. They are mechanical against these patterns.
 
 ## What this does and does not prove
 

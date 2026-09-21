@@ -11,3 +11,4 @@ store_probe
 *.db-wal
 *.db-shm
 gleandb_probe
+stores_probe
