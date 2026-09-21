@@ -9,9 +9,12 @@ Run both:
 
 ```
 cd spike/nim
-nim c -r sqlite_probe.nim          # storage
-nim c -r dpop_probe.nim && ./dpop_probe | (cd verify && go run .)   # auth
+nim c -r sqlite_probe.nim                                          # storage
+nim c -r dpop_probe.nim && ./dpop_probe | (cd verify && go run .)  # crypto
+nim c -r -d:ssl oauth_probe.nim [handle]                           # the flow
 ```
+
+Reusable code lives in `atproto/`; the `*_probe.nim` files are the checks.
 
 ## 1. sqlite-vec + FTS5 — works
 
@@ -56,19 +59,61 @@ that the thumbprint matches when recomputed independently.
 keypairs — worth confirming, because ECDSA values with leading zeros are a
 classic source of intermittent length bugs in `R||S` encoding.
 
+## 3. The OAuth flow — works against a live PDS
+
+`atproto/identity.nim` and `atproto/oauth.nim` implement resolution and the
+client flow, ported from the shape of indigo's `atproto/auth/oauth`.
+`oauth_probe.nim` drives it end to end against real servers:
+
+    handle -> DID -> PDS -> auth server -> metadata -> PAR -> authorize URL
+
+Against `bsky.social` all 15 checks pass, including a **real PAR that the
+production auth server accepts** and returns a `request_uri` for. That single
+result exercises the DPoP signature, the nonce retry and PKCE at once — a
+server-side validation no amount of local testing substitutes for.
+
+Two things worth recording:
+
+**The nonce retry is load-bearing, and the probe proves it.** A PDS rejects the
+first DPoP-signed request of a session with `400 use_dpop_nonce` and supplies a
+`DPoP-Nonce` header to retry with. Since `sendAuthRequest` retries
+transparently, the probe separately fires an unnonced request and asserts the
+rejection — otherwise a server that never demanded a nonce would look identical
+to a working retry.
+
+**Order of validation caught me out.** That check first sent a stub body and got
+`invalid_request`, not `use_dpop_nonce`: bsky.social validates request
+parameters *before* the nonce. The body has to be fully valid to observe the
+nonce requirement at all.
+
+The flow stops at the authorization URL, which is correct — the next step is a
+human granting consent in a browser. `exchangeCode` and `refresh` are
+implemented against that callback but are consequently untested.
+
 ## What this does and does not prove
 
-Proven: the cryptography and the storage layer are available to Nim, in the
-exact formats ATProto and Glean need.
+Proven: the cryptography, the storage layer, and the OAuth flow up to user
+consent all work from Nim, in the formats ATProto and real servers accept.
 
 Not proven, and still ahead:
 
-- The **OAuth protocol flow** — PAR, the authorization request, the DPoP nonce
-  retry dance (a PDS rejects the first request and returns a nonce to use).
-  Mechanical, but a lot of it.
-- **DID/handle resolution** and the PLC directory.
-- **XRPC** and the Jetstream websocket consumer (`indigo` covers both today).
+- **Token exchange and refresh** — written, but needs a browser consent to
+  exercise. This is the one place a real end-to-end test still has to happen.
+- **Session persistence** and the token-refresh lifecycle.
+- **XRPC** request signing with the DPoP-bound access token.
+- The **Jetstream** websocket consumer.
 - **CBOR/CAR** parsing for repository records.
 
-The honest read: nothing here is blocking, and the two things that could have
-been blocking are not. The remaining work is large but ordinary.
+The honest read: none of the three things that could have sunk the port did.
+What is left is protocol plumbing against well-specified formats — large, but
+ordinary.
+
+## Caveats in this code
+
+- `identity.nim` shells out to `dig` for the DNS leg of handle resolution,
+  because Nim's stdlib has no resolver. A missing `dig` degrades to the
+  HTTP `.well-known` fallback rather than failing, but a real port should bind
+  a resolver instead of depending on a binary.
+- Only public and localhost clients are supported. Confidential clients
+  (`private_key_jwt` client assertions) are not implemented; Glean uses a
+  public client today.
