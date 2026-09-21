@@ -36,3 +36,7 @@ web/.svelte-kit/
 
 # todo
 todo.md
+
+# python bytecode
+__pycache__/
+*.pyc
