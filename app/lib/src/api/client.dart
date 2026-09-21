@@ -78,7 +78,7 @@ class GleanClient {
   }) async =>
       ArticlesResponse.fromJson(await _get('/api/articles/', {
         'page': page,
-        'feed_url': feedUrl,
+        'feed': feedUrl,
         'status': status,
         'q': search,
         'category': category,
@@ -105,7 +105,7 @@ class GleanClient {
 
   Future<void> markAllRead({String? feedUrl, String? category}) =>
       _post('/api/articles/mark-all-read', form: {
-        'feed_url': ?feedUrl,
+        'feed': ?feedUrl,
         'category': ?category,
       });
 
@@ -116,26 +116,32 @@ class GleanClient {
 
   Future<Subscription> addFeed(String url, {String? category}) async {
     final j = await _post('/api/feeds/add', form: {
-      'url': url,
+      'feed_url': url,
       'category': ?category,
     });
     return Subscription.fromJson(j['subscription'] as Map<String, dynamic>);
   }
 
-  Future<Subscription> editFeed(String feedUrl, {String? category, String? title}) async {
+  Future<Subscription> editFeed(String feedUrl, {String? category}) async {
     final j = await _post('/api/feeds/edit', form: {
       'feed_url': feedUrl,
       'category': ?category,
-      'title': ?title,
     });
     return Subscription.fromJson(j['subscription'] as Map<String, dynamic>);
   }
 
   Future<void> removeFeed(String feedUrl) =>
-      _delete('/api/feeds/remove', form: {'feed_url': feedUrl});
+      _delete('/api/feeds/remove', form: {'url': feedUrl});
 
-  Future<int> uploadOpml(String opml) async =>
-      jsonInt((await _post('/api/feeds/opml/upload', form: {'opml': opml}))['added']);
+  Future<int> uploadOpml(String opml) async {
+    final res = await session.sendFile(
+      '/api/feeds/opml/upload',
+      field: 'opml',
+      filename: 'subscriptions.opml',
+      bytes: utf8.encode(opml),
+    );
+    return jsonInt(_decode(res)['added']);
+  }
 
   Future<String> downloadOpml() async {
     final res = await session.get('/api/feeds/opml/download');
@@ -148,7 +154,7 @@ class GleanClient {
   Future<void> refreshFeeds() => _post('/api/feeds/refresh');
 
   Future<void> retryFeed(String feedUrl) =>
-      _post('/api/feeds/retry', form: {'feed_url': feedUrl});
+      _post('/api/feeds/retry', form: {'url': feedUrl});
 
   Future<List<Subscription>> feedList() async =>
       jsonList((await _get('/api/feeds/list'))['subscriptions'], Subscription.fromJson);
@@ -206,22 +212,26 @@ class GleanClient {
   Future<void> dismissFeedRec(String feedUrl) =>
       _post('/api/recs/dismiss-feed', form: {'feed_url': feedUrl});
 
-  Future<void> dismissArticleRec(int articleId) =>
-      _post('/api/recs/dismiss-article', form: {'article_id': '$articleId'});
+  Future<void> dismissArticleRec(String articleUrl) =>
+      _post('/api/recs/dismiss-article', form: {'article_url': articleUrl});
 
   Future<void> dismissPersonRec(String did) =>
-      _post('/api/recs/dismiss-person', form: {'did': did});
+      _post('/api/recs/dismiss-person', form: {'target_did': did});
 
   // --- settings ---
 
   Future<List<String>> toggleLanguage(String code) async =>
       jsonStrList((await _post('/api/settings/languages/$code'))['languages']);
 
-  Future<bool> toggleExpandedView() async =>
-      jsonBool((await _post('/api/settings/expanded-view'))['expanded_view']);
+  Future<bool> setExpandedView(bool enabled) async => jsonBool(
+        (await _post('/api/settings/expanded-view',
+            form: {'expanded_view': enabled ? '1' : '0'}))['expanded_view'],
+      );
 
-  Future<bool> toggleDigestEnabled() async =>
-      jsonBool((await _post('/api/settings/digest-enabled'))['digest_enabled']);
+  Future<bool> setDigestEnabled(bool enabled) async => jsonBool(
+        (await _post('/api/settings/digest-enabled',
+            form: {'digest_enabled': enabled ? '1' : '0'}))['digest_enabled'],
+      );
 
   // --- digest ---
 

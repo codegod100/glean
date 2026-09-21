@@ -142,5 +142,21 @@ class GleanSession {
     return res;
   }
 
+  /// Multipart POST, for the endpoints that take a file rather than form
+  /// fields (OPML import uses r.FormFile).
+  Future<http.Response> sendFile(
+    String path, {
+    required String field,
+    required String filename,
+    required List<int> bytes,
+  }) async {
+    final req = http.MultipartRequest('POST', _uri(path))
+      ..headers.addAll(_headers(unsafe: true))
+      ..files.add(http.MultipartFile.fromBytes(field, bytes, filename: filename));
+    final res = await http.Response.fromStream(await _client.send(req));
+    _absorb(res);
+    return res;
+  }
+
   void close() => _client.close();
 }
