@@ -15,6 +15,7 @@ nim c -r -d:ssl oauth_probe.nim [handle]                           # the flow
 nim c -r -d:ssl xrpc_probe.nim                                     # signing
 nim c -r -d:ssl jetstream_probe.nim                                # firehose
 nim c -r -d:ssl reconnect_probe.nim                                # supervisor
+nim c -r -d:ssl store_probe.nim                                    # persistence
 ```
 
 Reusable code lives in `atproto/`; the `*_probe.nim` files are the checks.
@@ -206,6 +207,43 @@ to the initial delay, skipping jitter on the first retry. That is precisely
 the moment jitter exists for: one server restart drops every consumer at
 once, and un-jittered first retries bring them all back simultaneously.
 
+## 7. Session persistence — works
+
+`atproto/sqlite.nim` is a thin wrapper over the library the storage spike
+already proved (sqlite-vec linked in, WAL on). `atproto/store.nim` keeps the
+three things a restart must not lose, in the same tables the Go backend uses:
+`oauth_auth_requests`, `oauth_sessions`, `jetstream_cursor`. Rows hold JSON,
+as on the Go side, so adding a session field does not mean a migration.
+
+`atproto/cursor_store.nim` bridges the store and the supervisor, batching
+writes: the cursor advances on every event, often hundreds a second, and a
+synchronous write per event would make the database the bottleneck for a
+firehose. The stored cursor therefore trails the live one — which is exactly
+the gap the supervisor's rewind exists to cover.
+
+The check that earns its keep is the DPoP key. A missing row is loud; a key
+that round-trips *almost* correctly is not — every request after a restart
+would fail authentication with nothing pointing at storage. So the reloaded
+key is checked by **signing with it and verifying against the original public
+point**, with a second key as a negative control. Comparing fields, or
+re-signing and comparing bytes, would prove neither thing: ECDSA is
+randomised.
+
+Two other properties worth pinning:
+
+- Taking a pending auth request **consumes** it. An authorization code is
+  single-use, and leaving the row behind invites a replayed callback.
+- Cursors never move backwards. A late event that rewound the stored cursor
+  would rewind the subscription on the next reconnect.
+
+The public half of the key is stored rather than re-derived on load. Deriving
+it needs a curve operation, and a stored key that cannot be read back without
+one is a restart that silently drops every session.
+
+**These rows are key material.** A session holds the DPoP private key and the
+refresh token; together they are the account. The database file wants the
+protection of a password store, not of a cache.
+
 ## What this does and does not prove
 
 Proven: the cryptography, the storage layer, and the OAuth flow up to user
@@ -217,7 +255,6 @@ Not proven, and still ahead:
   exercise. This is the one place a real end-to-end test still has to happen,
   and it also covers the `invalid_token` refresh-and-retry branch of
   `xrpc.request`, which is currently unexercised.
-- **Session persistence** across restarts.
 
 ### Not needed: DAG-CBOR, CAR and the MST
 

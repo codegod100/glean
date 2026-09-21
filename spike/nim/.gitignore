@@ -6,3 +6,7 @@ oauth_probe
 xrpc_probe
 jetstream_probe
 reconnect_probe
+store_probe
+*.db
+*.db-wal
+*.db-shm

@@ -99,6 +99,31 @@ proc accessTokenHash*(accessToken: string): string =
   ## exists to prevent.
   b64u(sha256.digest(accessToken).data)
 
+proc verifyEs256*(k: P256Key, signingInput: string,
+                  sig: openArray[byte]): bool =
+  ## Verify a raw R||S signature against this key's public half.
+  ##
+  ## Mostly useful for proving a key survived a round trip: ECDSA is
+  ## randomised, so a reloaded key cannot be checked by re-signing and
+  ## comparing bytes. Signing with the reloaded key and verifying against the
+  ## original public point does establish the private scalar came back intact.
+  if sig.len != 64: return false
+  var q: array[65, byte]
+  q[0] = 0x04
+  for i in 0 ..< 32:
+    q[1 + i] = k.pubX[i]
+    q[33 + i] = k.pubY[i]
+
+  var pk: EcPublicKey
+  pk.curve = EC_secp256r1.cint
+  pk.q = cast[ptr byte](addr q[0])
+  pk.qlen = 65
+
+  let digest = sha256.digest(signingInput).data
+  ecdsaVrfyRawGetDefault()(
+    addr ecPrimeI31, unsafeAddr digest[0], digest.len.uint,
+    addr pk, unsafeAddr sig[0], sig.len.uint) == 1
+
 proc dpopProof*(k: P256Key, rng: var HmacDrbgContext, htm, htu: string,
                 nonce = "", accessToken = "", issuer = ""): string =
   ## A DPoP proof JWT (RFC 9449).
