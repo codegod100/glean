@@ -12,9 +12,10 @@ import 'package:glean_app/src/screens/home_shell.dart';
 import 'package:glean_app/src/theme.dart';
 
 /// Fake server covering just the routes the shell touches on startup.
-http.Client _fakeServer({required bool signedIn}) {
+http.Client _fakeServer({required bool signedIn, List<String>? seen}) {
   return MockClient((req) async {
     final path = req.url.path;
+    seen?.add(path);
     if (path == '/api/me') {
       return http.Response(
         jsonEncode({
@@ -89,12 +90,13 @@ http.Client _fakeServer({required bool signedIn}) {
   });
 }
 
-Future<void> _pump(WidgetTester tester, {required bool signedIn}) async {
+Future<void> _pump(WidgetTester tester,
+    {required bool signedIn, List<String>? seen}) async {
   SharedPreferences.setMockInitialValues({});
   final state = AppState(
     session: GleanSession(
       baseUrl: 'https://example.test',
-      client: _fakeServer(signedIn: signedIn),
+      client: _fakeServer(signedIn: signedIn, seen: seen),
     ),
   );
   await state.bootstrap();
@@ -127,5 +129,20 @@ void main() {
     expect(find.text('Articles'), findsWidgets);
     expect(find.text('7'), findsOneWidget);
     expect(find.text('unread'), findsOneWidget);
+  });
+
+  testWidgets('tabs do not fetch until they are opened', (tester) async {
+    final seen = <String>[];
+    await _pump(tester, signedIn: true, seen: seen);
+
+    // Home is the initial tab, so only it should have fetched. Building every
+    // tab up front would fire five requests at startup.
+    expect(seen, contains('/api/dashboard/'));
+    expect(seen.where((p) => p.startsWith('/api/recs')), isEmpty);
+    expect(seen, isNot(contains('/api/feeds/')));
+
+    await tester.tap(find.text('Feeds'));
+    await tester.pumpAndSettle();
+    expect(seen, contains('/api/feeds/'));
   });
 }
