@@ -1,0 +1,4 @@
+# nim build output
+nimcache/
+sqlite_probe
+dpop_probe
