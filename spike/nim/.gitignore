@@ -12,3 +12,5 @@ store_probe
 *.db-shm
 gleandb_probe
 stores_probe
+social_probe
+nimcache/

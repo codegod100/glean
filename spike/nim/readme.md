@@ -9,18 +9,21 @@ Run both:
 
 ```
 cd spike/nim
-nim c -r sqlite_probe.nim                                          # storage
-nim c -r dpop_probe.nim && ./dpop_probe | (cd verify && go run .)  # crypto
-nim c -r -d:ssl oauth_probe.nim [handle]                           # the flow
-nim c -r -d:ssl xrpc_probe.nim                                     # signing
-nim c -r -d:ssl jetstream_probe.nim                                # firehose
-nim c -r -d:ssl reconnect_probe.nim                                # supervisor
-nim c -r -d:ssl store_probe.nim                                    # persistence
-nim c -r -d:ssl gleandb_probe.nim                                  # database
-nim c -r -d:ssl stores_probe.nim                                   # queries
+nimble test      # everything that needs no network
+nimble testnet   # the probes that talk to real servers
+nimble testall   # both
+nimble schema    # regenerate atproto/schema.nim from the Go source
 ```
 
 Reusable code lives in `atproto/`; the `*_probe.nim` files are the checks.
+They are split by whether they touch the network: a failure against
+`bsky.social` can mean that server is having a bad day rather than that the
+port is broken, and a suite that cannot tell those apart stops being
+believed. Individual probes still run on their own:
+
+```
+nim c -r -d:ssl <name>_probe.nim
+```
 
 ## 1. sqlite-vec + FTS5 — works
 
@@ -334,6 +337,33 @@ filtering, read state, counts, search, retention, dead feeds. Not ported:
 `BatchReconcileSubscriptions`, OPML-adjacent helpers,
 `GetNextArticleID`'s navigation logic, and the several list variants the
 recommendation engine uses. They are mechanical against these patterns.
+
+## 10. Likes, annotations, follows and trending
+
+`atproto/socialstore.nim` ports `internal/db/social.go`, completing the
+database layer.
+
+Likes and annotations are ATProto records first and rows second. They are
+keyed by their `at://` URI because that is the identity the PDS owns, and
+each can arrive twice -- once from the firehose and once from a PDS sync --
+so every write is idempotent by construction rather than by checking first.
+An edit keeps the URI and changes the content, which is why annotations
+upsert rather than insert.
+
+Two details worth keeping:
+
+- The language filter always keeps `language = ''`. That means *not yet
+  classified*, not *no language*; excluding it would make new articles vanish
+  for anyone with a filter set and reappear minutes later once classified.
+- Future-dated articles sort last in trending. A feed publishing with a
+  scheduled timestamp would otherwise pin itself to the top indefinitely.
+
+The probe weights toward the destructive path. `deleteOrphanedLikes` and its
+annotation twin delete local rows the PDS no longer has, so the checks assert
+both halves: the dropped rows go, and *other* users' rows do not. The empty
+active set is called out in the code, because "you unliked everything" and
+"the fetch failed" are indistinguishable from inside the store — the caller
+has to not get there.
 
 ## What this does and does not prove
 

@@ -45,7 +45,10 @@ type
     published*: Option[DateTime]
     updated*: Option[DateTime]
 
-proc readArticle(r: Row): Article =
+proc readArticleRow*(r: Row): Article =
+  ## Exported so other stores returning the same column list can share it --
+  ## socialstore's liked-articles listing, in particular. The positional
+  ## reader is only safe while every caller selects `articleColumns`.
   Article(
     id: r.i64(0),
     feedUrl: r.str(1),
@@ -84,11 +87,11 @@ const articleFrom = """
 
 proc getArticle*(g: GleanDb, userDid: string, id: int64): Option[Article] =
   g.db.queryFirst("SELECT " & articleColumns & articleFrom & " WHERE a.id = ?",
-                  [p(userDid), p(userDid), p(id)], readArticle)
+                  [p(userDid), p(userDid), p(id)], readArticleRow)
 
 proc getArticleByUrl*(g: GleanDb, userDid, url: string): Option[Article] =
   g.db.queryFirst("SELECT " & articleColumns & articleFrom & " WHERE a.url = ?",
-                  [p(userDid), p(userDid), p(url)], readArticle)
+                  [p(userDid), p(userDid), p(url)], readArticleRow)
 
 proc listArticles*(g: GleanDb, userDid: string, filter = afAll,
                    feedUrl = "", category = "", sortOldest = false,
@@ -122,7 +125,7 @@ proc listArticles*(g: GleanDb, userDid: string, filter = afAll,
   params.add p(limit.int64)
   params.add p(offset.int64)
 
-  g.db.queryAll(sql, params, readArticle)
+  g.db.queryAll(sql, params, readArticleRow)
 
 proc searchArticles*(g: GleanDb, userDid, query: string,
                      limit = 25, offset = 0): seq[Article] =
@@ -145,7 +148,7 @@ proc searchArticles*(g: GleanDb, userDid, query: string,
     ORDER BY m.rank
     LIMIT ? OFFSET ?""",
     [p(userDid), p(userDid), p(userDid), p(query),
-     p(limit.int64), p(offset.int64)], readArticle)
+     p(limit.int64), p(offset.int64)], readArticleRow)
 
 proc batchUpsertArticles*(g: GleanDb, articles: seq[NewArticle],
                           retentionDays = 0) =
