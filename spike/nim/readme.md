@@ -186,10 +186,28 @@ Not proven, and still ahead:
   and it also covers the `invalid_token` refresh-and-retry branch of
   `xrpc.request`, which is currently unexercised.
 - **Session persistence** across restarts.
-- **CBOR/CAR** parsing for repository records — the last unexplored format,
-  needed for full-repo sync rather than the live stream.
 - **Reconnect and backoff** for a long-lived Jetstream subscription; the
   consumer reads a stream but does not yet survive the connection dropping.
+
+### Not needed: DAG-CBOR, CAR and the MST
+
+Earlier notes listed these as remaining work. That was wrong, and worth
+correcting because they are by far the largest format risk left in ATProto.
+
+Glean never parses them. `internal/atproto/sync.go` opens by saying so: it
+reconciles with `com.atproto.repo.listRecords` rather than
+`com.atproto.sync.getRepo`, because it only syncs known users, Jetstream
+covers real-time events, and every reconcile is idempotent. Reads go through
+`listRecords`/`getRecord` and writes through
+`createRecord`/`putRecord`/`deleteRecord` — all JSON.
+
+The imports confirm it. Glean uses four indigo packages — `atclient`,
+`auth/oauth`, `identity`, `syntax` — and none of `repo`, `mst`, `cbor` or
+`car`.
+
+A Nim port inherits that choice for free. Implementing DAG-CBOR, CIDs, CAR
+framing and Merkle Search Tree traversal would be real work in service of a
+code path this application does not have.
 
 The honest read: none of the three things that could have sunk the port did.
 What is left is protocol plumbing against well-specified formats — large, but
