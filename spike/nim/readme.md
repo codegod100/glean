@@ -406,6 +406,46 @@ four real feeds across two formats (Rust Blog, nim-lang, LWN, Hacker News)
 and asserts every item has a guid and a title. All four parse, 65 items
 between them, all dated and all carrying text.
 
+## 12. Fetching feeds
+
+`atproto/feedfetcher.nim` ports `internal/feed/fetcher.go`. Retries exist for
+servers that are briefly unwell -- 429 and 5xx -- and for nothing else. A 404
+will still be a 404 in a second, and bytes that do not parse will not parse
+differently on a second read.
+
+The retry policy is the substance, so the probe drives it with a scripted
+transport: 503 twice then success, a 404 that must not be retried, a 429
+naming its own delay. None of those are reproducible against a real host on
+demand.
+
+### A bug in the Go fetcher
+
+The Go retry policy does not do what it reads as doing. `executeRequest`
+returns its `*http.Response` **only on success**, so in `Fetch` the guard
+
+```go
+if resp != nil && !httpclient.IsRetryable(resp.StatusCode) {
+```
+
+can never be true when `err != nil` -- the response is always nil on the
+error path. Three things follow:
+
+- Every failure retries the full four attempts regardless of status, so a
+  permanently-404 feed costs four requests and ~7s of backoff on every
+  refresh cycle.
+- `retryBackoff`'s `Retry-After` handling is unreachable for the same reason:
+  `lastResp` is only non-nil once the function has already returned, so a
+  rate-limited server's own delay is never honoured.
+- The HTTP status is never checked at all, so an error page is handed to the
+  parser and fails there instead of failing as an HTTP error.
+
+This port checks the status, honours `Retry-After` (capped, so a server
+asking for an hour cannot hold a worker for one), and retries only what is
+worth retrying. That is a behaviour change rather than a translation, which
+is why it is written down both here and at the top of the module.
+
+Worth fixing on the Go side too; it is a handful of lines.
+
 ## What this does and does not prove
 
 Proven: the cryptography, the storage layer, and the OAuth flow up to user

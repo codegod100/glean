@@ -29,6 +29,7 @@ const networkProbes = @[
   "xrpc_probe",
   "jetstream_probe",
   "feedparser_probe",   # fixtures are offline, but it also fetches real feeds
+  "feedfetcher_probe",  # retry policy is scripted; one check hits the network
 ]
 
 proc runProbe(name: string) =
