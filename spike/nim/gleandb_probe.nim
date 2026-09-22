@@ -9,7 +9,7 @@
 ## degrades or diverges later.
 
 import std/[options, os, strformat, strutils]
-import atproto/[gleandb, schema, sqlite]
+import reader/[gleandb, schema, sqlite]
 
 var failures = 0
 
@@ -20,7 +20,7 @@ proc report(name: string, ok: bool, detail = "") =
   else: echo &"  {label}  {name}"
 
 proc cleanup(base: string) =
-  for suffix in ["_users", "_articles", "_recs"]:
+  for suffix in ["_users", "_articles"]:
     for ext in ["", "-wal", "-shm"]:
       removeFile(base & suffix & ext)
 
@@ -35,42 +35,25 @@ proc main() =
   var g = gleandb.open(base)
   defer: g.close()
 
-  report("schema statements extracted from the Go source",
-         usersSchema.len + articlesSchema.len + recsSchema.len == 44,
-         &"{usersSchema.len} + {articlesSchema.len} + {recsSchema.len}")
+  report("the schema covers the reader's tables", readerSchema.len == 15,
+         &"{readerSchema.len} statements")
 
   # --- the three databases ------------------------------------------------
   block:
     let schemas = g.attachedSchemas()
-    report("all three databases are attached",
-           "main" in schemas and "articles" in schemas and "recs" in schemas,
-           schemas.join(", "))
+    report("both databases are attached",
+           "main" in schemas and "articles" in schemas, schemas.join(", "))
     report("each is a separate file on disk",
-           fileExists(base & "_users") and fileExists(base & "_articles") and
-           fileExists(base & "_recs"))
+           fileExists(base & "_users") and fileExists(base & "_articles"))
 
   # --- pragmas ------------------------------------------------------------
   # WAL has to be set per schema: PRAGMA applies to one at a time, so setting
   # it on main leaves the others journalling the slow way.
   block:
-    for name in ["", "articles", "recs"]:
+    for name in ["", "articles"]:
       let mode = g.journalMode(name).toLowerAscii
       report(&"WAL is on for {(if name.len == 0: \"main\" else: name)}",
              mode == "wal", mode)
-
-  # --- custom SQL functions ----------------------------------------------
-  block:
-    let e = g.db.queryText("SELECT exp(1.0)")
-    report("exp() is callable from SQL",
-           e.isSome and e.get.startsWith("2.718"), e.get(""))
-    let l = g.db.queryText("SELECT log(2.718281828459045)")
-    report("log() is callable from SQL",
-           l.isSome and l.get.startsWith("1.0") or l.get("") == "1.0", l.get(""))
-    # log(0) is -inf; returning NULL keeps an ORDER BY sane.
-    report("log() of zero is NULL",
-           g.db.queryText("SELECT log(0)").isNone)
-    report("log() of a negative is NULL",
-           g.db.queryText("SELECT log(-5)").isNone)
 
   # --- schema -------------------------------------------------------------
   g.migrate()
@@ -81,10 +64,12 @@ proc main() =
       let n = g.db.queryInt(
         &"SELECT count(*) FROM {schemaName}.sqlite_master WHERE type='table'")
       n.get(0).int
-    report("users tables created", tableCount("main") >= 7, $tableCount("main"))
-    report("articles tables created", tableCount("articles") >= 7,
-           $tableCount("articles"))
-    report("recs tables created", tableCount("recs") >= 7, $tableCount("recs"))
+    # main holds only the local user now; everything that grows lives in
+    # the articles database.
+    report("the users database holds just the user table",
+           tableCount("main") == 1, $tableCount("main"))
+    report("articles holds feeds, subscriptions, articles and read state",
+           tableCount("articles") >= 5, $tableCount("articles"))
 
   # --- a real cross-database query ---------------------------------------
   # The whole point of attaching rather than opening three connections.
@@ -138,17 +123,6 @@ proc main() =
     report("FTS5 triggers follow deletes", afterDelete.isNone,
            if afterDelete.isNone: "row gone from the index"
            else: "STILL INDEXED: " & afterDelete.get)
-
-  # --- vec0 ---------------------------------------------------------------
-  block:
-    g.createEmbeddingTables(dimension = 4)
-    report("embedding tables take their dimension from config",
-           g.db.queryInt(
-             "SELECT count(*) FROM recs.sqlite_master WHERE name LIKE '%embeddings%'"
-           ).get(0) > 0)
-    # Proves sqlite-vec is registered on this connection, not just linked.
-    let ver = g.db.queryText("SELECT vec_version()")
-    report("sqlite-vec is live on the glean connection", ver.isSome, ver.get(""))
 
   echo ""
   if failures == 0:

@@ -1,11 +1,8 @@
-## A small SQLite wrapper, with sqlite-vec compiled in.
+## A small SQLite wrapper.
 ##
-## Deliberately thin: enough to prepare, bind and step, not an ORM. The
-## sqlite-vec extension is linked rather than loaded at runtime -- see
-## nim.cfg, where the SQLITE_CORE define lives, and note that getting that
-## wrong segfaults rather than erroring.
-
-{.compile: "../vendor/sqlite-vec.c".}
+## Deliberately thin: enough to prepare, bind and step, not an ORM. FTS5 is
+## used for article search and ships with the system library; nothing here
+## needs an extension.
 
 import std/options
 
@@ -51,8 +48,6 @@ proc sqlite3_changes(db: pointer): cint
 proc sqlite3_clear_bindings(s: pointer): cint
 {.pop.}
 
-proc sqlite3_vec_init(db: pointer, errMsg: ptr cstring,
-                      api: pointer): cint {.importc, cdecl.}
 
 const SQLITE_TRANSIENT = cast[pointer](-1)
 
@@ -62,7 +57,7 @@ proc check(db: pointer, rc: cint, what: string) =
   if rc notin [SQLITE_OK.cint, SQLITE_ROW.cint, SQLITE_DONE.cint]:
     raise newException(SqliteError, what & ": " & $sqlite3_errmsg(db))
 
-proc open*(path: string, withVec = true): Db =
+proc open*(path: string): Db =
   ## Open (or create) a database.
   ##
   ## WAL is set here rather than left to callers: it is what makes a reader
@@ -75,10 +70,6 @@ proc open*(path: string, withVec = true): Db =
     raise newException(SqliteError, "opening " & path & ": " & msg)
   result = Db(handle: handle)
 
-  if withVec:
-    let rc = sqlite3_vec_init(handle, nil, nil)
-    if rc != SQLITE_OK:
-      raise newException(SqliteError, "registering sqlite-vec failed")
 
   discard sqlite3_exec(handle, "PRAGMA journal_mode=WAL", nil, nil, nil)
   discard sqlite3_exec(handle, "PRAGMA synchronous=NORMAL", nil, nil, nil)

@@ -7,7 +7,7 @@
 ## returns other people's feeds, a NULL that sorts to the top.
 
 import std/[options, os, strformat, strutils, times]
-import atproto/[articlestore, feedstore, gleandb, sqlite]
+import reader/[articlestore, feedstore, gleandb, sqlite]
 
 var failures = 0
 

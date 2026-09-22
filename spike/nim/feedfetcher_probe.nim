@@ -9,7 +9,7 @@
 ## against a real host on demand.
 
 import std/[strformat, strutils, tables]
-import atproto/[feedfetcher, feedparser]
+import reader/[feedfetcher, feedparser]
 
 var failures = 0
 

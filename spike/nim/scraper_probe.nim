@@ -9,7 +9,7 @@
 ## page that renders correctly proves nothing about what was stripped.
 
 import std/[htmlparser, httpclient, options, strformat, strutils, xmltree]
-import atproto/[feedparser, scraper]
+import reader/[feedparser, scraper]
 
 var failures = 0
 

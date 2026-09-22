@@ -26,8 +26,6 @@ type
     published*: Option[DateTime]
     updated*: Option[DateTime]
     isRead*: bool
-    likeCount*: int
-    hasLiked*: bool
 
   ArticleFilter* = enum
     afAll = "all"
@@ -64,8 +62,6 @@ proc readArticleRow*(r: Row): Article =
     published: parseSqliteTime(r.str(11)),
     updated: parseSqliteTime(r.str(12)),
     isRead: r.b(13),
-    likeCount: r.i(14),
-    hasLiked: r.b(15),
   )
 
 ## The column list is shared so every listing returns the same shape and
@@ -75,10 +71,7 @@ const articleColumns = """
   a.id, a.feed_url, COALESCE(f.title, a.feed_url), f.favicon_url,
   a.guid, a.title, a.url, a.author, a.summary, a.content, a.full_content,
   a.published, a.updated,
-  COALESCE(r.is_read, 0),
-  (SELECT count(*) FROM articles.likes l WHERE l.article_url = a.url),
-  EXISTS(SELECT 1 FROM articles.likes l
-         WHERE l.article_url = a.url AND l.author_did = ?)"""
+  COALESCE(r.is_read, 0)"""
 
 const articleFrom = """
   FROM articles.articles a
@@ -87,11 +80,11 @@ const articleFrom = """
 
 proc getArticle*(g: GleanDb, userDid: string, id: int64): Option[Article] =
   g.db.queryFirst("SELECT " & articleColumns & articleFrom & " WHERE a.id = ?",
-                  [p(userDid), p(userDid), p(id)], readArticleRow)
+                  [p(userDid), p(id)], readArticleRow)
 
 proc getArticleByUrl*(g: GleanDb, userDid, url: string): Option[Article] =
   g.db.queryFirst("SELECT " & articleColumns & articleFrom & " WHERE a.url = ?",
-                  [p(userDid), p(userDid), p(url)], readArticleRow)
+                  [p(userDid), p(url)], readArticleRow)
 
 proc listArticles*(g: GleanDb, userDid: string, filter = afAll,
                    feedUrl = "", category = "", sortOldest = false,
@@ -101,7 +94,7 @@ proc listArticles*(g: GleanDb, userDid: string, filter = afAll,
     JOIN articles.subscriptions s
       ON s.feed_url = a.feed_url AND s.user_did = ?
     WHERE 1=1"""
-  var params = @[p(userDid), p(userDid), p(userDid)]
+  var params = @[p(userDid), p(userDid)]
 
   case filter
   of afUnread: sql &= " AND COALESCE(r.is_read, 0) = 0"
@@ -147,7 +140,7 @@ proc searchArticles*(g: GleanDb, userDid, query: string,
           WHERE articles_fts MATCH ?) m ON m.rowid = a.id
     ORDER BY m.rank
     LIMIT ? OFFSET ?""",
-    [p(userDid), p(userDid), p(userDid), p(query),
+    [p(userDid), p(userDid), p(query),
      p(limit.int64), p(offset.int64)], readArticleRow)
 
 proc batchUpsertArticles*(g: GleanDb, articles: seq[NewArticle],

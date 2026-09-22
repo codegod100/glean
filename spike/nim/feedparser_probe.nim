@@ -8,7 +8,7 @@
 ## the wild are stranger than any fixture.
 
 import std/[httpclient, options, sequtils, strformat, strutils]
-import atproto/feedparser
+import reader/feedparser
 
 var failures = 0
 

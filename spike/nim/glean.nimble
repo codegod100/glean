@@ -1,34 +1,21 @@
 version       = "0.1.0"
 author        = "glean"
-description   = "Nim port spike for glean: atproto, storage and the database layer"
+description   = "glean: a small RSS reader"
 license       = "MIT"
 srcDir        = "."
 
 requires "nim >= 2.2.0"
-requires "bearssl"
-requires "nimcrypto"
-requires "chronos"
-requires "websock"
 
 # Probes that touch only this machine. Safe to run anywhere, including CI.
 const offlineProbes = @[
-  "sqlite_probe",
-  "dpop_probe",
-  "store_probe",
   "gleandb_probe",
   "stores_probe",
-  "social_probe",
-  "cluster_probe",
-  "reconnect_probe",   # uses a local websocket server, not the network
 ]
 
 # Probes that talk to real servers. Kept separate because a failure here can
 # mean "bsky.social is having a bad day" rather than "the port is broken", and
 # a test suite that cannot tell those apart stops being believed.
 const networkProbes = @[
-  "oauth_probe",
-  "xrpc_probe",
-  "jetstream_probe",
   "feedparser_probe",   # fixtures are offline, but it also fetches real feeds
   "feedfetcher_probe",  # retry policy is scripted; one check hits the network
   "scraper_probe",      # fixtures are offline; one check fetches a real article
@@ -58,5 +45,5 @@ task build, "Compile every module without running anything":
     exec "nim c --hints:off -d:ssl -c " & probe & ".nim"
   echo "\nEverything compiles."
 
-task schema, "Regenerate atproto/schema.nim from the Go source":
+task schema, "Regenerate reader/schema.nim from the Go source":
   exec "python3 tools/extract_schema.py"

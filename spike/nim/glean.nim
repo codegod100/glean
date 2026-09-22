@@ -12,7 +12,7 @@
 
 import std/[asyncdispatch, asynchttpserver, httpclient, json, options, os,
             strformat, strutils, uri]
-import atproto/[articlestore, feedfetcher, feedparser, feedstore, gleandb,
+import reader/[articlestore, feedfetcher, feedparser, feedstore, gleandb,
                 scraper, sqlite]
 
 const
