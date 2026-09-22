@@ -151,9 +151,10 @@ def _snapshot_loop(stop: threading.Event) -> None:
     # Single writer: SQLite tolerates exactly one process writing these files,
     # and the snapshot scheme assumes one container owns the data.
     max_containers=1,
-    # Glean's background workers (Jetstream consumer, PDS sync, clustering,
-    # feed fetch) only run while a container is alive, so keep one alive.
-    min_containers=1,
+    # Scale to zero when idle: Glean's background workers (Jetstream consumer,
+    # PDS sync, clustering, feed fetch) only run while a container is alive, so
+    # they pause between requests and resume on the next one.
+    min_containers=0,
     scaledown_window=1200,
     timeout=24 * 60 * 60,
     cpu=2,
