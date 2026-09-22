@@ -33,9 +33,12 @@ const
   SQLITE_UTF8 = 1.cint
   SQLITE_DETERMINISTIC = 0x000000800.cint
 
-# Registered because the Go connection registers them. Nothing in the current
-# SQL calls either -- they exist so a scoring query can decay a weight
-# exponentially without pulling the rows into the application first.
+# SQLite ships maths functions only when built with
+# SQLITE_ENABLE_MATH_FUNCTIONS, which the library here is not, so these are
+# registered exactly as the Go connection registers them. They are not
+# optional: the clustering SQL calls EXP and LOG in seven places for time
+# decay and popularity normalisation, and without them every recommendation
+# query fails at runtime rather than at startup.
 proc sqlExp(ctx: pointer, n: cint, args: ptr UncheckedArray[pointer])
            {.cdecl.} =
   if n != 1:

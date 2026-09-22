@@ -18,6 +18,7 @@ const offlineProbes = @[
   "gleandb_probe",
   "stores_probe",
   "social_probe",
+  "cluster_probe",
   "reconnect_probe",   # uses a local websocket server, not the network
 ]
 

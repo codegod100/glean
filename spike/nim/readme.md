@@ -264,9 +264,16 @@ worth knowing: `PRAGMA` applies to one database at a time, so setting WAL on
 all three rather than trusting the call.
 
 `exp()` and `log()` are registered as SQL functions, as the Go connection
-does. Nothing in the current SQL calls either; they exist so a scoring query
-can decay a weight without pulling rows into the application. `log()` returns
-NULL for zero and negatives, since `-inf` and NaN both poison an `ORDER BY`.
+does, and they are load-bearing: the clustering SQL calls `EXP` and `LOG` in
+seven places for time decay and popularity normalisation. SQLite only ships
+maths functions when built with `SQLITE_ENABLE_MATH_FUNCTIONS`, so without
+these registrations every recommendation query fails at runtime rather than
+at startup.
+
+`log()` returns NULL for zero and negatives where Go's `math.Log` returns
+`-inf` and NaN. The call sites all pass `1 + count`, so the argument is never
+below 1 and the two agree in practice -- but it is a divergence, noted here
+rather than left to be found.
 
 **The schema is extracted, not retyped.** `tools/extract_schema.py` pulls all
 44 DDL statements out of `internal/db/db.go` into `atproto/schema.nim`.
@@ -484,6 +491,44 @@ the feed's own summary.
 The live check takes its URL from the Rust blog's feed rather than
 hard-coding one, after a hard-coded guess 404'd -- a probe that rots when
 someone reorganises their permalinks is worse than no probe.
+
+## 14. Similarity and scoring
+
+`atproto/cluster.nim` ports the similarity computations from
+`internal/cluster/jaccard.go` and the pure helpers from `scoring.go`.
+
+Both similarities are precomputed on a schedule and staged into a temp table
+before being swapped in, so the expensive pass holds no lock on the live
+table and readers keep seeing the previous generation rather than an empty
+one.
+
+Feed similarity is time-decayed, `exp(-0.023 * days)` -- a half-life of about
+a month. Without it a long-lived account's earliest subscriptions dominate
+its recommendations forever. User similarity over *subscriptions* is
+deliberately undecayed, because a subscription is a standing choice rather
+than an event; shared *likes* are events, so those decay on both sides.
+
+Recommendations have no obviously correct answer, so the probe checks
+properties rather than values: that decay decays, that each pair is stored
+once, that recomputing replaces rather than accumulates, that normalisation
+of an all-equal set does not produce NaN, and that `samplePeople` reserves
+half its slots for people the reader does *not* follow -- ranking purely by
+similarity returns the network they already have, which is not discovery.
+
+### A bug inherited from the Go implementation
+
+`common_likes` is computed as `CAST(SUM(decay * decay) AS INTEGER)`. Each
+decay factor is at most 1, so their product is always just under it: a pair
+sharing one recent like sums to 0.9999 and **truncates to 0**. Two shared
+likes store 1. The number is shown to readers as the reason for a
+recommendation -- "N shared likes" -- so a real overlap reads as none.
+
+This port uses `ROUND` instead. Worth fixing on the Go side too.
+
+The probe caught it only because the assertion looked *vacuous*: both the
+recent and the stale pair returned 0, so "recent >= old" passed while
+proving nothing. A test that passes for the wrong reason is worse than one
+that fails.
 
 ## What this does and does not prove
 
