@@ -16,3 +16,4 @@ social_probe
 nimcache/
 feedparser_probe
 feedfetcher_probe
+scraper_probe
