@@ -3,9 +3,18 @@
 ##   nim c -r -d:ssl glean.nim
 ##   GLEAN_DB=~/.local/share/glean/db GLEAN_PORT=8080 ./glean
 ##
-## Single user, no accounts, no auth. It runs on your machine and reads your
-## feeds. That assumption is what keeps this a few hundred lines instead of a
+## Single user, no accounts. It runs on your machine and reads your feeds,
+## and that assumption is what keeps this a few hundred lines instead of a
 ## few thousand: no sessions, no CSRF, no per-user scoping, no ATProto.
+##
+## GLEAN_TOKEN puts a shared secret in front of everything, which is what
+## makes it safe anywhere but loopback -- `/feeds` and `/fetch-content` will
+## fetch any URL handed to them, so an open instance is an SSRF proxy as well
+## as someone else's feed list. Unset, there is no gate at all and the local
+## case stays exactly as simple as it was.
+##
+## GLEAN_WEB points at a directory of static files (a Flutter web build) to
+## serve instead of the built-in page.
 ##
 ## The pieces underneath -- fetching, parsing, storage, search, full-text
 ## extraction -- are the same modules the larger port built and tested.
@@ -28,6 +37,34 @@ const
 
 type Reader = ref object
   db: GleanDb
+  token: string    ## empty disables the gate entirely
+  webRoot: string  ## empty serves the built-in page
+
+proc cookieValue(header, name: string): string =
+  for part in header.split(';'):
+    let kv = part.strip()
+    let i = kv.find('=')
+    if i > 0 and kv[0 ..< i] == name: return kv[i + 1 .. ^1]
+  ""
+
+proc constantTimeEq(a, b: string): bool =
+  ## Compare without leaking where the first difference is. A check that
+  ## returns early is an oracle for recovering the token a byte at a time.
+  if a.len != b.len: return false
+  var diff = 0'u8
+  for i in 0 ..< a.len:
+    diff = diff or (a[i].uint8 xor b[i].uint8)
+  diff == 0
+
+proc presentedToken(req: Request, queryKey: string): string =
+  ## Header first, then ?key=, then the cookie ?key= sets.
+  ##
+  ## Three ways because three callers: a native client sends a header, a
+  ## person opens a link, and the browser then has a cookie.
+  let h = req.headers.getOrDefault("X-Glean-Token").string
+  if h.len > 0: return h
+  if queryKey.len > 0: return queryKey
+  cookieValue(req.headers.getOrDefault("Cookie").string, "glean_token")
 
 proc jsonResponse(req: Request, code: HttpCode, node: JsonNode) {.async.} =
   await req.respond(code, $node, newHttpHeaders({
@@ -38,6 +75,48 @@ proc jsonResponse(req: Request, code: HttpCode, node: JsonNode) {.async.} =
 
 proc fail(req: Request, code: HttpCode, msg: string) {.async.} =
   await jsonResponse(req, code, %*{"error": msg})
+
+proc contentTypeFor(path: string): string =
+  ## Enough types for a Flutter web build. A wrong type here is not cosmetic:
+  ## a browser will refuse to execute JavaScript served as text/plain.
+  let ext = path.splitFile.ext.toLowerAscii
+  case ext
+  of ".html": "text/html; charset=utf-8"
+  of ".js", ".mjs": "text/javascript; charset=utf-8"
+  of ".css": "text/css; charset=utf-8"
+  of ".json": "application/json"
+  of ".wasm": "application/wasm"
+  of ".png": "image/png"
+  of ".jpg", ".jpeg": "image/jpeg"
+  of ".svg": "image/svg+xml"
+  of ".ico": "image/x-icon"
+  of ".woff2": "font/woff2"
+  of ".woff": "font/woff"
+  of ".ttf": "font/ttf"
+  of ".otf": "font/otf"
+  of ".map": "application/json"
+  else: "application/octet-stream"
+
+proc serveStatic(r: Reader, req: Request, rel: string): Future[bool] {.async.} =
+  ## Serve `rel` from the web root, if it is there. Returns false when it is
+  ## not, so the caller can fall through.
+  if r.webRoot.len == 0: return false
+  # Resolve and confirm the result is still inside the root: "../" in a
+  # request path is how a static file server turns into a file server for
+  # the whole disk.
+  let full = absolutePath(r.webRoot / rel)
+  let root = absolutePath(r.webRoot)
+  if not full.startsWith(root) or not fileExists(full): return false
+  await req.respond(Http200, readFile(full),
+                    newHttpHeaders({"Content-Type": contentTypeFor(full)}))
+  true
+
+proc serveApp(r: Reader, req: Request) {.async.} =
+  ## The client: a Flutter web build when one is configured, otherwise the
+  ## page baked into the binary.
+  if await serveStatic(r, req, "index.html"): return
+  await req.respond(Http200, IndexHtml,
+                    newHttpHeaders({"Content-Type": "text/html; charset=utf-8"}))
 
 proc toJson(a: Article): JsonNode =
   %*{
@@ -120,12 +199,27 @@ proc handle(r: Reader, req: Request) {.async.} =
     else:
       try: parseInt(raw) except ValueError: fallback
 
+  # The gate, before anything reads the database or fetches a URL.
+  if r.token.len > 0:
+    if not constantTimeEq(presentedToken(req, param("key")), r.token):
+      await fail(req, Http401, "unauthorized")
+      return
+    # Arriving with ?key= means a person followed a link; remember it so the
+    # rest of the app's requests carry it without the token sitting in every
+    # URL (and in the browser history, and in any Referer it sends).
+    if param("key").len > 0:
+      await req.respond(Http303, "", newHttpHeaders({
+        "Location": "/",
+        "Set-Cookie": "glean_token=" & r.token &
+                      "; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000",
+      }))
+      return
+
   case req.reqMethod
   of HttpGet:
     case segs[0]
     of "":
-      await req.respond(Http200, IndexHtml,
-                        newHttpHeaders({"Content-Type": "text/html; charset=utf-8"}))
+      await serveApp(r, req)
     of "health":
       await jsonResponse(req, Http200, %*{"ok": true})
 
@@ -166,7 +260,9 @@ proc handle(r: Reader, req: Request) {.async.} =
       await jsonResponse(req, Http200,
                          %*{"count": r.db.getUnreadCount(LocalUser, "", "")})
     else:
-      await fail(req, Http404, "not found")
+      # Not an API route: it may be an asset of the web client.
+      if not await serveStatic(r, req, path):
+        await fail(req, Http404, "not found")
 
   of HttpPost:
     case segs[0]
@@ -250,9 +346,24 @@ proc main() {.async.} =
   var db = gleandb.open(dbPath)
   db.migrate()
   db.db.run("INSERT OR IGNORE INTO users (did) VALUES (?)", p(LocalUser))
-  let reader = Reader(db: db)
+
+  let token = getEnv("GLEAN_TOKEN")
+  var webRoot = getEnv("GLEAN_WEB")
+  if webRoot.len > 0 and not dirExists(webRoot):
+    # Failing loudly beats silently serving the fallback page and leaving
+    # someone wondering why their client never updated.
+    quit(&"GLEAN_WEB points at {webRoot}, which is not a directory")
+
+  let reader = Reader(db: db, token: token, webRoot: webRoot)
 
   echo &"glean reading from {dbPath}"
+  if webRoot.len > 0: echo &"serving the client from {webRoot}"
+  if token.len > 0:
+    echo "token required: append ?key=… once to set the cookie"
+  else:
+    # Worth saying out loud, because the difference between this and an open
+    # instance on a public address is the whole of the security model.
+    echo "no token set — anyone who can reach this port has full access"
   echo &"open http://127.0.0.1:{port}"
 
   var server = newAsyncHttpServer()
@@ -264,7 +375,11 @@ proc main() {.async.} =
   proc cb(req: Request) {.async, gcsafe.} =
     {.cast(gcsafe).}:
       await reader.handle(req)
-  await server.serve(Port(port), cb, address = "127.0.0.1")
+  # Loopback unless a token guards it. Modal and other containers need a
+  # listener on all interfaces, and requiring the token for that is what
+  # keeps "reachable" from meaning "open".
+  let address = if token.len > 0: "0.0.0.0" else: "127.0.0.1"
+  await server.serve(Port(port), cb, address = address)
 
 when isMainModule:
   waitFor main()

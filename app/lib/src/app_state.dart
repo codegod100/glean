@@ -7,12 +7,22 @@ import 'models/models.dart';
 ///   flutter run --dart-define=GLEAN_BASE_URL=http://10.0.2.2:8080
 ///
 /// 10.0.2.2 is how the Android emulator reaches the host's loopback; a real
-/// device needs the machine's LAN address, and the server has no auth, so
-/// only do that on a network you trust.
+/// device needs the machine's LAN address.
+///
+/// The web build is served *by* the reader, so it leaves this empty and uses
+/// relative paths: same origin, which means no CORS preflight and the
+/// reader's own cookie on every request.
 const kDefaultBaseUrl = String.fromEnvironment(
   'GLEAN_BASE_URL',
   defaultValue: 'http://127.0.0.1:8080',
 );
+
+/// Shared secret, for a reader running with GLEAN_TOKEN set.
+///
+/// Empty by default, which is right for a local reader and for the web build
+/// served by the reader itself -- there the browser already holds the cookie
+/// the reader set, and same-origin requests carry it automatically.
+const kToken = String.fromEnvironment('GLEAN_TOKEN', defaultValue: '');
 
 /// Feed list and unread counts, shared across screens.
 ///
@@ -20,8 +30,11 @@ const kDefaultBaseUrl = String.fromEnvironment(
 /// filters differ and a shared list would be wrong for whichever screen did
 /// not set them.
 class AppState extends ChangeNotifier {
-  AppState({String baseUrl = kDefaultBaseUrl, GleanClient? client})
-      : client = client ?? GleanClient(baseUrl: baseUrl);
+  AppState({
+    String baseUrl = kDefaultBaseUrl,
+    String token = kToken,
+    GleanClient? client,
+  }) : client = client ?? GleanClient(baseUrl: baseUrl, token: token);
 
   final GleanClient client;
 
