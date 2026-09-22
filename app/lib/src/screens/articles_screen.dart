@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../api/client.dart';
 import '../app_state.dart';
@@ -6,7 +7,6 @@ import '../models/models.dart';
 import '../theme.dart';
 import '../widgets/article_tile.dart';
 import '../widgets/common.dart';
-import 'article_screen.dart';
 
 /// The reading list, scoped by the feed selected in the drawer.
 class ArticlesScreen extends StatefulWidget {
@@ -73,16 +73,24 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
   }
 
   Future<void> _open(Article a) async {
-    // Read the state up front: after the await the element may be gone, and
-    // a lint about context across an async gap is pointing at a real one.
     final app = AppScope.read(context);
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ArticleScreen(articleId: a.id)),
-    );
-    if (!mounted || a.isRead) return;
-    // Opening marks it read server-side.
-    setState(() => _patched[a.id] = a.copyWith(isRead: true));
-    app.adjustUnread(-1);
+    final uri = Uri.tryParse(a.url);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      showToast(context, 'This article does not have a valid link.');
+      return;
+    }
+    if (!await launchUrl(
+      uri,
+      mode: LaunchMode.platformDefault,
+      webOnlyWindowName: '_blank',
+    )) {
+      if (mounted) showToast(context, 'Could not open the link.');
+      return;
+    }
+    if (mounted && !a.isRead) {
+      setState(() => _patched[a.id] = a.copyWith(isRead: true));
+      app.adjustUnread(-1);
+    }
   }
 
   @override
