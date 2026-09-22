@@ -1,11 +1,11 @@
 {
-    "name": "glean_app",
-    "short_name": "glean_app",
+    "name": "Pulseboard",
+    "short_name": "Pulseboard",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "A personal feed reader.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

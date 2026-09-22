@@ -5,17 +5,17 @@ import 'src/screens/home_shell.dart';
 import 'src/theme.dart';
 
 void main() {
-  runApp(const GleanApp());
+  runApp(const PulseboardApp());
 }
 
-class GleanApp extends StatefulWidget {
-  const GleanApp({super.key});
+class PulseboardApp extends StatefulWidget {
+  const PulseboardApp({super.key});
 
   @override
-  State<GleanApp> createState() => _GleanAppState();
+  State<PulseboardApp> createState() => _PulseboardAppState();
 }
 
-class _GleanAppState extends State<GleanApp> {
+class _PulseboardAppState extends State<PulseboardApp> {
   final _state = AppState();
 
   @override
@@ -36,7 +36,7 @@ class _GleanAppState extends State<GleanApp> {
     return AppScope(
       state: _state,
       child: MaterialApp(
-        title: 'glean',
+        title: 'Pulseboard',
         debugShowCheckedModeBanner: false,
         theme: gleanTheme(Brightness.light),
         darkTheme: gleanTheme(Brightness.dark),
@@ -45,5 +45,4 @@ class _GleanAppState extends State<GleanApp> {
     );
   }
 }
-
 
