@@ -1,7 +1,7 @@
 ## Checks the three-database layout, the schema, and the behaviour that
 ## depends on both.
 ##
-##   nim c -r -d:ssl gleandb_probe.nim
+##   nim c -r -d:ssl pulseboarddb_probe.nim
 ##
 ## Most of this is about things that fail quietly. An ATTACH that did not
 ## happen, a pragma that did not take, an FTS index whose triggers never fire
@@ -9,7 +9,7 @@
 ## degrades or diverges later.
 
 import std/[options, os, strformat, strutils]
-import reader/[gleandb, schema, sqlite]
+import reader/[pulseboarddb, schema, sqlite]
 
 var failures = 0
 
@@ -25,14 +25,14 @@ proc cleanup(base: string) =
       removeFile(base & suffix & ext)
 
 proc main() =
-  echo "Glean database layer probe"
+  echo "Pulseboard database layer probe"
   echo ""
 
-  let base = getTempDir() / "glean_db_probe"
+  let base = getTempDir() / "pulseboard_db_probe"
   cleanup(base)
   defer: cleanup(base)
 
-  var g = gleandb.open(base)
+  var g = pulseboarddb.open(base)
   defer: g.close()
 
   report("the schema covers the reader's tables", readerSchema.len == 15,
@@ -126,7 +126,7 @@ proc main() =
 
   echo ""
   if failures == 0:
-    echo "RESULT: the database layer matches Glean's layout and behaviour."
+    echo "RESULT: the database layer matches Pulseboard's layout and behaviour."
   else:
     echo &"RESULT: {failures} check(s) failed."
     quit 1

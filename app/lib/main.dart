@@ -38,8 +38,8 @@ class _PulseboardAppState extends State<PulseboardApp> {
       child: MaterialApp(
         title: 'Pulseboard',
         debugShowCheckedModeBanner: false,
-        theme: gleanTheme(Brightness.light),
-        darkTheme: gleanTheme(Brightness.dark),
+        theme: pulseboardTheme(Brightness.light),
+        darkTheme: pulseboardTheme(Brightness.dark),
         home: const HomeShell(),
       ),
     );

@@ -1,14 +1,14 @@
-# glean — a small RSS reader
+# pulseboard — a small RSS reader
 
 One binary, one SQLite database, no accounts.
 
 ```
-nim c -d:ssl glean.nim
-./glean
+nim c -d:ssl pulseboard.nim
+./pulseboard
 ```
 
 Then open <http://127.0.0.1:8080>. The database lives under
-`~/.local/share/glean/`; override with `GLEAN_PORT` and `GLEAN_DB`.
+`~/.local/share/pulseboard/`; override with `PULSEBOARD_PORT` and `PULSEBOARD_DB`.
 
 ## The interface
 
@@ -77,7 +77,7 @@ Six modules under `reader/`:
 | `feedparser`  | RSS 2.0, RDF, Atom and JSON Feed |
 | `scraper`     | readability-style extraction, output sanitised |
 | `sqlite`      | a thin wrapper: prepare, bind, step, transactions |
-| `gleandb`     | two attached databases and the schema |
+| `pulseboarddb`     | two attached databases and the schema |
 | `feedstore` / `articlestore` | the queries |
 
 Each carries its own checks:

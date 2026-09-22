@@ -172,7 +172,7 @@ proc isNull*(r: Row, col: int): bool =
   sqlite3_column_type(r.stmt, col.cint) == SQLITE_NULL
 
 proc str*(r: Row, col: int): string =
-  ## NULL reads as "". Most of Glean's text columns are nullable but mean the
+  ## NULL reads as "". Most of Pulseboard's text columns are nullable but mean the
   ## empty string, and the Go side collapses them the same way at the wire
   ## boundary (see nullStr in internal/server/api.go).
   if r.isNull(col): return ""

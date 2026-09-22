@@ -108,7 +108,7 @@ class _FeedManagerScreenState extends State<FeedManagerScreen> {
   @override
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
-    final c = GleanColors.of(context);
+    final c = PulseboardColors.of(context);
     final filter = _filter.text.trim().toLowerCase();
     final feeds = app.feeds.where((feed) {
       return filter.isEmpty ||

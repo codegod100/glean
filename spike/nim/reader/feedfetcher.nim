@@ -48,7 +48,7 @@ type
 const
   AcceptFeed* = "application/xml,application/atom+xml,application/rss+xml," &
                 "application/rdf+xml,application/feed+json,text/html;q=0.9"
-  DefaultUserAgent* = "glean-nim/0.1"
+  DefaultUserAgent* = "pulseboard-nim/0.1"
 
 proc defaultConfig*(): FetchConfig =
   FetchConfig(

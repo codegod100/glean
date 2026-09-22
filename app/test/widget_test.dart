@@ -5,10 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-import 'package:glean_app/src/api/client.dart';
-import 'package:glean_app/src/app_state.dart';
-import 'package:glean_app/src/screens/home_shell.dart';
-import 'package:glean_app/src/theme.dart';
+import 'package:pulseboard_app/src/api/client.dart';
+import 'package:pulseboard_app/src/app_state.dart';
+import 'package:pulseboard_app/src/screens/home_shell.dart';
+import 'package:pulseboard_app/src/theme.dart';
 
 /// A stand-in for the reader, covering the routes the shell touches.
 http.Client fakeReader({List<String>? seen, bool empty = false}) {
@@ -66,14 +66,14 @@ http.Client fakeReader({List<String>? seen, bool empty = false}) {
 Future<AppState> pump(WidgetTester tester,
     {List<String>? seen, bool empty = false}) async {
   final state = AppState(
-    client: GleanClient(
+    client: PulseboardClient(
         baseUrl: 'https://reader.test',
         client: fakeReader(seen: seen, empty: empty)),
   );
   await tester.pumpWidget(AppScope(
     state: state,
     child: MaterialApp(
-      theme: gleanTheme(Brightness.light),
+      theme: pulseboardTheme(Brightness.light),
       home: const HomeShell(),
     ),
   ));

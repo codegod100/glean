@@ -29,14 +29,14 @@ import modal
 
 REPO = pathlib.Path(__file__).parent.parent
 
-APP_NAME = "glean-reader"
+APP_NAME = "pulseboard"
 PORT = 8080
-PUBLIC_URL = "https://codegod100--glean-reader-serve.modal.run"
+PUBLIC_URL = "https://codegod100--pulseboard-serve.modal.run"
 
 VOLUME_PATH = "/data"
 SNAPSHOT_DIR = f"{VOLUME_PATH}/db"
 LIVE_DIR = "/livedb"
-DB_BASE = f"{LIVE_DIR}/glean"
+DB_BASE = f"{LIVE_DIR}/pulseboard"
 
 # The reader opens <base>_users and attaches <base>_articles.
 DB_SUFFIXES = ("_users", "_articles")
@@ -57,28 +57,28 @@ image = (
         REPO / "spike" / "nim",
         remote_path="/src",
         copy=True,
-        ignore=["nimcache", "glean", "*_probe", "*.db*"],
+        ignore=["nimcache", "pulseboard", "*_probe", "*.db*"],
     )
     # The Flutter web build is committed output rather than built here:
     # installing Flutter in the image would add gigabytes and minutes for
     # something the developer machine has already produced.
     .add_local_dir(REPO / "app" / "build" / "web", remote_path="/web", copy=True)
-    .run_commands("cd /src && nim c -d:release -d:ssl --hints:off -o:/usr/local/bin/glean glean.nim")
+    .run_commands("cd /src && nim c -d:release -d:ssl --hints:off -o:/usr/local/bin/pulseboard pulseboard.nim")
 )
 
-volume = modal.Volume.from_name("glean-reader-data", create_if_missing=True)
+volume = modal.Volume.from_name("pulseboard-data", create_if_missing=True)
 
-# GLEAN_TOKEN. Without it the reader binds loopback and Modal's proxy reaches
+# PULSEBOARD_TOKEN. Without it the reader binds loopback and Modal's proxy reaches
 # nothing, so this is required rather than optional:
-#   modal secret create glean-reader GLEAN_TOKEN="$(openssl rand -hex 24)"
-secret = modal.Secret.from_name("glean-reader")
+#   modal secret create pulseboard PULSEBOARD_TOKEN="$(openssl rand -hex 24)"
+secret = modal.Secret.from_name("pulseboard")
 
 app = modal.App(APP_NAME)
 
 
 @app.function(image=image, secrets=[secret], timeout=300)
 def import_opml(opml: str) -> str:
-    """Import a backup through the live API without revealing GLEAN_TOKEN.
+    """Import a backup through the live API without revealing PULSEBOARD_TOKEN.
 
     Run with ``modal run deploy/modal_app.py::import_opml --opml "$(<backup.opml)"``.
     Keeping this as a Modal function means only workspace members can invoke
@@ -87,11 +87,11 @@ def import_opml(opml: str) -> str:
     from urllib.parse import urlencode
     from urllib.request import Request, urlopen
 
-    token = os.environ["GLEAN_TOKEN"]
+    token = os.environ["PULSEBOARD_TOKEN"]
     request = Request(
         f"{PUBLIC_URL}/opml",
         data=urlencode({"opml": opml}).encode(),
-        headers={"X-Glean-Token": token},
+        headers={"X-Pulseboard-Token": token},
         method="POST",
     )
     with urlopen(request, timeout=240) as response:
@@ -103,7 +103,7 @@ def inspect_feeds() -> str:
     """Return live feed and unread-article data for a recovery check."""
     from urllib.request import Request, urlopen
 
-    headers = {"X-Glean-Token": os.environ["GLEAN_TOKEN"]}
+    headers = {"X-Pulseboard-Token": os.environ["PULSEBOARD_TOKEN"]}
     results = {}
     for path in ("/feeds", "/articles?status=unread&limit=5"):
         with urlopen(Request(f"{PUBLIC_URL}{path}", headers=headers), timeout=50) as response:
@@ -132,7 +132,7 @@ def _snapshot_once() -> None:
         subprocess.run(
             ["sqlite3", live, f"VACUUM INTO '{staged}'"], check=True, capture_output=True
         )
-        shutil.copy2(staged, f"{SNAPSHOT_DIR}/glean{suffix}")
+        shutil.copy2(staged, f"{SNAPSHOT_DIR}/pulseboard{suffix}")
         os.remove(staged)
     volume.commit()
 
@@ -140,10 +140,10 @@ def _snapshot_once() -> None:
 def _restore() -> None:
     os.makedirs(LIVE_DIR, exist_ok=True)
     for suffix in DB_SUFFIXES:
-        snap = f"{SNAPSHOT_DIR}/glean{suffix}"
+        snap = f"{SNAPSHOT_DIR}/pulseboard{suffix}"
         if os.path.exists(snap):
             shutil.copy2(snap, f"{DB_BASE}{suffix}")
-            print(f"[glean] restored {snap}", flush=True)
+            print(f"[pulseboard] restored {snap}", flush=True)
 
 
 def _snapshot_loop(stop: threading.Event) -> None:
@@ -151,7 +151,7 @@ def _snapshot_loop(stop: threading.Event) -> None:
         try:
             _snapshot_once()
         except Exception as exc:  # a failed snapshot must not kill the server
-            print(f"[glean] snapshot failed: {exc}", file=sys.stderr, flush=True)
+            print(f"[pulseboard] snapshot failed: {exc}", file=sys.stderr, flush=True)
 
 
 @app.function(
@@ -170,16 +170,16 @@ def serve() -> None:
     _restore()
 
     env = dict(os.environ)
-    env["GLEAN_DB"] = DB_BASE
-    env["GLEAN_PORT"] = str(PORT)
-    env["GLEAN_WEB"] = "/web"
-    if not env.get("GLEAN_TOKEN"):
+    env["PULSEBOARD_DB"] = DB_BASE
+    env["PULSEBOARD_PORT"] = str(PORT)
+    env["PULSEBOARD_WEB"] = "/web"
+    if not env.get("PULSEBOARD_TOKEN"):
         # The reader would bind loopback and Modal's proxy would reach
         # nothing, which looks like a broken deploy rather than a missing
         # secret. Fail with the reason instead.
-        raise RuntimeError("GLEAN_TOKEN is required: the reader has no other auth")
+        raise RuntimeError("PULSEBOARD_TOKEN is required: the reader has no other auth")
 
-    proc = subprocess.Popen(["/usr/local/bin/glean"], env=env)
+    proc = subprocess.Popen(["/usr/local/bin/pulseboard"], env=env)
 
     stop = threading.Event()
     threading.Thread(target=_snapshot_loop, args=(stop,), daemon=True).start()
@@ -190,9 +190,9 @@ def serve() -> None:
         try:
             time.sleep(1)
             _snapshot_once()
-            print("[glean] final snapshot written", flush=True)
+            print("[pulseboard] final snapshot written", flush=True)
         except Exception as exc:
-            print(f"[glean] final snapshot failed: {exc}", file=sys.stderr, flush=True)
+            print(f"[pulseboard] final snapshot failed: {exc}", file=sys.stderr, flush=True)
         sys.exit(0)
 
     signal.signal(signal.SIGTERM, shutdown)

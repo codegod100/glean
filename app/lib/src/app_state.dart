@@ -5,7 +5,7 @@ import 'api/client.dart';
 import 'models/models.dart';
 
 /// Where the reader is. Override at build time:
-///   flutter run --dart-define=GLEAN_BASE_URL=http://10.0.2.2:8080
+///   flutter run --dart-define=PULSEBOARD_BASE_URL=http://10.0.2.2:8080
 ///
 /// 10.0.2.2 is how the Android emulator reaches the host's loopback; a real
 /// device needs the machine's LAN address.
@@ -14,7 +14,7 @@ import 'models/models.dart';
 /// relative paths: same origin, which means no CORS preflight and the
 /// reader's own cookie on every request.
 const kConfiguredBaseUrl = String.fromEnvironment(
-  'GLEAN_BASE_URL',
+  'PULSEBOARD_BASE_URL',
   defaultValue: '',
 );
 
@@ -22,12 +22,12 @@ String get kDefaultBaseUrl => kConfiguredBaseUrl.isNotEmpty
     ? kConfiguredBaseUrl
     : (kIsWeb ? '' : 'http://127.0.0.1:8080');
 
-/// Shared secret, for a reader running with GLEAN_TOKEN set.
+/// Shared secret, for a reader running with PULSEBOARD_TOKEN set.
 ///
 /// Empty by default, which is right for a local reader and for the web build
 /// served by the reader itself -- there the browser already holds the cookie
 /// the reader set, and same-origin requests carry it automatically.
-const kToken = String.fromEnvironment('GLEAN_TOKEN', defaultValue: '');
+const kToken = String.fromEnvironment('PULSEBOARD_TOKEN', defaultValue: '');
 
 /// Feed list and unread counts, shared across screens.
 ///
@@ -38,10 +38,10 @@ class AppState extends ChangeNotifier {
   AppState({
     String? baseUrl,
     String token = kToken,
-    GleanClient? client,
-  }) : client = client ?? GleanClient(baseUrl: baseUrl ?? kDefaultBaseUrl, token: token);
+    PulseboardClient? client,
+  }) : client = client ?? PulseboardClient(baseUrl: baseUrl ?? kDefaultBaseUrl, token: token);
 
-  final GleanClient client;
+  final PulseboardClient client;
 
   List<Feed> _feeds = const [];
   int _unread = 0;

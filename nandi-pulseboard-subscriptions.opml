@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <opml version="2.0">
-  <head><title>Glean subscriptions — nandi.uk</title></head>
+  <head><title>Pulseboard subscriptions — nandi.uk</title></head>
   <body>
     <outline text="(iterate think thoughts)" title="(iterate think thoughts)" type="rss" xmlUrl="https://yogthos.net/feed.xml"/>
     <outline text="This Week in GNOME" title="This Week in GNOME" type="rss" xmlUrl="https://thisweek.gnome.org/index.xml"/>

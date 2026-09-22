@@ -15,7 +15,7 @@ import ./schema
 import ./sqlite
 
 type
-  GleanDb* = object
+  PulseboardDb* = object
     db*: Db
     basePath*: string
 
@@ -51,7 +51,7 @@ proc applyPragmas(db: Db, schemaName: string, pragmas: openArray[string]) =
     except SqliteError:
       discard
 
-proc open*(basePath: string): GleanDb =
+proc open*(basePath: string): PulseboardDb =
   ## Open `<basePath>_users` and attach `_articles`.
   let
     usersPath = basePath & "_users"
@@ -66,21 +66,21 @@ proc open*(basePath: string): GleanDb =
     db.exec &"ATTACH DATABASE '{path.replace(\"'\", \"''\")}' AS {name}"
     applyPragmas(db, name, AttachedPragmas)
 
-  GleanDb(db: db, basePath: basePath)
+  PulseboardDb(db: db, basePath: basePath)
 
-proc migrate*(g: GleanDb) =
+proc migrate*(g: PulseboardDb) =
   ## Apply the schema. Every statement is IF NOT EXISTS, so this runs on every
   ## boot rather than being gated on a version.
   for stmt in readerSchema: g.db.exec stmt
 
-proc close*(g: var GleanDb) =
+proc close*(g: var PulseboardDb) =
   g.db.close()
 
-proc journalMode*(g: GleanDb, schemaName = ""): string =
+proc journalMode*(g: PulseboardDb, schemaName = ""): string =
   let sql = if schemaName.len == 0: "PRAGMA journal_mode"
             else: &"PRAGMA {schemaName}.journal_mode"
   g.db.queryText(sql).get("")
 
-proc attachedSchemas*(g: GleanDb): seq[string] =
+proc attachedSchemas*(g: PulseboardDb): seq[string] =
   for row in g.db.rows("PRAGMA database_list"):
     result.add row[1]

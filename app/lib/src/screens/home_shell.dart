@@ -96,11 +96,11 @@ class _HomeShellState extends State<HomeShell> {
       return FeedManagerScreen(onClose: _closeManageFeeds);
     }
     final app = AppScope.of(context);
-    final c = GleanColors.of(context);
+    final c = PulseboardColors.of(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_selected.isAll ? 'glean' : _selected.title),
+        title: Text(_selected.isAll ? 'Pulseboard' : _selected.title),
         actions: [
           IconButton(
             tooltip: 'Manage feeds',
@@ -170,7 +170,7 @@ class _HomeShellState extends State<HomeShell> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         trailing: f.unread > 0
-                            ? GleanTag('${f.unread}', emphasis: !f.isAll)
+                            ? PulseboardTag('${f.unread}', emphasis: !f.isAll)
                             : null,
                         onTap: () {
                           setState(() => _selected = f);

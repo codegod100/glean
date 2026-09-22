@@ -7,7 +7,7 @@
 ## returns other people's feeds, a NULL that sorts to the top.
 
 import std/[options, os, strformat, strutils, times]
-import reader/[articlestore, feedstore, gleandb, sqlite]
+import reader/[articlestore, feedstore, pulseboarddb, sqlite]
 
 var failures = 0
 
@@ -32,11 +32,11 @@ proc main() =
   echo "Article / feed store probe"
   echo ""
 
-  let base = getTempDir() / "glean_stores_probe"
+  let base = getTempDir() / "pulseboard_stores_probe"
   cleanup(base)
   defer: cleanup(base)
 
-  var g = gleandb.open(base)
+  var g = pulseboarddb.open(base)
   defer: g.close()
   g.migrate()
 

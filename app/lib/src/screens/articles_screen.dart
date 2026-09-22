@@ -172,7 +172,7 @@ class _StatusFilter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = GleanColors.of(context);
+    final c = PulseboardColors.of(context);
     return DropdownButton<String>(
       value: status,
       underline: const SizedBox.shrink(),

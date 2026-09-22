@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 
 /// Flutter port of web/src/app.css.
 ///
-/// Glean's web design system is deliberately brutalist: a monochrome ink/paper
+/// Pulseboard's web design system is deliberately brutalist: a monochrome ink/paper
 /// base with one accent green, sharp corners, 2px borders and hard offset
 /// shadows, monospace throughout. Keeping that identity matters more than
 /// looking like stock Material, so this leans on a shared token set rather
 /// than ColorScheme.fromSeed.
-class GleanColors extends ThemeExtension<GleanColors> {
-  const GleanColors({
+class PulseboardColors extends ThemeExtension<PulseboardColors> {
+  const PulseboardColors({
     required this.bg,
     required this.fg,
     required this.surface,
@@ -30,7 +30,7 @@ class GleanColors extends ThemeExtension<GleanColors> {
   final Color accentInk;
   final Color danger;
 
-  static const light = GleanColors(
+  static const light = PulseboardColors(
     bg: Color(0xFFFAFAF7),
     fg: Color(0xFF0A0A0A),
     surface: Color(0xFFF0EFE9),
@@ -42,7 +42,7 @@ class GleanColors extends ThemeExtension<GleanColors> {
     danger: Color(0xFFC82014),
   );
 
-  static const dark = GleanColors(
+  static const dark = PulseboardColors(
     bg: Color(0xFF0A0A0A),
     fg: Color(0xFFF5F5EF),
     surface: Color(0xFF161616),
@@ -54,15 +54,15 @@ class GleanColors extends ThemeExtension<GleanColors> {
     danger: Color(0xFFFF5A4D),
   );
 
-  static GleanColors of(BuildContext context) =>
-      Theme.of(context).extension<GleanColors>()!;
+  static PulseboardColors of(BuildContext context) =>
+      Theme.of(context).extension<PulseboardColors>()!;
 
   @override
-  GleanColors copyWith() => this;
+  PulseboardColors copyWith() => this;
 
   @override
-  GleanColors lerp(ThemeExtension<GleanColors>? other, double t) =>
-      t < 0.5 ? this : (other as GleanColors? ?? this);
+  PulseboardColors lerp(ThemeExtension<PulseboardColors>? other, double t) =>
+      t < 0.5 ? this : (other as PulseboardColors? ?? this);
 }
 
 /// The web app asks for JetBrains Mono and falls back through IBM Plex Mono to
@@ -70,8 +70,8 @@ class GleanColors extends ThemeExtension<GleanColors> {
 /// runtime font download; bundling the TTF would pin it exactly.
 const kMonoFallback = <String>['JetBrains Mono', 'IBM Plex Mono', 'monospace'];
 
-ThemeData gleanTheme(Brightness brightness) {
-  final c = brightness == Brightness.dark ? GleanColors.dark : GleanColors.light;
+ThemeData pulseboardTheme(Brightness brightness) {
+  final c = brightness == Brightness.dark ? PulseboardColors.dark : PulseboardColors.light;
 
   TextStyle mono(double size, {FontWeight weight = FontWeight.w400, Color? color}) =>
       TextStyle(

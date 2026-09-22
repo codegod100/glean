@@ -1,8 +1,8 @@
 # Deploying
 
 ```
-modal secret create glean-reader GLEAN_TOKEN="$(openssl rand -hex 24)"
-cd app && flutter build web --release --dart-define=GLEAN_BASE_URL=
+modal secret create pulseboard PULSEBOARD_TOKEN="$(openssl rand -hex 24)"
+cd app && flutter build web --release --dart-define=PULSEBOARD_BASE_URL=
 modal deploy deploy/modal_app.py
 ```
 
@@ -23,7 +23,7 @@ the deployment ships the previous client.
 
 ## The token is not optional here
 
-Without `GLEAN_TOKEN` the reader binds loopback, Modal's proxy reaches
+Without `PULSEBOARD_TOKEN` the reader binds loopback, Modal's proxy reaches
 nothing, and the deploy looks broken rather than insecure. The function
 raises with the reason instead of starting.
 

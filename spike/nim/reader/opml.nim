@@ -40,7 +40,7 @@ proc parseOpml*(source: string): seq[OpmlFeed] =
     raise newException(ValueError, "expected an OPML document")
   collect(root, "", result)
 
-proc renderOpml*(feeds: openArray[OpmlFeed], title = "Glean subscriptions"): string =
+proc renderOpml*(feeds: openArray[OpmlFeed], title = "Pulseboard subscriptions"): string =
   result = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<opml version=\"2.0\">\n  <head><title>" &
            escapeXml(title) & "</title></head>\n  <body>\n"
   var uncategorized: seq[OpmlFeed]

@@ -1,4 +1,4 @@
-# glean
+# pulseboard
 
 An RSS reader. Two pieces:
 
@@ -10,15 +10,15 @@ An RSS reader. Two pieces:
 Run the reader, point the client at it:
 
 ```
-cd spike/nim && nim c -d:ssl glean.nim && ./glean
+cd spike/nim && nim c -d:ssl pulseboard.nim && ./pulseboard
 ```
 
 It listens on `127.0.0.1:8080`, keeps a SQLite database under
-`~/.local/share/glean/`, and serves a plain HTML interface at the root — so
+`~/.local/share/pulseboard/`, and serves a plain HTML interface at the root — so
 it is usable on its own, without the Flutter client.
 
 ```
-cd app && flutter run --dart-define=GLEAN_BASE_URL=http://127.0.0.1:8080
+cd app && flutter run --dart-define=PULSEBOARD_BASE_URL=http://127.0.0.1:8080
 ```
 
 ## Why it is split

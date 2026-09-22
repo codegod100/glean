@@ -229,7 +229,7 @@ proc main() =
     for url in feeds:
       try:
         let client = newHttpClient(timeout = 20_000,
-                                   userAgent = "glean-nim-spike/0.1")
+                                   userAgent = "pulseboard-nim-spike/0.1")
         defer: client.close()
         let body = client.getContent(url)
         let r = parseFeed(body, url)

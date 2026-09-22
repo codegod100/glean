@@ -197,7 +197,7 @@ proc main() =
   block:
     try:
       let client = newHttpClient(timeout = 20_000,
-                                 userAgent = "glean-nim-spike/0.1")
+                                 userAgent = "pulseboard-nim-spike/0.1")
       defer: client.close()
       let feed = parseFeed(client.getContent("https://blog.rust-lang.org/feed.xml"),
                            "https://blog.rust-lang.org/feed.xml")

@@ -1,4 +1,4 @@
-package fr.rbrt.glean.glean_app
+package fr.rbrt.pulseboard.pulseboard_app
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -1,6 +1,6 @@
 version       = "0.1.0"
-author        = "glean"
-description   = "glean: a small RSS reader"
+author        = "pulseboard"
+description   = "pulseboard: a small RSS reader"
 license       = "MIT"
 srcDir        = "."
 
@@ -8,7 +8,7 @@ requires "nim >= 2.2.0"
 
 # Probes that touch only this machine. Safe to run anywhere, including CI.
 const offlineProbes = @[
-  "gleandb_probe",
+  "pulseboarddb_probe",
   "stores_probe",
 ]
 

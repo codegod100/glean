@@ -20,7 +20,7 @@ class ArticleTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = GleanColors.of(context);
+    final c = PulseboardColors.of(context);
     final text = Theme.of(context).textTheme;
     final read = article.isRead;
 

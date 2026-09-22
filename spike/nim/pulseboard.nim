@@ -1,19 +1,19 @@
 ## A small RSS reader.
 ##
-##   nim c -r -d:ssl glean.nim
-##   GLEAN_DB=~/.local/share/glean/db GLEAN_PORT=8080 ./glean
+##   nim c -r -d:ssl pulseboard.nim
+##   PULSEBOARD_DB=~/.local/share/pulseboard/db PULSEBOARD_PORT=8080 ./pulseboard
 ##
 ## Single user, no accounts. It runs on your machine and reads your feeds,
 ## and that assumption is what keeps this a few hundred lines instead of a
 ## few thousand: no sessions, no CSRF, no per-user scoping, no ATProto.
 ##
-## GLEAN_TOKEN puts a shared secret in front of everything, which is what
+## PULSEBOARD_TOKEN puts a shared secret in front of everything, which is what
 ## makes it safe anywhere but loopback -- `/feeds` and `/fetch-content` will
 ## fetch any URL handed to them, so an open instance is an SSRF proxy as well
 ## as someone else's feed list. Unset, there is no gate at all and the local
 ## case stays exactly as simple as it was.
 ##
-## GLEAN_WEB must point at the Flutter web build. The reader refuses to start
+## PULSEBOARD_WEB must point at the Flutter web build. The reader refuses to start
 ## without it so deployments cannot silently serve a different client.
 ##
 ## The pieces underneath -- fetching, parsing, storage, search, full-text
@@ -21,7 +21,7 @@
 
 import std/[asyncdispatch, asynchttpserver, httpclient, json, options, os,
             strformat, strutils, times, uri]
-import reader/[articlestore, feedfetcher, feedparser, feedstore, gleandb,
+import reader/[articlestore, feedfetcher, feedparser, feedstore, pulseboarddb,
                 opml, scraper, sqlite]
 
 const
@@ -32,7 +32,7 @@ const
   DefaultPort = 8080
 
 type Reader = ref object
-  db: GleanDb
+  db: PulseboardDb
   token: string    ## empty disables the gate entirely
   webRoot: string  ## required Flutter web bundle
 
@@ -57,10 +57,10 @@ proc presentedToken(req: Request, queryKey: string): string =
   ##
   ## Three ways because three callers: a native client sends a header, a
   ## person opens a link, and the browser then has a cookie.
-  let h = req.headers.getOrDefault("X-Glean-Token").string
+  let h = req.headers.getOrDefault("X-Pulseboard-Token").string
   if h.len > 0: return h
   if queryKey.len > 0: return queryKey
-  cookieValue(req.headers.getOrDefault("Cookie").string, "glean_token")
+  cookieValue(req.headers.getOrDefault("Cookie").string, "pulseboard_token")
 
 proc jsonResponse(req: Request, code: HttpCode, node: JsonNode) {.async.} =
   await req.respond(code, $node, newHttpHeaders({
@@ -208,7 +208,7 @@ proc handle(r: Reader, req: Request) {.async.} =
     if param("key").len > 0:
       await req.respond(Http303, "", newHttpHeaders({
         "Location": "/",
-        "Set-Cookie": "glean_token=" & r.token &
+        "Set-Cookie": "pulseboard_token=" & r.token &
                       "; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000",
       }))
       return
@@ -233,7 +233,7 @@ proc handle(r: Reader, req: Request) {.async.} =
         feeds.add OpmlFeed(url: s.feedUrl, title: s.feedTitle, category: s.category)
       await req.respond(Http200, renderOpml(feeds), newHttpHeaders({
         "Content-Type": "application/xml; charset=utf-8",
-        "Content-Disposition": "attachment; filename=glean-subscriptions.opml",
+        "Content-Disposition": "attachment; filename=pulseboard-subscriptions.opml",
       }))
 
     of "articles":
@@ -351,7 +351,7 @@ proc handle(r: Reader, req: Request) {.async.} =
         return
       try:
         let client = newHttpClient(timeout = 20_000,
-                                   userAgent = "glean/0.1")
+                                   userAgent = "pulseboard/0.1")
         defer: client.close()
         let text = extractArticle(client.getContent(a.get.url))
         r.db.updateArticleFullContent(id, text)
@@ -372,25 +372,25 @@ proc handle(r: Reader, req: Request) {.async.} =
     await fail(req, Http405, "method not allowed")
 
 proc main() {.async.} =
-  let dbPath = getEnv("GLEAN_DB", getHomeDir() / ".local/share/glean/glean")
+  let dbPath = getEnv("PULSEBOARD_DB", getHomeDir() / ".local/share/pulseboard/pulseboard")
   createDir(dbPath.parentDir)
-  let port = try: parseInt(getEnv("GLEAN_PORT", $DefaultPort))
+  let port = try: parseInt(getEnv("PULSEBOARD_PORT", $DefaultPort))
              except ValueError: DefaultPort
 
-  var db = gleandb.open(dbPath)
+  var db = pulseboarddb.open(dbPath)
   db.migrate()
   db.db.run("INSERT OR IGNORE INTO users (did) VALUES (?)", p(LocalUser))
 
-  let token = getEnv("GLEAN_TOKEN")
-  let webRoot = getEnv("GLEAN_WEB")
+  let token = getEnv("PULSEBOARD_TOKEN")
+  let webRoot = getEnv("PULSEBOARD_WEB")
   if webRoot.len == 0:
-    quit("GLEAN_WEB is required and must point at a Flutter web build")
+    quit("PULSEBOARD_WEB is required and must point at a Flutter web build")
   if not dirExists(webRoot) or not fileExists(webRoot / "index.html"):
-    quit(&"GLEAN_WEB points at {webRoot}, which has no index.html")
+    quit(&"PULSEBOARD_WEB points at {webRoot}, which has no index.html")
 
   let reader = Reader(db: db, token: token, webRoot: webRoot)
 
-  echo &"glean reading from {dbPath}"
+  echo &"pulseboard reading from {dbPath}"
   if webRoot.len > 0: echo &"serving the client from {webRoot}"
   if token.len > 0:
     echo "token required: append ?key=… once to set the cookie"

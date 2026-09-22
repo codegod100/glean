@@ -1,4 +1,4 @@
-# glean_app
+# pulseboard_app
 
 A new Flutter project.
 

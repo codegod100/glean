@@ -5,8 +5,8 @@ import '../theme.dart';
 
 /// A hard-edged box with a 2px border and the offset shadow the web app uses
 /// for cards and buttons.
-class GleanBox extends StatelessWidget {
-  const GleanBox({
+class PulseboardBox extends StatelessWidget {
+  const PulseboardBox({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(12),
@@ -23,7 +23,7 @@ class GleanBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = GleanColors.of(context);
+    final c = PulseboardColors.of(context);
     final box = Container(
       padding: padding,
       decoration: BoxDecoration(
@@ -41,15 +41,15 @@ class GleanBox extends StatelessWidget {
 }
 
 /// Monospace pill used for counts, categories and other metadata.
-class GleanTag extends StatelessWidget {
-  const GleanTag(this.label, {super.key, this.emphasis = false});
+class PulseboardTag extends StatelessWidget {
+  const PulseboardTag(this.label, {super.key, this.emphasis = false});
 
   final String label;
   final bool emphasis;
 
   @override
   Widget build(BuildContext context) {
-    final c = GleanColors.of(context);
+    final c = PulseboardColors.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
@@ -68,8 +68,8 @@ class GleanTag extends StatelessWidget {
 }
 
 /// Square-cornered primary button.
-class GleanButton extends StatelessWidget {
-  const GleanButton({
+class PulseboardButton extends StatelessWidget {
+  const PulseboardButton({
     super.key,
     required this.label,
     this.onPressed,
@@ -84,11 +84,11 @@ class GleanButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = GleanColors.of(context);
+    final c = PulseboardColors.of(context);
     final enabled = onPressed != null && !busy;
     return Opacity(
       opacity: enabled ? 1 : 0.5,
-      child: GleanBox(
+      child: PulseboardBox(
         onTap: enabled ? onPressed : null,
         filled: !accent,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -171,7 +171,7 @@ class ErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = GleanColors.of(context);
+    final c = PulseboardColors.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -187,7 +187,7 @@ class ErrorView extends StatelessWidget {
             const SizedBox(height: 8),
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 16),
-            GleanButton(label: 'Retry', onPressed: onRetry),
+            PulseboardButton(label: 'Retry', onPressed: onRetry),
           ],
         ),
       ),
@@ -226,7 +226,7 @@ class FaviconBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = GleanColors.of(context);
+    final c = PulseboardColors.of(context);
     final letter = seed.isEmpty ? '?' : seed.characters.first.toUpperCase();
     final fallback = Container(
       width: size,

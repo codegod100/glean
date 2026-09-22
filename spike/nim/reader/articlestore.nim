@@ -7,7 +7,7 @@
 
 import std/[options, strutils, times]
 import ./feedstore
-import ./gleandb
+import ./pulseboarddb
 import ./sqlite
 
 type
@@ -78,15 +78,15 @@ const articleFrom = """
   LEFT JOIN articles.feeds f ON f.feed_url = a.feed_url
   LEFT JOIN articles.read_state r ON r.article_id = a.id AND r.user_did = ?"""
 
-proc getArticle*(g: GleanDb, userDid: string, id: int64): Option[Article] =
+proc getArticle*(g: PulseboardDb, userDid: string, id: int64): Option[Article] =
   g.db.queryFirst("SELECT " & articleColumns & articleFrom & " WHERE a.id = ?",
                   [p(userDid), p(id)], readArticleRow)
 
-proc getArticleByUrl*(g: GleanDb, userDid, url: string): Option[Article] =
+proc getArticleByUrl*(g: PulseboardDb, userDid, url: string): Option[Article] =
   g.db.queryFirst("SELECT " & articleColumns & articleFrom & " WHERE a.url = ?",
                   [p(userDid), p(url)], readArticleRow)
 
-proc listArticles*(g: GleanDb, userDid: string, filter = afAll,
+proc listArticles*(g: PulseboardDb, userDid: string, filter = afAll,
                    feedUrl = "", category = "", sortOldest = false,
                    limit = 25, offset = 0): seq[Article] =
   ## The main listing, scoped to what the user subscribes to.
@@ -120,7 +120,7 @@ proc listArticles*(g: GleanDb, userDid: string, filter = afAll,
 
   g.db.queryAll(sql, params, readArticleRow)
 
-proc searchArticles*(g: GleanDb, userDid, query: string,
+proc searchArticles*(g: PulseboardDb, userDid, query: string,
                      limit = 25, offset = 0): seq[Article] =
   ## Full-text search over the user's subscriptions.
   ##
@@ -143,7 +143,7 @@ proc searchArticles*(g: GleanDb, userDid, query: string,
     [p(userDid), p(userDid), p(query),
      p(limit.int64), p(offset.int64)], readArticleRow)
 
-proc batchUpsertArticles*(g: GleanDb, articles: seq[NewArticle],
+proc batchUpsertArticles*(g: PulseboardDb, articles: seq[NewArticle],
                           retentionDays = 0) =
   ## Ingest a fetch. One transaction, one prepared statement.
   ##
@@ -191,13 +191,13 @@ proc batchUpsertArticles*(g: GleanDb, articles: seq[NewArticle],
     for url in feedUrls:
       restore.exec(p(url))
 
-proc updateArticleFullContent*(g: GleanDb, id: int64, fullContent: string) =
+proc updateArticleFullContent*(g: PulseboardDb, id: int64, fullContent: string) =
   g.db.run("UPDATE articles.articles SET full_content = ? WHERE id = ?",
            pOrNull(fullContent), p(id))
 
 # --- read state ------------------------------------------------------------
 
-proc setRead(g: GleanDb, userDid: string, articleId: int64, isRead: bool) =
+proc setRead(g: PulseboardDb, userDid: string, articleId: int64, isRead: bool) =
   g.db.run("""INSERT INTO articles.read_state (user_did, article_id, is_read, read_at)
               VALUES (?, ?, ?, CURRENT_TIMESTAMP)
               ON CONFLICT(user_did, article_id) DO UPDATE SET
@@ -205,13 +205,13 @@ proc setRead(g: GleanDb, userDid: string, articleId: int64, isRead: bool) =
                 read_at = excluded.read_at""",
            p(userDid), p(articleId), p(if isRead: 1'i64 else: 0'i64))
 
-proc markArticleRead*(g: GleanDb, userDid: string, articleId: int64) =
+proc markArticleRead*(g: PulseboardDb, userDid: string, articleId: int64) =
   setRead(g, userDid, articleId, true)
 
-proc markArticleUnread*(g: GleanDb, userDid: string, articleId: int64) =
+proc markArticleUnread*(g: PulseboardDb, userDid: string, articleId: int64) =
   setRead(g, userDid, articleId, false)
 
-proc markAllRead*(g: GleanDb, userDid, feedUrl: string) =
+proc markAllRead*(g: PulseboardDb, userDid, feedUrl: string) =
   ## Scoped to one feed when given, otherwise everything the user subscribes
   ## to. Getting this scope wrong is the difference between clearing a feed
   ## and clearing the whole account, so the two cases are separate statements
@@ -234,7 +234,7 @@ proc markAllRead*(g: GleanDb, userDid, feedUrl: string) =
                   is_read = 1, read_at = CURRENT_TIMESTAMP""",
              p(userDid), p(userDid))
 
-proc getUnreadCount*(g: GleanDb, userDid, feedUrl, category: string): int =
+proc getUnreadCount*(g: PulseboardDb, userDid, feedUrl, category: string): int =
   var sql = """
     SELECT count(*)
     FROM articles.articles a
@@ -252,12 +252,12 @@ proc getUnreadCount*(g: GleanDb, userDid, feedUrl, category: string): int =
     params.add p(category)
   g.db.queryInt(sql, params).get(0).int
 
-proc isRead*(g: GleanDb, userDid: string, articleId: int64): bool =
+proc isRead*(g: PulseboardDb, userDid: string, articleId: int64): bool =
   g.db.queryInt("""SELECT COALESCE(is_read, 0) FROM articles.read_state
                    WHERE user_did = ? AND article_id = ?""",
                 p(userDid), p(articleId)).get(0) != 0
 
-proc countNewArticles*(g: GleanDb, userDid: string, since: DateTime): int =
+proc countNewArticles*(g: PulseboardDb, userDid: string, since: DateTime): int =
   g.db.queryInt("""
     SELECT count(*) FROM articles.articles a
     JOIN articles.subscriptions s

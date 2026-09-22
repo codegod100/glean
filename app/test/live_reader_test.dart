@@ -4,18 +4,18 @@ library;
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:glean_app/src/api/client.dart';
+import 'package:pulseboard_app/src/api/client.dart';
 
 /// Checks the client against a running reader, which is the only thing that
 /// proves the two agree on field names. A mock returns whatever the test
 /// author believed the server sends.
 ///
-///   flutter test --tags live --dart-define=GLEAN_BASE_URL=http://127.0.0.1:8080
+///   flutter test --tags live --dart-define=PULSEBOARD_BASE_URL=http://127.0.0.1:8080
 void main() {
-  const base = String.fromEnvironment('GLEAN_BASE_URL',
+  const base = String.fromEnvironment('PULSEBOARD_BASE_URL',
       defaultValue: 'http://127.0.0.1:8080');
 
-  late GleanClient client;
+  late PulseboardClient client;
 
   setUpAll(() {
     TestWidgetsFlutterBinding.ensureInitialized();
@@ -24,7 +24,7 @@ void main() {
     HttpOverrides.global = null;
   });
 
-  setUp(() => client = GleanClient(baseUrl: base));
+  setUp(() => client = PulseboardClient(baseUrl: base));
   tearDown(() => client.close());
 
   test('feeds and unread parse', () async {

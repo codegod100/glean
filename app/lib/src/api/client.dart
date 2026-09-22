@@ -16,13 +16,13 @@ class ApiException implements Exception {
 ///
 /// No cookies, no CSRF, no auth: the server is single-user and binds
 /// loopback. That is why this class is a thin wrapper rather than a session.
-class GleanClient {
-  GleanClient({required this.baseUrl, this.token = '', http.Client? client})
+class PulseboardClient {
+  PulseboardClient({required this.baseUrl, this.token = '', http.Client? client})
     : _client = client ?? http.Client();
 
   final String baseUrl;
 
-  /// Shared secret, when the reader is running with GLEAN_TOKEN set. Empty
+  /// Shared secret, when the reader is running with PULSEBOARD_TOKEN set. Empty
   /// for a local reader, which has no gate.
   ///
   /// Sent as a header rather than a query parameter so it stays out of the
@@ -32,7 +32,7 @@ class GleanClient {
   final http.Client _client;
 
   Map<String, String> get _headers =>
-      token.isEmpty ? const {} : {'X-Glean-Token': token};
+      token.isEmpty ? const {} : {'X-Pulseboard-Token': token};
 
   Uri _uri(String path, [Map<String, String>? query]) {
     final q = query?.entries.where((e) => e.value.isNotEmpty);

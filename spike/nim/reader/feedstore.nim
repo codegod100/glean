@@ -6,7 +6,7 @@
 ## read on every listing and written only when someone subscribes.
 
 import std/[options, times]
-import ./gleandb
+import ./pulseboarddb
 import ./sqlite
 
 type
@@ -73,7 +73,7 @@ const feedColumns = """f.feed_url, f.title, f.site_url, f.description,
   f.feed_type, f.favicon_url, f.subscriber_count, f.error_count, f.last_error,
   f.last_fetched_at"""
 
-proc upsertFeed*(g: GleanDb, f: Feed) =
+proc upsertFeed*(g: PulseboardDb, f: Feed) =
   ## Insert, or refresh the metadata of an existing feed.
   ##
   ## subscriber_count and the error columns are deliberately not touched: they
@@ -91,12 +91,12 @@ proc upsertFeed*(g: GleanDb, f: Feed) =
            p(f.feedUrl), pOrNull(f.title), pOrNull(f.siteUrl),
            pOrNull(f.description), pOrNull(f.feedType), pOrNull(f.faviconUrl))
 
-proc getFeed*(g: GleanDb, feedUrl: string): Option[Feed] =
+proc getFeed*(g: PulseboardDb, feedUrl: string): Option[Feed] =
   g.db.queryFirst("SELECT " & feedColumns &
                   " FROM articles.feeds f WHERE f.feed_url = ?",
                   [p(feedUrl)], readFeed)
 
-proc getFeedsToFetch*(g: GleanDb, olderThan: Duration, limit: int): seq[Feed] =
+proc getFeedsToFetch*(g: PulseboardDb, olderThan: Duration, limit: int): seq[Feed] =
   ## Feeds due for a refresh: never fetched, or last fetched before the
   ## cutoff. Dead feeds are excluded by error_count so a permanently broken
   ## URL does not consume a fetch slot every cycle.
@@ -110,7 +110,7 @@ proc getFeedsToFetch*(g: GleanDb, olderThan: Duration, limit: int): seq[Feed] =
                    LIMIT ?""",
                 [p(cutoff), p(limit.int64)], readFeed)
 
-proc markFeedFetched*(g: GleanDb, feedUrl: string) =
+proc markFeedFetched*(g: PulseboardDb, feedUrl: string) =
   ## A successful fetch clears the error state, so a feed that recovers
   ## re-enters the rotation instead of staying dead.
   g.db.run("""UPDATE articles.feeds
@@ -119,14 +119,14 @@ proc markFeedFetched*(g: GleanDb, feedUrl: string) =
                   error_count = 0
               WHERE feed_url = ?""", p(feedUrl))
 
-proc markFeedFetchError*(g: GleanDb, feedUrl, lastError: string) =
+proc markFeedFetchError*(g: PulseboardDb, feedUrl, lastError: string) =
   g.db.run("""UPDATE articles.feeds
               SET last_fetched_at = CURRENT_TIMESTAMP,
                   last_error = ?,
                   error_count = error_count + 1
               WHERE feed_url = ?""", p(lastError), p(feedUrl))
 
-proc updateFeedFavicon*(g: GleanDb, feedUrl, faviconUrl: string) =
+proc updateFeedFavicon*(g: PulseboardDb, feedUrl, faviconUrl: string) =
   g.db.run("UPDATE articles.feeds SET favicon_url = ? WHERE feed_url = ?",
            pOrNull(faviconUrl), p(feedUrl))
 
@@ -146,7 +146,7 @@ proc readSubscription(r: Row): Subscription =
     faviconUrl: r.str(9),
   )
 
-proc createSubscription*(g: GleanDb, userDid, feedUrl, title, category,
+proc createSubscription*(g: PulseboardDb, userDid, feedUrl, title, category,
                          uri, cid: string) =
   ## Subscribe, and keep subscriber_count in step.
   ##
@@ -172,7 +172,7 @@ proc createSubscription*(g: GleanDb, userDid, feedUrl, title, category,
                     WHERE feed_url = ?)
                   WHERE feed_url = ?""", p(feedUrl), p(feedUrl))
 
-proc deleteSubscription*(g: GleanDb, userDid, feedUrl: string) =
+proc deleteSubscription*(g: PulseboardDb, userDid, feedUrl: string) =
   g.db.transaction:
     g.db.run("""DELETE FROM articles.subscriptions
                 WHERE user_did = ? AND feed_url = ?""", p(userDid), p(feedUrl))
@@ -182,14 +182,14 @@ proc deleteSubscription*(g: GleanDb, userDid, feedUrl: string) =
                   WHERE feed_url = ?)
                 WHERE feed_url = ?""", p(feedUrl), p(feedUrl))
 
-proc deleteAllSubscriptions*(g: GleanDb, userDid: string) =
+proc deleteAllSubscriptions*(g: PulseboardDb, userDid: string) =
   g.db.transaction:
     g.db.run("DELETE FROM articles.subscriptions WHERE user_did = ?", p(userDid))
     g.db.run("""UPDATE articles.feeds SET subscriber_count = (
                   SELECT count(*) FROM articles.subscriptions s
                   WHERE s.feed_url = articles.feeds.feed_url)""")
 
-proc getSubscription*(g: GleanDb, userDid, feedUrl: string): Option[Subscription] =
+proc getSubscription*(g: PulseboardDb, userDid, feedUrl: string): Option[Subscription] =
   g.db.queryFirst("""
     SELECT s.id, s.user_did, s.feed_url,
            COALESCE(s.title, f.title, s.feed_url), s.category, s.uri, s.cid,
@@ -199,7 +199,7 @@ proc getSubscription*(g: GleanDb, userDid, feedUrl: string): Option[Subscription
     WHERE s.user_did = ? AND s.feed_url = ?""",
     [p(userDid), p(feedUrl)], readSubscription)
 
-proc listSubscriptions*(g: GleanDb, userDid, category: string,
+proc listSubscriptions*(g: PulseboardDb, userDid, category: string,
                         limit, offset: int): seq[Subscription] =
   ## The unread count is computed per row here rather than stored: it is
   ## per-user and changes constantly, so a cached column would be wrong more
@@ -225,18 +225,18 @@ proc listSubscriptions*(g: GleanDb, userDid, category: string,
   params.add p(offset.int64)
   g.db.queryAll(sql, params, readSubscription)
 
-proc getSubscriptionCount*(g: GleanDb, userDid: string): int =
+proc getSubscriptionCount*(g: PulseboardDb, userDid: string): int =
   g.db.queryInt("SELECT count(*) FROM articles.subscriptions WHERE user_did = ?",
                 p(userDid)).get(0).int
 
-proc getCategories*(g: GleanDb, userDid: string): seq[string] =
+proc getCategories*(g: PulseboardDb, userDid: string): seq[string] =
   for r in g.db.query("""SELECT DISTINCT category FROM articles.subscriptions
                          WHERE user_did = ? AND category IS NOT NULL
                            AND category != ''
                          ORDER BY category COLLATE NOCASE""", p(userDid)):
     result.add r.str(0)
 
-proc listDeadFeeds*(g: GleanDb, userDid: string, threshold: int): seq[Feed] =
+proc listDeadFeeds*(g: PulseboardDb, userDid: string, threshold: int): seq[Feed] =
   ## Subscribed feeds that keep failing, so the UI can offer a retry rather
   ## than silently showing nothing.
   g.db.queryAll("""SELECT """ & feedColumns & """
@@ -246,14 +246,14 @@ proc listDeadFeeds*(g: GleanDb, userDid: string, threshold: int): seq[Feed] =
                    ORDER BY f.error_count DESC""",
                 [p(userDid), p(threshold.int64)], readFeed)
 
-proc recountSubscriberCounts*(g: GleanDb) =
+proc recountSubscriberCounts*(g: PulseboardDb) =
   ## Repair pass. The counts are maintained incrementally, so anything that
   ## interrupts a subscribe leaves them drifted.
   g.db.run("""UPDATE articles.feeds SET subscriber_count = (
                 SELECT count(*) FROM articles.subscriptions s
                 WHERE s.feed_url = articles.feeds.feed_url)""")
 
-proc batchUpsertFeeds*(g: GleanDb, feeds: seq[Feed]) =
+proc batchUpsertFeeds*(g: PulseboardDb, feeds: seq[Feed]) =
   if feeds.len == 0: return
   g.db.transaction:
     var ps = g.db.prepared("""
