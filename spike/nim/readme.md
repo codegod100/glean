@@ -7,10 +7,22 @@ nim c -d:ssl glean.nim
 ./glean
 ```
 
-Listens on `127.0.0.1:8080` and stores its database under
-`~/.local/share/glean/`. Override with `GLEAN_PORT` and `GLEAN_DB`.
+Then open <http://127.0.0.1:8080>. The database lives under
+`~/.local/share/glean/`; override with `GLEAN_PORT` and `GLEAN_DB`.
+
+## The interface
+
+A two-pane reader: feeds on the left, articles on the right, the article in
+place. Add a feed, refresh, search, read. Opening an article marks it read;
+"Fetch full text" runs the scraper over the original page, for feeds that
+only ship an excerpt.
+
+One HTML file, no build step, no dependencies, baked into the binary with
+`staticRead` so there is still only one file to copy.
 
 ## API
+
+The interface is built on this, and it is usable on its own.
 
 ```
 GET    /feeds                       subscriptions, with unread counts
@@ -43,6 +55,17 @@ rather than a few thousand.
 The one visible consequence: **do not expose it to a network.** It binds
 loopback deliberately. Anything that can reach the port can read and change
 everything, because there is nobody to distinguish from anybody else.
+
+## A note on rendering feeds
+
+Article bodies are markup from someone else's server, and the interface puts
+them in a browser. Every body the API serves -- scraped *and* straight from
+the feed -- goes through the same whitelist the scraper uses: `script`,
+`style` and `iframe` never survive, attributes are allowed rather than
+denied, and a link that does not point at http(s) is flattened to its text.
+
+Titles and summaries are set with `textContent` in the page, for the same
+reason. `innerHTML` is used in exactly one place: the sanitised body.
 
 ## What it is built on
 
