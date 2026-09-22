@@ -13,8 +13,8 @@
 ## as someone else's feed list. Unset, there is no gate at all and the local
 ## case stays exactly as simple as it was.
 ##
-## GLEAN_WEB points at a directory of static files (a Flutter web build) to
-## serve instead of the built-in page.
+## GLEAN_WEB must point at the Flutter web build. The reader refuses to start
+## without it so deployments cannot silently serve a different client.
 ##
 ## The pieces underneath -- fetching, parsing, storage, search, full-text
 ## extraction -- are the same modules the larger port built and tested.
@@ -25,10 +25,6 @@ import reader/[articlestore, feedfetcher, feedparser, feedstore, gleandb,
                 opml, scraper, sqlite]
 
 const
-  ## Baked in at compile time rather than read from disk, so the reader stays
-  ## one file to copy around.
-  IndexHtml = staticRead("ui.html")
-
   ## Everything is stored per-user underneath because the schema came from a
   ## multi-user server. One constant user keeps that plumbing satisfied
   ## without inventing accounts.
@@ -38,7 +34,7 @@ const
 type Reader = ref object
   db: GleanDb
   token: string    ## empty disables the gate entirely
-  webRoot: string  ## empty serves the built-in page
+  webRoot: string  ## required Flutter web bundle
 
 proc cookieValue(header, name: string): string =
   for part in header.split(';'):
@@ -107,16 +103,18 @@ proc serveStatic(r: Reader, req: Request, rel: string): Future[bool] {.async.} =
   let full = absolutePath(r.webRoot / rel)
   let root = absolutePath(r.webRoot)
   if not full.startsWith(root) or not fileExists(full): return false
-  await req.respond(Http200, readFile(full),
-                    newHttpHeaders({"Content-Type": contentTypeFor(full)}))
+  var headers = newHttpHeaders({"Content-Type": contentTypeFor(full)})
+  # Flutter's bootstrap and main bundle keep stable filenames. Revalidate
+  # them so a Modal deploy cannot leave browsers running yesterday's client.
+  let ext = full.splitFile.ext.toLowerAscii
+  if ext in [".html", ".js", ".mjs"]:
+    headers["Cache-Control"] = "no-cache"
+  await req.respond(Http200, readFile(full), headers)
   true
 
 proc serveApp(r: Reader, req: Request) {.async.} =
-  ## The client: a Flutter web build when one is configured, otherwise the
-  ## page baked into the binary.
-  if await serveStatic(r, req, "index.html"): return
-  await req.respond(Http200, IndexHtml,
-                    newHttpHeaders({"Content-Type": "text/html; charset=utf-8"}))
+  if not await serveStatic(r, req, "index.html"):
+    await fail(req, Http500, "Flutter web bundle is unavailable")
 
 proc toJson(a: Article): JsonNode =
   %*{
@@ -384,11 +382,11 @@ proc main() {.async.} =
   db.db.run("INSERT OR IGNORE INTO users (did) VALUES (?)", p(LocalUser))
 
   let token = getEnv("GLEAN_TOKEN")
-  var webRoot = getEnv("GLEAN_WEB")
-  if webRoot.len > 0 and not dirExists(webRoot):
-    # Failing loudly beats silently serving the fallback page and leaving
-    # someone wondering why their client never updated.
-    quit(&"GLEAN_WEB points at {webRoot}, which is not a directory")
+  let webRoot = getEnv("GLEAN_WEB")
+  if webRoot.len == 0:
+    quit("GLEAN_WEB is required and must point at a Flutter web build")
+  if not dirExists(webRoot) or not fileExists(webRoot / "index.html"):
+    quit(&"GLEAN_WEB points at {webRoot}, which has no index.html")
 
   let reader = Reader(db: db, token: token, webRoot: webRoot)
 

@@ -36,7 +36,10 @@ class GleanClient {
 
   Uri _uri(String path, [Map<String, String>? query]) {
     final q = query?.entries.where((e) => e.value.isNotEmpty);
-    return Uri.parse('$baseUrl$path').replace(
+    // The web app is served by the reader. An empty base means same origin,
+    // rather than the browser's own 127.0.0.1 (which is never the Modal app).
+    final base = baseUrl.isEmpty ? Uri.base.resolve(path) : Uri.parse('$baseUrl$path');
+    return base.replace(
       queryParameters: q == null || q.isEmpty ? null : Map.fromEntries(q),
     );
   }

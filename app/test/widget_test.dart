@@ -123,6 +123,32 @@ void main() {
     expect(find.textContaining('4 new'), findsOneWidget);
   });
 
+  testWidgets('feed management exposes add and removal controls',
+      (tester) async {
+    await pump(tester);
+
+    await tester.tap(find.byTooltip('Manage feeds').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Manage feeds'), findsOneWidget);
+    expect(find.text('Add a subscription'), findsOneWidget);
+    expect(find.text('Subscriptions'), findsOneWidget);
+    expect(find.byTooltip('Remove Feed A'), findsOneWidget);
+    expect(find.text('Backup & restore'), findsOneWidget);
+  });
+
+  testWidgets('returning from feed management restores the reader',
+      (tester) async {
+    await pump(tester);
+
+    await tester.tap(find.byTooltip('Manage feeds').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('First article'), findsOneWidget);
+  });
+
   testWidgets('marking an article read updates the count without a refetch',
       (tester) async {
     final state = await pump(tester);

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head><title>Glean subscriptions — nandi.uk</title></head>
+  <body>
+    <outline text="(iterate think thoughts)" title="(iterate think thoughts)" type="rss" xmlUrl="https://yogthos.net/feed.xml"/>
+    <outline text="This Week in GNOME" title="This Week in GNOME" type="rss" xmlUrl="https://thisweek.gnome.org/index.xml"/>
+    <outline text="The Tangled Blog" title="The Tangled Blog" type="rss" xmlUrl="https://blog.tangled.org/feed.xml"/>
+    <outline text="Daring Fireball" title="Daring Fireball" type="rss" xmlUrl="https://daringfireball.net/feeds/main"/>
+    <outline text="404 Media" title="404 Media" type="rss" xmlUrl="https://www.404media.co/rss/"/>
+    <outline text="Phoronix" title="Phoronix" type="rss" xmlUrl="https://www.phoronix.com/rss.php"/>
+    <outline text="The Phoenix Architecture" title="The Phoenix Architecture" type="rss" xmlUrl="https://aicoding.leaflet.pub/rss"/>
+    <outline text="articles" title="articles">
+      <outline text="Hacker News" title="Hacker News" type="rss" xmlUrl="https://hackernews.com/rss"/>
+      <outline text="HEY" title="HEY" type="rss" xmlUrl="https://www.hey.com/feed/new.atom"/>
+      <outline text="Articles by Aaron Parecki" title="Articles by Aaron Parecki" type="rss" xmlUrl="https://aaronparecki.com/feed.xml"/>
+      <outline text="The XMPP Blog on XMPP" title="The XMPP Blog on XMPP" type="rss" xmlUrl="https://mov.im/feed/pubsub.movim.eu/XMPP"/>
+      <outline text="Gleam weekly" title="Gleam weekly" type="rss" xmlUrl="https://gleamweekly.com/atom.xml"/>
+      <outline text="freeq blog" title="freeq blog" type="rss" xmlUrl="https://freeq.at/blog/feed.xml"/>
+      <outline text="Lobsters" title="Lobsters" type="rss" xmlUrl="https://lobste.rs/rss"/>
+      <outline text="TechCrunch" title="TechCrunch" type="rss" xmlUrl="https://techcrunch.com/feed/"/>
+      <outline text="Matrix.org" title="Matrix.org" type="rss" xmlUrl="https://matrix.org/atom.xml"/>
+    </outline>
+    <outline text="tangled" title="tangled">
+      <outline text="@mitchellh.com's timeline" title="@mitchellh.com's timeline" type="rss" xmlUrl="https://tangled.org/mitchellh.com/feed.atom"/>
+      <outline text="@expede.wtf's timeline" title="@expede.wtf's timeline" type="rss" xmlUrl="https://tangled.org/expede.wtf/feed.atom"/>
+      <outline text="activity feed for @aly.codes/tg" title="activity feed for @aly.codes/tg" type="rss" xmlUrl="https://tangled.org/aly.codes/tg/feed.atom"/>
+    </outline>
+  </body>
+</opml>

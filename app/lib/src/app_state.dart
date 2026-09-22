@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
 
 import 'api/client.dart';
@@ -12,10 +13,14 @@ import 'models/models.dart';
 /// The web build is served *by* the reader, so it leaves this empty and uses
 /// relative paths: same origin, which means no CORS preflight and the
 /// reader's own cookie on every request.
-const kDefaultBaseUrl = String.fromEnvironment(
+const kConfiguredBaseUrl = String.fromEnvironment(
   'GLEAN_BASE_URL',
-  defaultValue: 'http://127.0.0.1:8080',
+  defaultValue: '',
 );
+
+String get kDefaultBaseUrl => kConfiguredBaseUrl.isNotEmpty
+    ? kConfiguredBaseUrl
+    : (kIsWeb ? '' : 'http://127.0.0.1:8080');
 
 /// Shared secret, for a reader running with GLEAN_TOKEN set.
 ///
@@ -31,10 +36,10 @@ const kToken = String.fromEnvironment('GLEAN_TOKEN', defaultValue: '');
 /// not set them.
 class AppState extends ChangeNotifier {
   AppState({
-    String baseUrl = kDefaultBaseUrl,
+    String? baseUrl,
     String token = kToken,
     GleanClient? client,
-  }) : client = client ?? GleanClient(baseUrl: baseUrl, token: token);
+  }) : client = client ?? GleanClient(baseUrl: baseUrl ?? kDefaultBaseUrl, token: token);
 
   final GleanClient client;
 

@@ -31,6 +31,7 @@ REPO = pathlib.Path(__file__).parent.parent
 
 APP_NAME = "glean-reader"
 PORT = 8080
+PUBLIC_URL = "https://codegod100--glean-reader-serve.modal.run"
 
 VOLUME_PATH = "/data"
 SNAPSHOT_DIR = f"{VOLUME_PATH}/db"
@@ -45,7 +46,7 @@ SNAPSHOT_INTERVAL = 300
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
-    .apt_install("curl", "xz-utils", "gcc", "libsqlite3-dev", "ca-certificates")
+    .apt_install("curl", "xz-utils", "gcc", "sqlite3", "libsqlite3-dev", "ca-certificates")
     .run_commands(
         # choosenim is the supported installer and pins a known version;
         # Debian's Nim is far behind what this code needs.
@@ -73,6 +74,44 @@ volume = modal.Volume.from_name("glean-reader-data", create_if_missing=True)
 secret = modal.Secret.from_name("glean-reader")
 
 app = modal.App(APP_NAME)
+
+
+@app.function(image=image, secrets=[secret], timeout=300)
+def import_opml(opml: str) -> str:
+    """Import a backup through the live API without revealing GLEAN_TOKEN.
+
+    Run with ``modal run deploy/modal_app.py::import_opml --opml "$(<backup.opml)"``.
+    Keeping this as a Modal function means only workspace members can invoke
+    it, while the browser-facing reader remains protected by its shared token.
+    """
+    from urllib.parse import urlencode
+    from urllib.request import Request, urlopen
+
+    token = os.environ["GLEAN_TOKEN"]
+    request = Request(
+        f"{PUBLIC_URL}/opml",
+        data=urlencode({"opml": opml}).encode(),
+        headers={"X-Glean-Token": token},
+        method="POST",
+    )
+    with urlopen(request, timeout=240) as response:
+        return response.read().decode()
+
+
+@app.function(image=image, secrets=[secret], timeout=60)
+def inspect_feeds() -> str:
+    """Return live feed and unread-article data for a recovery check."""
+    from urllib.request import Request, urlopen
+
+    headers = {"X-Glean-Token": os.environ["GLEAN_TOKEN"]}
+    results = {}
+    for path in ("/feeds", "/articles?status=unread&limit=5"):
+        with urlopen(Request(f"{PUBLIC_URL}{path}", headers=headers), timeout=50) as response:
+            results[path] = response.read().decode()
+    import json
+    body = json.dumps(results)
+    print(body, flush=True)
+    return body
 
 
 def _snapshot_once() -> None:
