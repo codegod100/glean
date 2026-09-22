@@ -259,6 +259,24 @@ proc renderNode*(n: XmlNode): string =
 
 # --- entry point -----------------------------------------------------------
 
+proc sanitizeFragment*(html: string): string =
+  ## Run arbitrary HTML through the same whitelist the extractor uses.
+  ##
+  ## Feed content needs this as much as scraped content does, and is easier
+  ## to forget: an entry's `content:encoded` is attacker-controlled markup
+  ## from a stranger's server, and it reaches the reader without ever passing
+  ## through extractArticle. Rendering it raw is a script tag away from
+  ## running in the reader's browser.
+  ##
+  ## Returns "" for input that will not parse, rather than raising: a feed
+  ## with one malformed entry should lose that entry's body, not the article.
+  if html.strip().len == 0: return ""
+  let doc =
+    try: parseHtml(html)
+    except CatchableError: return ""
+  removeUnwanted(doc)
+  renderNode(doc)
+
 proc extractArticle*(body: string): string =
   ## Pull the readable article out of a page.
   ##

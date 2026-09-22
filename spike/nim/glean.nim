@@ -11,11 +11,15 @@
 ## extraction -- are the same modules the larger port built and tested.
 
 import std/[asyncdispatch, asynchttpserver, httpclient, json, options, os,
-            strformat, strutils, uri]
+            strformat, strutils, times, uri]
 import reader/[articlestore, feedfetcher, feedparser, feedstore, gleandb,
                 scraper, sqlite]
 
 const
+  ## Baked in at compile time rather than read from disk, so the reader stays
+  ## one file to copy around.
+  IndexHtml = staticRead("ui.html")
+
   ## Everything is stored per-user underneath because the schema came from a
   ## multi-user server. One constant user keeps that plumbing satisfied
   ## without inventing accounts.
@@ -44,8 +48,16 @@ proc toJson(a: Article): JsonNode =
     "url": a.url,
     "author": a.author,
     "summary": a.summary,
-    "content": (if a.fullContent.len > 0: a.fullContent else: a.content),
-    "published": (if a.published.isSome: $a.published.get else: ""),
+    # Sanitised on the way out, whichever source it came from. Scraped text
+    # has already been through the whitelist, but feed content has not, and
+    # it is markup from a stranger's server heading for a browser.
+    "content": sanitizeFragment(
+      if a.fullContent.len > 0: a.fullContent else: a.content),
+    # Explicitly ISO 8601. Nim's `$` on a DateTime dumps the struct's fields,
+    # which reaches the browser as "Invalid Date".
+    "published": (if a.published.isSome:
+                    a.published.get.format("yyyy-MM-dd'T'HH:mm:ss'Z'")
+                  else: ""),
     "is_read": a.isRead,
   }
 
@@ -111,7 +123,10 @@ proc handle(r: Reader, req: Request) {.async.} =
   case req.reqMethod
   of HttpGet:
     case segs[0]
-    of "", "health":
+    of "":
+      await req.respond(Http200, IndexHtml,
+                        newHttpHeaders({"Content-Type": "text/html; charset=utf-8"}))
+    of "health":
       await jsonResponse(req, Http200, %*{"ok": true})
 
     of "feeds":
@@ -238,7 +253,7 @@ proc main() {.async.} =
   let reader = Reader(db: db)
 
   echo &"glean reading from {dbPath}"
-  echo &"listening on http://127.0.0.1:{port}"
+  echo &"open http://127.0.0.1:{port}"
 
   var server = newAsyncHttpServer()
   # Single-threaded server, single Reader: the cast is asserting that, not

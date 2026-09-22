@@ -1,0 +1,299 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>glean</title>
+<style>
+  :root {
+    --bg: #fafaf7; --fg: #1a1a1a; --muted: #6b6b6b; --line: #e0e0da;
+    --surface: #fff; --accent: #00754a; --danger: #c82014;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16161a; --fg: #e8e8e3; --muted: #9a9a9a; --line: #2c2c32;
+      --surface: #1d1d22; --accent: #4ade80; --danger: #ff6b5e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: grid; grid-template-columns: 280px 1fr; height: 100vh;
+  }
+  /* The sidebar scrolls independently of the article, so a long read never
+     loses the feed list. */
+  aside {
+    border-right: 1px solid var(--line); overflow-y: auto; padding: 14px;
+    background: var(--surface);
+  }
+  main { overflow-y: auto; padding: 20px 28px; }
+  h1 { font-size: 18px; margin: 0 0 14px; letter-spacing: -.01em; }
+  h1 span { color: var(--muted); font-weight: 400; font-size: 13px; }
+  button, input, select {
+    font: inherit; color: inherit; background: var(--bg);
+    border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px;
+  }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .row { display: flex; gap: 6px; margin-bottom: 10px; }
+  .row input { flex: 1; min-width: 0; }
+  .feed {
+    display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+    border-radius: 6px; cursor: pointer; font-size: 14px;
+  }
+  .feed:hover { background: var(--bg); }
+  .feed.on { background: var(--bg); font-weight: 600; }
+  .feed .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .feed .x { color: var(--muted); opacity: 0; }
+  .feed:hover .x { opacity: 1; }
+  .feed .x:hover { color: var(--danger); }
+  .item {
+    padding: 12px 0; border-bottom: 1px solid var(--line); cursor: pointer;
+  }
+  .item.read .title { color: var(--muted); font-weight: 400; }
+  .title { font-weight: 600; margin-bottom: 3px; }
+  .meta { color: var(--muted); font-size: 12.5px; }
+  .summary { color: var(--muted); font-size: 13.5px; margin-top: 4px;
+             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+             overflow: hidden; }
+  article { max-width: 42em; }
+  article h2 { font-size: 24px; line-height: 1.25; margin: 0 0 6px; }
+  .body { margin-top: 18px; }
+  .body img { max-width: 100%; height: auto; }
+  .body pre { overflow-x: auto; background: var(--surface); padding: 10px;
+              border-radius: 6px; }
+  .body a { color: var(--accent); }
+  .body blockquote { border-left: 3px solid var(--line); margin-left: 0;
+                     padding-left: 14px; color: var(--muted); }
+  .empty { color: var(--muted); padding: 30px 0; }
+  .err { color: var(--danger); font-size: 13px; }
+  .bar { display: flex; gap: 8px; align-items: center; margin-bottom: 14px;
+         flex-wrap: wrap; }
+  .bar input[type=search] { flex: 1; min-width: 140px; }
+  @media (max-width: 720px) {
+    body { grid-template-columns: 1fr; }
+    aside { display: none; }
+    aside.show { display: block; }
+  }
+</style>
+
+<aside>
+  <h1>glean <span id="total"></span></h1>
+  <div class="row">
+    <input id="url" placeholder="feed or site URL" autocomplete="off">
+    <button id="add" class="primary">+</button>
+  </div>
+  <div class="row">
+    <button id="refresh">Refresh</button>
+    <button id="allread">Mark read</button>
+  </div>
+  <div id="err" class="err"></div>
+  <div id="feeds"></div>
+</aside>
+
+<main>
+  <div class="bar">
+    <select id="status">
+      <option value="unread">Unread</option>
+      <option value="all">All</option>
+      <option value="read">Read</option>
+    </select>
+    <input id="q" type="search" placeholder="Search…">
+    <button id="back" hidden>← Back</button>
+  </div>
+  <div id="view"></div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const state = { feed: "", status: "unread", q: "", article: null };
+
+const api = async (path, opts) => {
+  const res = await fetch(path, opts);
+  const body = await res.json().catch(() => ({ error: "bad response" }));
+  if (!res.ok || body.error) throw new Error(body.error || `HTTP ${res.status}`);
+  return body;
+};
+const post = (path, params) =>
+  api(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(params || {}),
+  });
+
+const say = msg => { $("#err").textContent = msg || ""; };
+const when = iso => {
+  if (!iso) return "";
+  const d = new Date(iso), mins = (Date.now() - d) / 60000;
+  if (mins < 60) return `${Math.max(1, Math.round(mins))}m`;
+  if (mins < 1440) return `${Math.round(mins / 60)}h`;
+  if (mins < 43200) return `${Math.round(mins / 1440)}d`;
+  return d.toLocaleDateString();
+};
+
+async function loadFeeds() {
+  const feeds = await api("/feeds");
+  const { count } = await api("/unread");
+  $("#total").textContent = count ? `${count} unread` : "all read";
+
+  const el = $("#feeds");
+  el.innerHTML = "";
+  el.append(feedRow({ feed_url: "", title: "All feeds", unread: count }));
+  for (const f of feeds) el.append(feedRow(f));
+}
+
+function feedRow(f) {
+  const div = document.createElement("div");
+  div.className = "feed" + (state.feed === f.feed_url ? " on" : "");
+  div.innerHTML =
+    `<span class="name"></span><span class="count"></span>` +
+    (f.feed_url ? `<span class="x" title="Unsubscribe">×</span>` : "");
+  // textContent, not innerHTML: a feed title is whatever a stranger's server
+  // put in <title>.
+  div.querySelector(".name").textContent = f.title || f.feed_url;
+  div.querySelector(".count").textContent = f.unread || "";
+  div.onclick = e => {
+    if (e.target.classList.contains("x")) return;
+    state.feed = f.feed_url; state.article = null; render();
+  };
+  const x = div.querySelector(".x");
+  if (x) x.onclick = async e => {
+    e.stopPropagation();
+    if (!confirm(`Unsubscribe from ${f.title || f.feed_url}?`)) return;
+    await api(`/feeds?url=${encodeURIComponent(f.feed_url)}`, { method: "DELETE" });
+    if (state.feed === f.feed_url) state.feed = "";
+    render();
+  };
+  return div;
+}
+
+async function loadArticles() {
+  const p = new URLSearchParams({ limit: "100" });
+  if (state.q) p.set("q", state.q);
+  else {
+    p.set("status", state.status);
+    if (state.feed) p.set("feed", state.feed);
+  }
+  return api(`/articles?${p}`);
+}
+
+function listView(items) {
+  const view = $("#view");
+  view.innerHTML = "";
+  if (!items.length) {
+    view.innerHTML = `<div class="empty">Nothing here.</div>`;
+    return;
+  }
+  for (const a of items) {
+    const div = document.createElement("div");
+    div.className = "item" + (a.is_read ? " read" : "");
+    div.innerHTML = `<div class="title"></div><div class="meta"></div>` +
+                    (a.summary ? `<div class="summary"></div>` : "");
+    div.querySelector(".title").textContent = a.title || "(untitled)";
+    div.querySelector(".meta").textContent =
+      [a.feed_title, when(a.published), a.author].filter(Boolean).join(" · ");
+    if (a.summary) {
+      // Summaries are HTML in most feeds; show them as the text they read as.
+      const tmp = document.createElement("div");
+      tmp.innerHTML = a.summary;
+      div.querySelector(".summary").textContent = tmp.textContent;
+    }
+    div.onclick = () => openArticle(a.id);
+    view.append(div);
+  }
+}
+
+async function openArticle(id) {
+  const a = await api(`/articles/${id}`);
+  state.article = a;
+  if (!a.is_read) { await post("/read", { id }); loadFeeds(); }
+
+  const view = $("#view");
+  view.innerHTML = `<article>
+      <h2></h2><div class="meta"></div>
+      <div class="bar" style="margin-top:14px">
+        <a id="orig" target="_blank" rel="noopener noreferrer"><button>Open original</button></a>
+        <button id="full">Fetch full text</button>
+        <button id="unread">Mark unread</button>
+      </div>
+      <div class="body"></div>
+    </article>`;
+  view.querySelector("h2").textContent = a.title || "(untitled)";
+  view.querySelector(".meta").textContent =
+    [a.feed_title, when(a.published), a.author].filter(Boolean).join(" · ");
+  // The server sanitises every article body through the same whitelist the
+  // scraper uses, so this is the one place innerHTML is deliberate.
+  view.querySelector(".body").innerHTML = a.content || "<p><em>No content.</em></p>";
+  $("#orig").href = a.url || "#";
+  $("#back").hidden = false;
+
+  $("#full").onclick = async e => {
+    e.target.disabled = true; e.target.textContent = "Fetching…";
+    try {
+      const r = await post("/fetch-content", { id });
+      view.querySelector(".body").innerHTML = r.content;
+      e.target.textContent = "Fetched";
+    } catch (err) {
+      e.target.textContent = "Fetch full text";
+      e.target.disabled = false;
+      say(err.message);
+    }
+  };
+  $("#unread").onclick = async () => {
+    await post("/read", { id, undo: "1" });
+    state.article = null; render();
+  };
+}
+
+async function render() {
+  say("");
+  try {
+    await loadFeeds();
+    if (state.article) return;
+    $("#back").hidden = true;
+    listView(await loadArticles());
+  } catch (e) { say(e.message); }
+}
+
+$("#add").onclick = async () => {
+  const url = $("#url").value.trim();
+  if (!url) return;
+  $("#add").disabled = true;
+  try {
+    const r = await post("/feeds", { url });
+    if (r.error) say(r.error); else $("#url").value = "";
+    render();
+  } catch (e) { say(e.message); }
+  finally { $("#add").disabled = false; }
+};
+$("#url").onkeydown = e => { if (e.key === "Enter") $("#add").click(); };
+
+$("#refresh").onclick = async e => {
+  e.target.disabled = true; e.target.textContent = "Refreshing…";
+  try {
+    const r = await post("/refresh");
+    if (r.errors?.length) say(`${r.errors.length} feed(s) failed`);
+    state.article = null; render();
+  } catch (err) { say(err.message); }
+  finally { e.target.disabled = false; e.target.textContent = "Refresh"; }
+};
+
+$("#allread").onclick = async () => {
+  if (!confirm(state.feed ? "Mark this feed read?" : "Mark everything read?")) return;
+  await post("/read-all", state.feed ? { feed: state.feed } : {});
+  state.article = null; render();
+};
+
+$("#status").onchange = e => { state.status = e.target.value; state.article = null; render(); };
+$("#back").onclick = () => { state.article = null; render(); };
+
+let timer;
+$("#q").oninput = e => {
+  clearTimeout(timer);
+  // Debounced: every keystroke is an FTS5 query otherwise.
+  timer = setTimeout(() => { state.q = e.target.value.trim(); state.article = null; render(); }, 250);
+};
+
+render();
+</script>
