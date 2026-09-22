@@ -2,6 +2,7 @@ package feed
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -18,6 +19,10 @@ const (
 	maxRetries     = 3
 	baseRetryDelay = 1 * time.Second
 )
+
+// errUnparseable marks a response that arrived intact and was not a feed, as
+// opposed to one that never arrived. Only the latter is worth retrying.
+var errUnparseable = errors.New("response was not a feed")
 
 type ATProtoFetcher interface {
 	FetchFeed(ctx context.Context, feedURL string) (*ParseResult, error)
@@ -60,17 +65,20 @@ func (f *Fetcher) Fetch(ctx context.Context, feedURL string) (*ParseResult, erro
 			}
 		}
 
-		if lastResp != nil {
-			lastResp.Body.Close()
-		}
-
 		result, resp, err := f.executeRequest(ctx, feedURL)
 		lastResp = resp
 		if err == nil {
 			return result, nil
 		}
 
+		// A status the server has settled on will not change on a retry.
 		if resp != nil && !httpclient.IsRetryable(resp.StatusCode) {
+			return nil, err
+		}
+
+		// Nor will a body that did not parse. Retrying it costs three more
+		// requests to reach the same conclusion.
+		if errors.Is(err, errUnparseable) {
 			return nil, err
 		}
 
@@ -119,9 +127,18 @@ func (f *Fetcher) executeRequest(ctx context.Context, feedURL string) (*ParseRes
 	}
 	defer resp.Body.Close()
 
+	// The response is returned on the error paths too, not just on success.
+	// It is what lets the caller tell a 503 worth retrying from a 404 that is
+	// not; returning nil here made that check unreachable and every failure
+	// cost the full retry budget. The body is closed by the defer above, but
+	// StatusCode and Header stay readable, which is all the caller needs.
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, resp, fmt.Errorf("fetching feed: unexpected status %s", resp.Status)
+	}
+
 	result, err := Parse(resp.Body, feedURL)
 	if err != nil {
-		return nil, nil, fmt.Errorf("parsing feed: %w", err)
+		return nil, resp, fmt.Errorf("%w: %v", errUnparseable, err)
 	}
 
 	return result, resp, nil
