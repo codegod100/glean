@@ -288,10 +288,15 @@ func (e *Engine) ComputeUserSimilarity(ctx context.Context) error {
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO _likes_overlap (user_a, user_b, common)
 			SELECT l1.author_did, l2.author_did,
-				CAST(SUM(
+				-- ROUND, not a bare CAST: each decay factor is at most 1, so
+				-- their product is always just under it. Truncating meant a
+				-- pair sharing one recent like summed to 0.9999 and stored 0,
+				-- which both hid the overlap from the reader ("N shared
+				-- likes") and zeroed the likes term of their similarity.
+				CAST(ROUND(SUM(
 					EXP(-0.023 * CAST(julianday('now') - julianday(l1.created_at) AS REAL))
 				  * EXP(-0.023 * CAST(julianday('now') - julianday(l2.created_at) AS REAL))
-				) AS INTEGER)
+				)) AS INTEGER)
 			FROM articles.likes l1
 			JOIN articles.likes l2 ON l1.feed_url = l2.feed_url AND l1.article_url = l2.article_url
 				AND l1.author_did < l2.author_did

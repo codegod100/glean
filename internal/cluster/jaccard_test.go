@@ -2,12 +2,14 @@ package cluster
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"hash/fnv"
 	"log/slog"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	"pkg.rbrt.fr/glean/internal/db"
@@ -891,4 +893,81 @@ func TestNormalizeFeedScores(t *testing.T) {
 	assert.Equal(t, recs[0].Score, 1.0)
 	assert.Equal(t, recs[1].Score, 4.0/9.0)
 	assert.Equal(t, recs[2].Score, 0.0)
+}
+
+// TestComputeUserSimilarity above asserts only that some pairs exist, which
+// is how the common_likes truncation survived: the column was never read.
+//
+// Each decay factor is at most 1, so their product is always just under it.
+// A bare CAST(... AS INTEGER) therefore floors a single shared like to zero,
+// which both hides the overlap from the reader ("N shared likes") and zeroes
+// the likes term of that pair's similarity.
+//
+// The like is deliberately an hour old rather than brand new. A like written
+// in the same instant the computation runs has an age of ~0, so its decay
+// rounds to exactly 1.0 and the truncation does not bite -- which is not a
+// case that occurs outside a test, since likes arrive from a PDS already
+// minutes to days old.
+func TestUserSimilarity_SingleSharedLikeCounts(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupClusterTestDB(t)
+	seedClusterData(t, ctx, dbs)
+
+	const feedURL = "https://a.com/feed"
+	const articleURL = "https://a.com/shared-article"
+	anHourAgo := time.Now().Add(-time.Hour)
+	for _, did := range []string{"did:test:alice", "did:test:bob"} {
+		assert.NilError(t, dbs.Articles.CreateLike(ctx, &db.Like{
+			URI:        "at://" + did + "/app.bsky.feed.like/shared",
+			AuthorDID:  did,
+			FeedURL:    feedURL,
+			ArticleURL: articleURL,
+			CreatedAt:  sql.NullTime{Time: anHourAgo, Valid: true},
+		}))
+	}
+
+	engine := newTestEngine(dbs)
+	assert.NilError(t, engine.ComputeUserSimilarity(ctx))
+
+	var commonLikes int
+	err := dbs.SQLDB().QueryRowContext(ctx, `
+		SELECT common_likes FROM recs.user_similarity
+		WHERE user_a = ? AND user_b = ?
+	`, "did:test:alice", "did:test:bob").Scan(&commonLikes)
+	assert.NilError(t, err)
+	assert.Equal(t, commonLikes, 1,
+		"one shared like should count as one, not be floored to zero")
+}
+
+// The rounding must not undo the decay: a like from long ago should still
+// count for nothing.
+func TestUserSimilarity_StaleSharedLikeDecays(t *testing.T) {
+	ctx := context.Background()
+	dbs := setupClusterTestDB(t)
+	seedClusterData(t, ctx, dbs)
+
+	const feedURL = "https://a.com/feed"
+	const articleURL = "https://a.com/ancient-article"
+	longAgo := time.Now().AddDate(0, 0, -400)
+	for _, did := range []string{"did:test:alice", "did:test:bob"} {
+		assert.NilError(t, dbs.Articles.CreateLike(ctx, &db.Like{
+			URI:        "at://" + did + "/app.bsky.feed.like/ancient",
+			AuthorDID:  did,
+			FeedURL:    feedURL,
+			ArticleURL: articleURL,
+			CreatedAt:  sql.NullTime{Time: longAgo, Valid: true},
+		}))
+	}
+
+	engine := newTestEngine(dbs)
+	assert.NilError(t, engine.ComputeUserSimilarity(ctx))
+
+	var commonLikes int
+	err := dbs.SQLDB().QueryRowContext(ctx, `
+		SELECT common_likes FROM recs.user_similarity
+		WHERE user_a = ? AND user_b = ?
+	`, "did:test:alice", "did:test:bob").Scan(&commonLikes)
+	assert.NilError(t, err)
+	assert.Equal(t, commonLikes, 0,
+		"a 400-day-old shared like should decay to nothing")
 }
