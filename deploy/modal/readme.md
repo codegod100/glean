@@ -44,9 +44,10 @@ running its exit handler, up to five minutes of writes are gone. Lower
 `max_containers=1` is not tuning, it is a correctness requirement. Two
 containers would mean two SQLite writers over two independent copies of the
 data, and the Volume's last-write-wins semantics would silently discard one of
-them. `min_containers=1` keeps that container alive because Glean's background
-workers — the Jetstream websocket consumer and the PDS sync / clustering /
-feed-fetch loops — only run while a container exists.
+them. `min_containers=0` lets that container scale to zero when idle. Glean's
+background workers — the Jetstream websocket consumer and the PDS sync /
+clustering / feed-fetch loops — only run while a container exists, so they
+pause once it scales down and resume when the next request wakes one.
 
 ## Secrets
 
@@ -75,8 +76,9 @@ Modal's model is autoscaling ephemeral containers. Glean is a stateful,
 single-writer, always-on server. The mismatch is real and this deployment
 manages it rather than resolving it:
 
-- **One container, always warm.** No horizontal scaling; `min_containers=1`
-  means you pay for an idle container rather than scaling to zero.
+- **One container, scaled to zero when idle.** No horizontal scaling, and
+  with `min_containers=0` the first request after an idle period pays a cold
+  start while the background workers are stopped in between.
 - **Snapshot durability, not continuous durability.** See the window above.
 - **Container churn costs data.** Any restart that skips the exit handler — a
   hard kill, an OOM, a preemption — loses the interval.
