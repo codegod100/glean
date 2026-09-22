@@ -126,22 +126,21 @@ class GleanButton extends StatelessWidget {
 ///
 /// Every screen fetches independently, so this is where retry and the
 /// "session expired" path live rather than being re-written per screen.
+/// Renders a future with consistent loading, error and empty states.
+///
+/// Every screen fetches independently, so retry lives here rather than being
+/// re-written per screen.
 class AsyncView<T> extends StatelessWidget {
   const AsyncView({
     super.key,
     required this.future,
     required this.builder,
     required this.onRetry,
-    this.onUnauthorized,
   });
 
   final Future<T>? future;
   final Widget Function(BuildContext, T) builder;
   final VoidCallback onRetry;
-
-  /// Called when the server rejects the session, so the shell can send the
-  /// user back to sign-in instead of showing a bare error.
-  final VoidCallback? onUnauthorized;
 
   @override
   Widget build(BuildContext context) {
@@ -153,9 +152,6 @@ class AsyncView<T> extends StatelessWidget {
         }
         if (snap.hasError) {
           final err = snap.error;
-          if (err is ApiException && err.isUnauthorized && onUnauthorized != null) {
-            WidgetsBinding.instance.addPostFrameCallback((_) => onUnauthorized!());
-          }
           return ErrorView(
             message: err is ApiException ? err.message : 'Something went wrong.',
             onRetry: onRetry,
@@ -275,3 +271,18 @@ void showToast(BuildContext context, String message) {
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(message)));
 }
+
+
+/// Flatten HTML to the text it reads as.
+///
+/// For summaries and previews only. Article bodies are rendered as HTML,
+/// which is safe because the server sanitises every body it sends.
+String stripHtml(String html) => html
+    .replaceAll(RegExp(r'<[^>]*>'), ' ')
+    .replaceAll('&nbsp;', ' ')
+    .replaceAll('&amp;', '&')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .trim();

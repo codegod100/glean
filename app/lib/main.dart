@@ -21,7 +21,8 @@ class _GleanAppState extends State<GleanApp> {
   @override
   void initState() {
     super.initState();
-    _state.bootstrap();
+    // The feed list loads from the shell, which is the only screen that
+    // needs it; there is no session to restore first.
   }
 
   @override
@@ -39,23 +40,10 @@ class _GleanAppState extends State<GleanApp> {
         debugShowCheckedModeBanner: false,
         theme: gleanTheme(Brightness.light),
         darkTheme: gleanTheme(Brightness.dark),
-        home: const _Root(),
+        home: const HomeShell(),
       ),
     );
   }
 }
 
-/// Holds the splash until the persisted session has been checked, so the app
-/// does not flash the signed-out shell at a signed-in user.
-class _Root extends StatelessWidget {
-  const _Root();
 
-  @override
-  Widget build(BuildContext context) {
-    final app = AppScope.of(context);
-    if (app.loading && app.user == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    return const HomeShell();
-  }
-}

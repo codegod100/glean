@@ -1,19 +1,17 @@
 import 'package:flutter/material.dart';
 
+import '../api/client.dart';
 import '../app_state.dart';
+import '../models/models.dart';
 import '../theme.dart';
+import '../widgets/common.dart';
 import 'articles_screen.dart';
-import 'dashboard_screen.dart';
-import 'discover_screen.dart';
-import 'feeds_screen.dart';
-import 'library_screen.dart';
-import 'login_screen.dart';
-import 'profile_screen.dart';
-import 'trending_screen.dart';
 
-/// Bottom-tab shell. Trending is public; the rest require a session, so a
-/// signed-out visitor sees Trending with a prompt to sign in rather than a
-/// wall of failed requests.
+/// Articles, with the feed list in a drawer.
+///
+/// One screen rather than a tab bar: the reader has exactly one thing to
+/// look at, and choosing a feed is navigation within it rather than a
+/// separate destination.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -22,135 +20,209 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  int _index = 0;
+  Feed _selected = Feed.all(0);
+  bool _refreshing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppScope.read(context).load();
+    });
+  }
+
+  Future<void> _addFeed() async {
+    final url = await showDialog<String>(
+      context: context,
+      builder: (_) => const _AddFeedDialog(),
+    );
+    if (url == null || url.isEmpty || !mounted) return;
+    try {
+      await AppScope.read(context).addFeed(url);
+    } on ApiException catch (e) {
+      if (mounted) showToast(context, e.message);
+    }
+  }
+
+  Future<void> _refresh() async {
+    setState(() => _refreshing = true);
+    try {
+      final result = await AppScope.read(context).refresh();
+      if (!mounted) return;
+      showToast(
+        context,
+        result.errors.isEmpty
+            ? '${result.added} new'
+            : '${result.added} new, ${result.errors.length} feed(s) failed',
+      );
+    } on ApiException catch (e) {
+      if (mounted) showToast(context, e.message);
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
+  Future<void> _markAllRead() async {
+    final scope = _selected.isAll ? 'everything' : _selected.title;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: const RoundedRectangleBorder(),
+        title: Text('Mark $scope read?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Mark read')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await AppScope.read(context).markAllRead(feedUrl: _selected.feedUrl);
+  }
+
+  Future<void> _remove(Feed f) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: const RoundedRectangleBorder(),
+        title: const Text('Unsubscribe?'),
+        content: Text(f.title),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Unsubscribe')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await AppScope.read(context).removeFeed(f.feedUrl);
+    if (mounted && _selected.feedUrl == f.feedUrl) {
+      setState(() => _selected = Feed.all(0));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final app = AppScope.of(context);
     final c = GleanColors.of(context);
 
-    // Tab set depends on the session: no point offering Home to a visitor who
-    // would only get a 401.
-    final tabs = <_Tab>[
-      if (app.signedIn) ...[
-        const _Tab(icon: Icons.home_outlined, label: 'Home', child: DashboardScreen()),
-        const _Tab(icon: Icons.article_outlined, label: 'Articles', child: ArticlesScreen()),
-        const _Tab(icon: Icons.rss_feed, label: 'Feeds', child: FeedsScreen()),
-        const _Tab(icon: Icons.bookmark_border, label: 'Library', child: LibraryScreen()),
-        const _Tab(icon: Icons.explore_outlined, label: 'Discover', child: DiscoverScreen()),
-      ] else
-        const _Tab(icon: Icons.trending_up, label: 'Trending', child: TrendingScreen()),
-    ];
-    final index = _index.clamp(0, tabs.length - 1);
-
     return Scaffold(
       appBar: AppBar(
-        title: Text(tabs[index].label == 'Home' ? 'glean' : tabs[index].label),
+        title: Text(_selected.isAll ? 'glean' : _selected.title),
         actions: [
-          if (app.signedIn) ...[
-            IconButton(
-              tooltip: 'Trending',
-              icon: const Icon(Icons.trending_up),
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => Scaffold(
-                  appBar: AppBar(title: const Text('Trending')),
-                  body: const TrendingScreen(),
-                ),
-              )),
-            ),
-            IconButton(
-              tooltip: 'Profile',
-              icon: const Icon(Icons.person_outline),
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => Scaffold(
-                  appBar: AppBar(title: const Text('Profile')),
-                  body: const ProfileScreen(),
-                ),
-              )),
-            ),
-            IconButton(
-              tooltip: 'Sign out',
-              icon: const Icon(Icons.logout),
-              onPressed: () => AppScope.read(context).signOut(),
-            ),
-          ]
-          else
-            TextButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-              ),
-              child: const Text('Sign in'),
-            ),
+          IconButton(
+            tooltip: 'Mark all read',
+            icon: const Icon(Icons.done_all),
+            onPressed: _markAllRead,
+          ),
+          IconButton(
+            tooltip: 'Refresh',
+            icon: _refreshing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.refresh),
+            onPressed: _refreshing ? null : _refresh,
+          ),
         ],
       ),
-      body: _LazyIndexedStack(index: index, children: [for (final t in tabs) t.child]),
-      bottomNavigationBar: tabs.length < 2
-          ? null
-          : Container(
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: c.border, width: 2)),
+      drawer: Drawer(
+        backgroundColor: c.bg,
+        child: SafeArea(
+          child: Column(
+            children: [
+              ListTile(
+                title: Text('Feeds',
+                    style: Theme.of(context).textTheme.titleMedium),
+                trailing: IconButton(
+                  icon: const Icon(Icons.add),
+                  tooltip: 'Add feed',
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _addFeed();
+                  },
+                ),
               ),
-              child: NavigationBar(
-                selectedIndex: index,
-                backgroundColor: c.bg,
-                indicatorColor: c.accent,
-                onDestinationSelected: (i) => setState(() => _index = i),
-                destinations: [
-                  for (final t in tabs)
-                    NavigationDestination(icon: Icon(t.icon), label: t.label),
-                ],
+              if (app.error != null)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(app.error!,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: c.danger)),
+                ),
+              Expanded(
+                child: ListView(
+                  children: [
+                    for (final f in app.sidebar)
+                      ListTile(
+                        selected: f.feedUrl == _selected.feedUrl,
+                        title: Text(f.title,
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        trailing: f.unread > 0
+                            ? GleanTag('${f.unread}', emphasis: !f.isAll)
+                            : null,
+                        onLongPress: f.isAll ? null : () => _remove(f),
+                        onTap: () {
+                          setState(() => _selected = f);
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                  ],
+                ),
               ),
-            ),
+            ],
+          ),
+        ),
+      ),
+      body: ArticlesScreen(key: ValueKey(_selected.feedUrl), feed: _selected),
     );
   }
 }
 
-class _Tab {
-  const _Tab({required this.icon, required this.label, required this.child});
+class _AddFeedDialog extends StatefulWidget {
+  const _AddFeedDialog();
 
-  final IconData icon;
-  final String label;
-  final Widget child;
+  @override
+  State<_AddFeedDialog> createState() => _AddFeedDialogState();
 }
 
-
-/// IndexedStack keeps every tab alive, which is what we want -- scroll position
-/// and loaded pages survive switching -- but it also *builds* them all up
-/// front, so every screen would fire its initial fetch at startup whether or
-/// not the reader ever opens it. This builds each tab on first visit and keeps
-/// it alive from then on.
-class _LazyIndexedStack extends StatefulWidget {
-  const _LazyIndexedStack({required this.index, required this.children});
-
-  final int index;
-  final List<Widget> children;
+class _AddFeedDialogState extends State<_AddFeedDialog> {
+  final _controller = TextEditingController();
 
   @override
-  State<_LazyIndexedStack> createState() => _LazyIndexedStackState();
-}
-
-class _LazyIndexedStackState extends State<_LazyIndexedStack> {
-  final _visited = <int>{};
-
-  @override
-  void initState() {
-    super.initState();
-    _visited.add(widget.index);
-  }
-
-  @override
-  void didUpdateWidget(_LazyIndexedStack old) {
-    super.didUpdateWidget(old);
-    _visited.add(widget.index);
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return IndexedStack(
-      index: widget.index,
-      children: [
-        for (var i = 0; i < widget.children.length; i++)
-          if (_visited.contains(i)) widget.children[i] else const SizedBox.shrink(),
+    return AlertDialog(
+      shape: const RoundedRectangleBorder(),
+      title: const Text('Add feed'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        keyboardType: TextInputType.url,
+        decoration: const InputDecoration(hintText: 'https://example.com/feed.xml'),
+        onSubmitted: (v) => Navigator.pop(context, v.trim()),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.pop(context, _controller.text.trim()),
+          child: const Text('Add'),
+        ),
       ],
     );
   }

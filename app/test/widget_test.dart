@@ -2,147 +2,138 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/testing.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/testing.dart';
 
-import 'package:glean_app/src/api/session.dart';
+import 'package:glean_app/src/api/client.dart';
 import 'package:glean_app/src/app_state.dart';
 import 'package:glean_app/src/screens/home_shell.dart';
 import 'package:glean_app/src/theme.dart';
 
-/// Fake server covering just the routes the shell touches on startup.
-http.Client _fakeServer({required bool signedIn, List<String>? seen}) {
+/// A stand-in for the reader, covering the routes the shell touches.
+http.Client fakeReader({List<String>? seen, bool empty = false}) {
   return MockClient((req) async {
-    final path = req.url.path;
-    seen?.add(path);
-    if (path == '/api/me') {
-      return http.Response(
-        jsonEncode({
-          'user': signedIn
-              ? {
-                  'did': 'did:plc:abc',
-                  'handle': 'reader.bsky.social',
-                  'display_name': 'Reader',
-                  'avatar_url': '',
-                }
-              : null,
-          'csrf_token': 'tok',
-          'has_llm': false,
-          'client_id': 'https://example.test/client-metadata',
-        }),
-        200,
-        headers: {'content-type': 'application/json'},
-      );
+    seen?.add('${req.method} ${req.url.path}');
+    Map<String, String> q = req.url.queryParameters;
+    late final Object body;
+
+    switch (req.url.path) {
+      case '/feeds':
+        if (req.method == 'GET') {
+          body = empty
+              ? []
+              : [
+                  {
+                    'feed_url': 'https://a.test/feed',
+                    'title': 'Feed A',
+                    'category': '',
+                    'unread': 2,
+                    'favicon_url': '',
+                  },
+                ];
+        } else {
+          body = {'feed_url': q['url'] ?? '', 'added': 3};
+        }
+      case '/unread':
+        body = {'count': empty ? 0 : 2};
+      case '/articles':
+        body = empty
+            ? []
+            : [
+                {
+                  'id': 1,
+                  'feed_url': 'https://a.test/feed',
+                  'feed_title': 'Feed A',
+                  'title': 'First article',
+                  'url': 'https://a.test/1',
+                  'author': 'Alice',
+                  'summary': '<p>a <b>summary</b></p>',
+                  'content': '<p>body</p>',
+                  'published': '2026-09-20T10:00:00Z',
+                  'is_read': false,
+                },
+              ];
+      case '/refresh':
+        body = {'added': 4, 'errors': []};
+      default:
+        body = {'ok': true};
     }
-    if (path == '/api/trending/') {
-      return http.Response(
-        jsonEncode({
-          'user': null,
-          'trending': [
-            {
-              'article_id': 1,
-              'title': 'A trending article',
-              'url': 'https://example.test/a',
-              'author': '',
-              'summary': '',
-              'feed_url': 'https://example.test/feed',
-              'feed_title': 'Example',
-              'favicon_url': '',
-              'like_count': 3,
-              'annotation_count': 0,
-              'has_liked': false,
-            }
-          ],
-          'scope': 'all',
-          'pagination': {
-            'page': 1,
-            'page_size': 25,
-            'has_prev': false,
-            'has_next': false,
-            'prev_page': 0,
-            'next_page': 0,
-          },
-        }),
-        200,
-        headers: {'content-type': 'application/json'},
-      );
-    }
-    if (path == '/api/dashboard/') {
-      return http.Response(
-        jsonEncode({
-          'user': {'did': 'did:plc:abc', 'handle': 'reader.bsky.social', 'display_name': '', 'avatar_url': ''},
-          'subscription_count': 2,
-          'unread_count': 7,
-          'articles': [],
-          'personal_trending': [],
-          'global_trending': [],
-          'digest_enabled': false,
-          'has_llm': false,
-          'now': 0,
-        }),
-        200,
-        headers: {'content-type': 'application/json'},
-      );
-    }
-    return http.Response('{"error":"not found"}', 404,
+    return http.Response(jsonEncode(body), 200,
         headers: {'content-type': 'application/json'});
   });
 }
 
-Future<void> _pump(WidgetTester tester,
-    {required bool signedIn, List<String>? seen}) async {
-  SharedPreferences.setMockInitialValues({});
+Future<AppState> pump(WidgetTester tester,
+    {List<String>? seen, bool empty = false}) async {
   final state = AppState(
-    session: GleanSession(
-      baseUrl: 'https://example.test',
-      client: _fakeServer(signedIn: signedIn, seen: seen),
-    ),
+    client: GleanClient(
+        baseUrl: 'https://reader.test',
+        client: fakeReader(seen: seen, empty: empty)),
   );
-  await state.bootstrap();
-  await tester.pumpWidget(
-    AppScope(
-      state: state,
-      child: MaterialApp(theme: gleanTheme(Brightness.light), home: const HomeShell()),
+  await tester.pumpWidget(AppScope(
+    state: state,
+    child: MaterialApp(
+      theme: gleanTheme(Brightness.light),
+      home: const HomeShell(),
     ),
-  );
+  ));
   await tester.pumpAndSettle();
+  return state;
 }
 
 void main() {
-  testWidgets('a signed-out visitor gets Trending and a sign-in affordance',
-      (tester) async {
-    await _pump(tester, signedIn: false);
-
-    expect(find.text('Sign in'), findsOneWidget);
-    expect(find.text('A trending article'), findsOneWidget);
-    // Home and Articles would only 401 for a visitor, so they are not offered.
-    expect(find.text('Home'), findsNothing);
-    expect(find.text('Articles'), findsNothing);
-  });
-
-  testWidgets('a signed-in reader gets the full tab set and dashboard counts',
-      (tester) async {
-    await _pump(tester, signedIn: true);
-
-    expect(find.text('Sign in'), findsNothing);
-    expect(find.text('Articles'), findsWidgets);
-    expect(find.text('7'), findsOneWidget);
-    expect(find.text('unread'), findsOneWidget);
-  });
-
-  testWidgets('tabs do not fetch until they are opened', (tester) async {
+  testWidgets('articles and unread counts load on open', (tester) async {
     final seen = <String>[];
-    await _pump(tester, signedIn: true, seen: seen);
+    await pump(tester, seen: seen);
 
-    // Home is the initial tab, so only it should have fetched. Building every
-    // tab up front would fire five requests at startup.
-    expect(seen, contains('/api/dashboard/'));
-    expect(seen.where((p) => p.startsWith('/api/recs')), isEmpty);
-    expect(seen, isNot(contains('/api/feeds/')));
+    expect(find.text('First article'), findsOneWidget);
+    expect(find.text('Feed A'), findsWidgets);
+    // Summaries are HTML in most feeds; the tile shows the text they read as.
+    expect(find.textContaining('a summary'), findsOneWidget);
+    expect(find.textContaining('<b>'), findsNothing);
 
-    await tester.tap(find.text('Feeds'));
+    expect(seen, contains('GET /articles'));
+    expect(seen, contains('GET /feeds'));
+  });
+
+  testWidgets('an empty reader says so rather than showing a spinner',
+      (tester) async {
+    await pump(tester, empty: true);
+    expect(find.textContaining('Nothing here'), findsOneWidget);
+  });
+
+  testWidgets('the drawer lists feeds with an all-feeds row', (tester) async {
+    await pump(tester);
+    await tester.tap(find.byTooltip('Open navigation menu'));
     await tester.pumpAndSettle();
-    expect(seen, contains('/api/feeds/'));
+
+    // The server does not send this row; the client adds it.
+    expect(find.text('All feeds'), findsOneWidget);
+    expect(find.text('Feed A'), findsWidgets);
+  });
+
+  testWidgets('refresh reports what arrived', (tester) async {
+    final seen = <String>[];
+    await pump(tester, seen: seen);
+
+    await tester.tap(find.byTooltip('Refresh'));
+    await tester.pumpAndSettle();
+
+    expect(seen, contains('POST /refresh'));
+    expect(find.textContaining('4 new'), findsOneWidget);
+  });
+
+  testWidgets('marking an article read updates the count without a refetch',
+      (tester) async {
+    final state = await pump(tester);
+    expect(state.unread, 2);
+
+    // The per-article button, not the app bar's "Mark all read".
+    await tester.tap(find.byTooltip('Mark read'));
+    await tester.pumpAndSettle();
+
+    // The tile flips locally and the sidebar count follows, rather than the
+    // whole list being fetched again.
+    expect(state.unread, 1);
   });
 }
