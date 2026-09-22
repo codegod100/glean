@@ -79,6 +79,14 @@ class AppState extends ChangeNotifier {
     await load();
   }
 
+  Future<ImportResult> importOpml(String source) async {
+    final result = await client.importOpml(source);
+    await load();
+    return result;
+  }
+
+  Future<String> exportOpml() => client.exportOpml();
+
   Future<RefreshResult> refresh() async {
     final result = await client.refresh();
     await load();
@@ -105,7 +113,7 @@ class AppState extends ChangeNotifier {
 
 class AppScope extends InheritedNotifier<AppState> {
   const AppScope({super.key, required AppState state, required super.child})
-      : super(notifier: state);
+    : super(notifier: state);
 
   static AppState of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<AppScope>()!.notifier!;

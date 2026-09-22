@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../api/client.dart';
 import '../app_state.dart';
@@ -71,11 +72,13 @@ class _HomeShellState extends State<HomeShell> {
         title: Text('Mark $scope read?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Mark read')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Mark read'),
+          ),
         ],
       ),
     );
@@ -92,11 +95,13 @@ class _HomeShellState extends State<HomeShell> {
         content: Text(f.title),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Unsubscribe')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Unsubscribe'),
+          ),
         ],
       ),
     );
@@ -104,6 +109,51 @@ class _HomeShellState extends State<HomeShell> {
     await AppScope.read(context).removeFeed(f.feedUrl);
     if (mounted && _selected.feedUrl == f.feedUrl) {
       setState(() => _selected = Feed.all(0));
+    }
+  }
+
+  Future<void> _manageFeeds() async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.upload_file),
+              title: const Text('Import OPML'),
+              onTap: () => Navigator.pop(ctx, 'import'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.download),
+              title: const Text('Copy OPML backup'),
+              onTap: () => Navigator.pop(ctx, 'export'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    try {
+      if (action == 'export') {
+        final opml = await AppScope.read(context).exportOpml();
+        await Clipboard.setData(ClipboardData(text: opml));
+        if (mounted) showToast(context, 'OPML backup copied to clipboard');
+      } else {
+        final source = await showDialog<String>(
+          context: context,
+          builder: (_) => const _ImportOpmlDialog(),
+        );
+        if (source == null || source.trim().isEmpty || !mounted) return;
+        final result = await AppScope.read(context).importOpml(source);
+        if (mounted)
+          showToast(
+            context,
+            '${result.added} feed(s) added${result.errors.isEmpty ? '' : ', ${result.errors.length} failed'}',
+          );
+      }
+    } on ApiException catch (e) {
+      if (mounted) showToast(context, e.message);
     }
   }
 
@@ -127,7 +177,8 @@ class _HomeShellState extends State<HomeShell> {
                 ? const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2))
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.refresh),
             onPressed: _refreshing ? null : _refresh,
           ),
@@ -139,25 +190,37 @@ class _HomeShellState extends State<HomeShell> {
           child: Column(
             children: [
               ListTile(
-                title: Text('Feeds',
-                    style: Theme.of(context).textTheme.titleMedium),
-                trailing: IconButton(
-                  icon: const Icon(Icons.add),
-                  tooltip: 'Add feed',
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    _addFeed();
-                  },
+                title: Text(
+                  'Feeds',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.more_horiz),
+                      tooltip: 'Manage feeds',
+                      onPressed: _manageFeeds,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add),
+                      tooltip: 'Add feed',
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        _addFeed();
+                      },
+                    ),
+                  ],
                 ),
               ),
               if (app.error != null)
                 Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text(app.error!,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: c.danger)),
+                  child: Text(
+                    app.error!,
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: c.danger),
+                  ),
                 ),
               Expanded(
                 child: ListView(
@@ -165,8 +228,11 @@ class _HomeShellState extends State<HomeShell> {
                     for (final f in app.sidebar)
                       ListTile(
                         selected: f.feedUrl == _selected.feedUrl,
-                        title: Text(f.title,
-                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                        title: Text(
+                          f.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         trailing: f.unread > 0
                             ? GleanTag('${f.unread}', emphasis: !f.isAll)
                             : null,
@@ -195,6 +261,44 @@ class _AddFeedDialog extends StatefulWidget {
   State<_AddFeedDialog> createState() => _AddFeedDialogState();
 }
 
+class _ImportOpmlDialog extends StatefulWidget {
+  const _ImportOpmlDialog();
+  @override
+  State<_ImportOpmlDialog> createState() => _ImportOpmlDialogState();
+}
+
+class _ImportOpmlDialogState extends State<_ImportOpmlDialog> {
+  final _controller = TextEditingController();
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    shape: const RoundedRectangleBorder(),
+    title: const Text('Import OPML'),
+    content: TextField(
+      controller: _controller,
+      autofocus: true,
+      minLines: 8,
+      maxLines: 14,
+      decoration: const InputDecoration(hintText: 'Paste your OPML here'),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      TextButton(
+        onPressed: () => Navigator.pop(context, _controller.text),
+        child: const Text('Import'),
+      ),
+    ],
+  );
+}
+
 class _AddFeedDialogState extends State<_AddFeedDialog> {
   final _controller = TextEditingController();
 
@@ -213,12 +317,16 @@ class _AddFeedDialogState extends State<_AddFeedDialog> {
         controller: _controller,
         autofocus: true,
         keyboardType: TextInputType.url,
-        decoration: const InputDecoration(hintText: 'https://example.com/feed.xml'),
+        decoration: const InputDecoration(
+          hintText: 'https://example.com/feed.xml',
+        ),
         onSubmitted: (v) => Navigator.pop(context, v.trim()),
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
         TextButton(
           onPressed: () => Navigator.pop(context, _controller.text.trim()),
           child: const Text('Add'),

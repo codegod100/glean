@@ -22,7 +22,7 @@
 import std/[asyncdispatch, asynchttpserver, httpclient, json, options, os,
             strformat, strutils, times, uri]
 import reader/[articlestore, feedfetcher, feedparser, feedstore, gleandb,
-                scraper, sqlite]
+                opml, scraper, sqlite]
 
 const
   ## Baked in at compile time rather than read from disk, so the reader stays
@@ -229,6 +229,15 @@ proc handle(r: Reader, req: Request) {.async.} =
         items.add toJson(s, s.unreadCount)
       await jsonResponse(req, Http200, items)
 
+    of "opml":
+      var feeds: seq[OpmlFeed]
+      for s in r.db.listSubscriptions(LocalUser, "", 5000, 0):
+        feeds.add OpmlFeed(url: s.feedUrl, title: s.feedTitle, category: s.category)
+      await req.respond(Http200, renderOpml(feeds), newHttpHeaders({
+        "Content-Type": "application/xml; charset=utf-8",
+        "Content-Disposition": "attachment; filename=glean-subscriptions.opml",
+      }))
+
     of "articles":
       if segs.len == 2:
         # One article, with its full text if we have it.
@@ -266,6 +275,33 @@ proc handle(r: Reader, req: Request) {.async.} =
 
   of HttpPost:
     case segs[0]
+    of "opml":
+      let source = param("opml")
+      if source.len == 0:
+        await fail(req, Http400, "OPML required")
+        return
+      if source.len > 1_000_000:
+        await fail(req, Http413, "OPML is too large")
+        return
+      var imported: seq[OpmlFeed]
+      try:
+        imported = parseOpml(source)
+      except CatchableError as e:
+        await fail(req, Http400, "invalid OPML: " & e.msg)
+        return
+      var added = 0
+      var errors = newJArray()
+      for feed in imported:
+        let exists = r.db.getSubscription(LocalUser, feed.url).isSome
+        r.db.upsertFeed(Feed(feedUrl: feed.url, title: feed.title,
+                             siteUrl: feed.siteUrl, description: feed.description))
+        r.db.createSubscription(LocalUser, feed.url, feed.title, feed.category, "", "")
+        if not exists: inc added
+        let (_, err) = r.refreshFeed(feed.url)
+        if err.len > 0: errors.add %*{"feed_url": feed.url, "error": err}
+      await jsonResponse(req, Http200,
+                         %*{"imported": imported.len, "added": added, "errors": errors})
+
     of "feeds":
       let url = param("url")
       if url.len == 0:

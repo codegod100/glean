@@ -38,30 +38,30 @@ class Article {
   final bool isRead;
 
   factory Article.fromJson(Map<String, dynamic> j) => Article(
-        id: _int(j['id']),
-        feedUrl: _str(j['feed_url']),
-        feedTitle: _str(j['feed_title']),
-        title: _str(j['title']),
-        url: _str(j['url']),
-        author: _str(j['author']),
-        summary: _str(j['summary']),
-        content: _str(j['content']),
-        published: DateTime.tryParse(_str(j['published']))?.toLocal(),
-        isRead: _bool(j['is_read']),
-      );
+    id: _int(j['id']),
+    feedUrl: _str(j['feed_url']),
+    feedTitle: _str(j['feed_title']),
+    title: _str(j['title']),
+    url: _str(j['url']),
+    author: _str(j['author']),
+    summary: _str(j['summary']),
+    content: _str(j['content']),
+    published: DateTime.tryParse(_str(j['published']))?.toLocal(),
+    isRead: _bool(j['is_read']),
+  );
 
   Article copyWith({bool? isRead, String? content}) => Article(
-        id: id,
-        feedUrl: feedUrl,
-        feedTitle: feedTitle,
-        title: title,
-        url: url,
-        author: author,
-        summary: summary,
-        content: content ?? this.content,
-        published: published,
-        isRead: isRead ?? this.isRead,
-      );
+    id: id,
+    feedUrl: feedUrl,
+    feedTitle: feedTitle,
+    title: title,
+    url: url,
+    author: author,
+    summary: summary,
+    content: content ?? this.content,
+    published: published,
+    isRead: isRead ?? this.isRead,
+  );
 }
 
 class Feed {
@@ -81,22 +81,22 @@ class Feed {
 
   /// The "all feeds" row, which the server does not send.
   factory Feed.all(int unread) => Feed(
-        feedUrl: '',
-        title: 'All feeds',
-        category: '',
-        unread: unread,
-        faviconUrl: '',
-      );
+    feedUrl: '',
+    title: 'All feeds',
+    category: '',
+    unread: unread,
+    faviconUrl: '',
+  );
 
   bool get isAll => feedUrl.isEmpty;
 
   factory Feed.fromJson(Map<String, dynamic> j) => Feed(
-        feedUrl: _str(j['feed_url']),
-        title: _str(j['title']),
-        category: _str(j['category']),
-        unread: _int(j['unread']),
-        faviconUrl: _str(j['favicon_url']),
-      );
+    feedUrl: _str(j['feed_url']),
+    title: _str(j['title']),
+    category: _str(j['category']),
+    unread: _int(j['unread']),
+    faviconUrl: _str(j['favicon_url']),
+  );
 }
 
 /// What a refresh reports back: how many arrived, and which feeds failed.
@@ -107,9 +107,29 @@ class RefreshResult {
   final List<String> errors;
 
   factory RefreshResult.fromJson(Map<String, dynamic> j) => RefreshResult(
-        added: _int(j['added']),
-        errors: ((j['errors'] as List?) ?? const [])
-            .map((e) => _str((e as Map<String, dynamic>)['feed_url']))
-            .toList(),
-      );
+    added: _int(j['added']),
+    errors: ((j['errors'] as List?) ?? const [])
+        .map((e) => _str((e as Map<String, dynamic>)['feed_url']))
+        .toList(),
+  );
+}
+
+class ImportResult {
+  const ImportResult({
+    required this.imported,
+    required this.added,
+    required this.errors,
+  });
+  final int imported;
+  final int added;
+  final List<Map<String, dynamic>> errors;
+
+  factory ImportResult.fromJson(Map<String, dynamic> json) => ImportResult(
+    imported: (json['imported'] as num?)?.toInt() ?? 0,
+    added: (json['added'] as num?)?.toInt() ?? 0,
+    errors: ((json['errors'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList(),
+  );
 }

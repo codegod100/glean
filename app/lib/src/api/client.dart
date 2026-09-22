@@ -18,7 +18,7 @@ class ApiException implements Exception {
 /// loopback. That is why this class is a thin wrapper rather than a session.
 class GleanClient {
   GleanClient({required this.baseUrl, this.token = '', http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   final String baseUrl;
 
@@ -61,15 +61,19 @@ class GleanClient {
       _decode(await _client.get(_uri(path, q), headers: _headers));
 
   Future<dynamic> _post(String path, [Map<String, String>? form]) async =>
-      _decode(await _client.post(_uri(path),
-          headers: _headers, body: form ?? const {}));
+      _decode(
+        await _client.post(
+          _uri(path),
+          headers: _headers,
+          body: form ?? const {},
+        ),
+      );
 
   // --- feeds ---
 
-  Future<List<Feed>> feeds() async =>
-      ((await _get('/feeds')) as List)
-          .map((e) => Feed.fromJson(e as Map<String, dynamic>))
-          .toList();
+  Future<List<Feed>> feeds() async => ((await _get('/feeds')) as List)
+      .map((e) => Feed.fromJson(e as Map<String, dynamic>))
+      .toList();
 
   Future<int> unreadCount() async =>
       ((await _get('/unread')) as Map<String, dynamic>)['count'] as int? ?? 0;
@@ -82,9 +86,21 @@ class GleanClient {
     return (j['added'] as num?)?.toInt() ?? 0;
   }
 
-  Future<void> removeFeed(String feedUrl) async =>
-      _decode(await _client.delete(_uri('/feeds', {'url': feedUrl}),
-          headers: _headers));
+  Future<void> removeFeed(String feedUrl) async => _decode(
+    await _client.delete(_uri('/feeds', {'url': feedUrl}), headers: _headers),
+  );
+
+  Future<String> exportOpml() async {
+    final res = await _client.get(_uri('/opml'), headers: _headers);
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw ApiException('Export failed (${res.statusCode}).');
+    }
+    return res.body;
+  }
+
+  Future<ImportResult> importOpml(String source) async => ImportResult.fromJson(
+    await _post('/opml', {'opml': source}) as Map<String, dynamic>,
+  );
 
   Future<RefreshResult> refresh() async =>
       RefreshResult.fromJson(await _post('/refresh') as Map<String, dynamic>);
@@ -114,15 +130,16 @@ class GleanClient {
       _post('/read', {'id': '$id', if (!read) 'undo': '1'});
 
   Future<int> markAllRead({String feedUrl = ''}) async {
-    final j = await _post('/read-all', {if (feedUrl.isNotEmpty) 'feed': feedUrl})
-        as Map<String, dynamic>;
+    final j = await _post('/read-all', {
+      if (feedUrl.isNotEmpty) 'feed': feedUrl,
+    }) as Map<String, dynamic>;
     return (j['unread'] as num?)?.toInt() ?? 0;
   }
 
   /// Scrape the original page for feeds that only ship an excerpt.
   Future<String> fetchFullText(int id) async {
-    final j = await _post('/fetch-content', {'id': '$id'})
-        as Map<String, dynamic>;
+    final j =
+        await _post('/fetch-content', {'id': '$id'}) as Map<String, dynamic>;
     return (j['content'] as String?) ?? '';
   }
 
