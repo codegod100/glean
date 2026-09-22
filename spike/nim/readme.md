@@ -446,6 +446,45 @@ is why it is written down both here and at the top of the module.
 
 Worth fixing on the Go side too; it is a handful of lines.
 
+## 13. The scraper
+
+`atproto/scraper.nim` ports `internal/scraper/scraper.go`. Feeds routinely
+ship a first paragraph and a "read more" link, so the reader view needs the
+page itself: find the node most likely to be the article, strip the furniture
+around it, and re-render a whitelisted subset of HTML. Output stays HTML
+rather than text, because paragraphs, headings, lists and code blocks are
+most of what makes a long article readable.
+
+### Sanitisation is the real test
+
+This renders HTML fetched from an arbitrary site into a reader's client, so
+the probe weights toward what must *not* survive: `script` and `style`
+content, `iframe`, event handlers, unknown data attributes, `javascript:`
+URLs. Attributes are whitelisted rather than blacklisted, so an attribute
+nobody anticipated is dropped by default instead of needing to be added to a
+list. A page that renders correctly proves nothing about what was stripped,
+so each of those is asserted separately.
+
+Links carry `rel="noopener noreferrer"`, and a link whose target is not
+http(s) is flattened to its text -- the words survive without the anchor.
+
+Two smaller details worth keeping:
+
+- A lazy-loaded image resolves through `src` → `data-src` → `data-lazy-src`
+  to the first *reachable* URL. Rendering the placeholder gives a broken
+  image where the picture should be.
+- Removal walks children back to front. Deleting by index shifts every
+  sibling after it, so a forward walk skips one after each removal -- the
+  probe has four consecutive `<nav>` elements specifically to catch that.
+
+The extractor refuses rather than returning something thin. A caller handed a
+nav menu cannot tell it from a short article; an error lets it fall back to
+the feed's own summary.
+
+The live check takes its URL from the Rust blog's feed rather than
+hard-coding one, after a hard-coded guess 404'd -- a probe that rots when
+someone reorganises their permalinks is worse than no probe.
+
 ## What this does and does not prove
 
 Proven: the cryptography, the storage layer, and the OAuth flow up to user
