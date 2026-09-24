@@ -1,7 +1,23 @@
 # Deploying
 
+Production deploys automatically after a commit lands on `main`. The
+[`Deploy` workflow](../.github/workflows/deploy.yml) tests and builds the
+Flutter web client, then deploys the complete application to Modal.
+
+Before merging the workflow for the first time, add these GitHub Actions
+secrets to the repository (or to its `production` environment):
+
+- `MODAL_TOKEN_ID`
+- `MODAL_TOKEN_SECRET`
+
+Create a Modal token with `modal token new`; use its token ID and secret for
+the two values. The workflow can also be run manually from the Actions tab.
+
+## Manual deployment
+
 ```
 cd app && flutter build web --release --dart-define=PULSEBOARD_BASE_URL=
+cd ..
 modal deploy deploy/modal_app.py
 ```
 
@@ -15,10 +31,10 @@ The Nim binary serves the API *and* the Flutter web build, so there is
 nothing to proxy and no second origin to arrange CORS for. The client is
 built with an empty base URL and uses relative paths.
 
-The web build is committed output rather than built in the image. Installing
-Flutter there would add gigabytes and minutes to produce something the
-developer machine has already made — so **rebuild it before deploying** or
-the deployment ships the previous client.
+The web build is generated before Modal builds the image: GitHub Actions does
+this automatically, while a manual deployment must run the Flutter command
+above first. Installing Flutter in the Modal image would add gigabytes and
+minutes to the image build.
 
 ## Authentication
 
