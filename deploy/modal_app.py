@@ -46,7 +46,10 @@ SNAPSHOT_INTERVAL = 300
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
-    .apt_install("curl", "xz-utils", "gcc", "sqlite3", "libsqlite3-dev", "ca-certificates")
+    .apt_install(
+        "curl", "xz-utils", "gcc", "sqlite3", "libsqlite3-dev",
+        "ca-certificates", "nodejs", "npm",
+    )
     .run_commands(
         # choosenim is the supported installer and pins a known version;
         # Debian's Nim is far behind what this code needs.
@@ -63,55 +66,13 @@ image = (
     # installing Flutter in the image would add gigabytes and minutes for
     # something the developer machine has already produced.
     .add_local_dir(REPO / "app" / "build" / "web", remote_path="/web", copy=True)
+    .run_commands("cd /src/auth && npm ci --omit=dev")
     .run_commands("cd /src && nim c -d:release -d:ssl --hints:off -o:/usr/local/bin/pulseboard pulseboard.nim")
 )
 
 volume = modal.Volume.from_name("pulseboard-data", create_if_missing=True)
 
-# PULSEBOARD_TOKEN. Without it the reader binds loopback and Modal's proxy reaches
-# nothing, so this is required rather than optional:
-#   modal secret create pulseboard PULSEBOARD_TOKEN="$(openssl rand -hex 24)"
-secret = modal.Secret.from_name("pulseboard")
-
 app = modal.App(APP_NAME)
-
-
-@app.function(image=image, secrets=[secret], timeout=300)
-def import_opml(opml: str) -> str:
-    """Import a backup through the live API without revealing PULSEBOARD_TOKEN.
-
-    Run with ``modal run deploy/modal_app.py::import_opml --opml "$(<backup.opml)"``.
-    Keeping this as a Modal function means only workspace members can invoke
-    it, while the browser-facing reader remains protected by its shared token.
-    """
-    from urllib.parse import urlencode
-    from urllib.request import Request, urlopen
-
-    token = os.environ["PULSEBOARD_TOKEN"]
-    request = Request(
-        f"{PUBLIC_URL}/opml",
-        data=urlencode({"opml": opml}).encode(),
-        headers={"X-Pulseboard-Token": token},
-        method="POST",
-    )
-    with urlopen(request, timeout=240) as response:
-        return response.read().decode()
-
-
-@app.function(image=image, secrets=[secret], timeout=60)
-def inspect_feeds() -> str:
-    """Return live feed and unread-article data for a recovery check."""
-    from urllib.request import Request, urlopen
-
-    headers = {"X-Pulseboard-Token": os.environ["PULSEBOARD_TOKEN"]}
-    results = {}
-    for path in ("/feeds", "/articles?status=unread&limit=5"):
-        with urlopen(Request(f"{PUBLIC_URL}{path}", headers=headers), timeout=50) as response:
-            results[path] = response.read().decode()
-    import json
-    body = json.dumps(results)
-    print(body, flush=True)
-    return body
 
 
 def _snapshot_once() -> None:
@@ -157,7 +118,6 @@ def _snapshot_loop(stop: threading.Event) -> None:
 @app.function(
     image=image,
     volumes={VOLUME_PATH: volume},
-    secrets=[secret],
     # SQLite tolerates one writer, and the snapshot scheme assumes one
     # container owns the data. This is correctness, not tuning.
     max_containers=1,
@@ -173,11 +133,9 @@ def serve() -> None:
     env["PULSEBOARD_DB"] = DB_BASE
     env["PULSEBOARD_PORT"] = str(PORT)
     env["PULSEBOARD_WEB"] = "/web"
-    if not env.get("PULSEBOARD_TOKEN"):
-        # The reader would bind loopback and Modal's proxy would reach
-        # nothing, which looks like a broken deploy rather than a missing
-        # secret. Fail with the reason instead.
-        raise RuntimeError("PULSEBOARD_TOKEN is required: the reader has no other auth")
+    env["PULSEBOARD_PUBLIC_URL"] = PUBLIC_URL
+    env["PULSEBOARD_OAUTH_ROOT"] = f"{VOLUME_PATH}/oauth"
+    env["PULSEBOARD_OAUTH_HELPER"] = "/src/auth/atproto-oauth.mjs"
 
     proc = subprocess.Popen(["/usr/local/bin/pulseboard"], env=env)
 

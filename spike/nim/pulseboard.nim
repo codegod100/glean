@@ -3,15 +3,9 @@
 ##   nim c -r -d:ssl pulseboard.nim
 ##   PULSEBOARD_DB=~/.local/share/pulseboard/db PULSEBOARD_PORT=8080 ./pulseboard
 ##
-## Single user, no accounts. It runs on your machine and reads your feeds,
-## and that assumption is what keeps this a few hundred lines instead of a
-## few thousand: no sessions, no CSRF, no per-user scoping, no ATProto.
-##
-## PULSEBOARD_TOKEN puts a shared secret in front of everything, which is what
-## makes it safe anywhere but loopback -- `/feeds` and `/fetch-content` will
-## fetch any URL handed to them, so an open instance is an SSRF proxy as well
-## as someone else's feed list. Unset, there is no gate at all and the local
-## case stays exactly as simple as it was.
+## Authentication is AT Protocol OAuth. The official Node client performs
+## discovery, PKCE, PAR and DPoP; this server keeps only the verified DID in an
+## opaque browser session and immediately revokes the OAuth credential.
 ##
 ## PULSEBOARD_WEB must point at the Flutter web build. The reader refuses to start
 ## without it so deployments cannot silently serve a different client.
@@ -19,22 +13,19 @@
 ## The pieces underneath -- fetching, parsing, storage, search, full-text
 ## extraction -- are the same modules the larger port built and tested.
 
-import std/[asyncdispatch, asynchttpserver, httpclient, json, options, os,
-            strformat, strutils, times, uri]
+import std/[asyncdispatch, asynchttpserver, base64, httpclient, json, options,
+            os, osproc, strformat, strutils, sysrand, times, uri]
 import reader/[articlestore, feedfetcher, feedparser, feedstore, pulseboarddb,
                 opml, scraper, sqlite]
 
 const
-  ## Everything is stored per-user underneath because the schema came from a
-  ## multi-user server. One constant user keeps that plumbing satisfied
-  ## without inventing accounts.
-  LocalUser = "local"
   DefaultPort = 8080
+  SessionLifetime = 12 * 60 * 60
 
 type Reader = ref object
   db: PulseboardDb
-  token: string    ## empty disables the gate entirely
   webRoot: string  ## required Flutter web bundle
+  oauthHelper: string
 
 proc cookieValue(header, name: string): string =
   for part in header.split(';'):
@@ -43,24 +34,50 @@ proc cookieValue(header, name: string): string =
     if i > 0 and kv[0 ..< i] == name: return kv[i + 1 .. ^1]
   ""
 
-proc constantTimeEq(a, b: string): bool =
-  ## Compare without leaking where the first difference is. A check that
-  ## returns early is an oracle for recovering the token a byte at a time.
-  if a.len != b.len: return false
-  var diff = 0'u8
-  for i in 0 ..< a.len:
-    diff = diff or (a[i].uint8 xor b[i].uint8)
-  diff == 0
+proc oauth(r: Reader, command: string, payload: JsonNode): JsonNode =
+  let invocation = "node " & quoteShell(r.oauthHelper) & " " & quoteShell(command)
+  let res = execCmdEx(invocation, input = $payload)
+  if res.exitCode != 0:
+    raise newException(IOError, res.output.strip)
+  parseJson(res.output)
 
-proc presentedToken(req: Request, queryKey: string): string =
-  ## Header first, then ?key=, then the cookie ?key= sets.
-  ##
-  ## Three ways because three callers: a native client sends a header, a
-  ## person opens a link, and the browser then has a cookie.
-  let h = req.headers.getOrDefault("X-Pulseboard-Token").string
-  if h.len > 0: return h
-  if queryKey.len > 0: return queryKey
-  cookieValue(req.headers.getOrDefault("Cookie").string, "pulseboard_token")
+proc newSessionToken(): string =
+  var bytes = newSeq[byte](32)
+  if not urandom(bytes):
+    raise newException(IOError, "system randomness unavailable")
+  encode(bytes).replace("+", "-").replace("/", "_").strip(chars = {'='})
+
+proc createSession(r: Reader, did: string): string =
+  result = newSessionToken()
+  r.db.db.run("INSERT OR IGNORE INTO users (did) VALUES (?)", p(did))
+  # Adopt data from versions that used a single synthetic user. This runs only
+  # while that legacy row exists, so the first verified account becomes its
+  # owner and later accounts remain isolated.
+  if r.db.db.queryText("SELECT did FROM users WHERE did = 'local'").isSome:
+    r.db.db.run("UPDATE OR IGNORE articles.subscriptions SET user_did = ? WHERE user_did = 'local'", p(did))
+    r.db.db.run("DELETE FROM articles.subscriptions WHERE user_did = 'local'")
+    r.db.db.run("UPDATE OR IGNORE articles.read_state SET user_did = ? WHERE user_did = 'local'", p(did))
+    r.db.db.run("DELETE FROM articles.read_state WHERE user_did = 'local'")
+    r.db.db.run("UPDATE OR IGNORE articles.read_state_history SET user_did = ? WHERE user_did = 'local'", p(did))
+    r.db.db.run("DELETE FROM articles.read_state_history WHERE user_did = 'local'")
+    r.db.db.run("DELETE FROM users WHERE did = 'local'")
+  r.db.db.run(
+    "INSERT INTO web_sessions (token, user_did, expires_at) VALUES (?, ?, ?)",
+    p(result), p(did), p((getTime().toUnix + SessionLifetime).int64))
+
+proc sessionUser(r: Reader, req: Request): string =
+  let token = cookieValue(req.headers.getOrDefault("Cookie").string,
+                          "pulseboard_session")
+  if token.len == 0: return ""
+  r.db.db.queryText(
+    "SELECT user_did FROM web_sessions WHERE token = ? AND expires_at > ?",
+    p(token), p(getTime().toUnix)).get("")
+
+proc clearSession(r: Reader, req: Request) =
+  let token = cookieValue(req.headers.getOrDefault("Cookie").string,
+                          "pulseboard_session")
+  if token.len > 0:
+    r.db.db.run("DELETE FROM web_sessions WHERE token = ?", p(token))
 
 proc jsonResponse(req: Request, code: HttpCode, node: JsonNode) {.async.} =
   await req.respond(code, $node, newHttpHeaders({
@@ -149,7 +166,7 @@ proc toJson(s: Subscription, unread: int): JsonNode =
 
 # --- feed refresh ----------------------------------------------------------
 
-proc refreshFeed(r: Reader, feedUrl: string): tuple[added: int, err: string] =
+proc refreshFeed(r: Reader, userDid, feedUrl: string): tuple[added: int, err: string] =
   ## Fetch one feed and store what came back.
   ##
   ## A failure is recorded rather than raised: one unreachable feed should
@@ -163,7 +180,7 @@ proc refreshFeed(r: Reader, feedUrl: string): tuple[added: int, err: string] =
         feedUrl: feedUrl, guid: a.guid, title: a.title, url: a.url,
         author: a.author, summary: a.summary, content: a.content,
         published: a.published, updated: a.updated)
-    let before = r.db.getUnreadCount(LocalUser, feedUrl, "")
+    let before = r.db.getUnreadCount(userDid, feedUrl, "")
     r.db.batchUpsertArticles(batch)
     r.db.upsertFeed(Feed(feedUrl: feedUrl, title: parsed.feed.title,
                          siteUrl: parsed.feed.siteUrl,
@@ -171,7 +188,7 @@ proc refreshFeed(r: Reader, feedUrl: string): tuple[added: int, err: string] =
                          feedType: $parsed.feed.kind,
                          faviconUrl: parsed.feed.faviconUrl))
     r.db.markFeedFetched(feedUrl)
-    (r.db.getUnreadCount(LocalUser, feedUrl, "") - before, "")
+    (r.db.getUnreadCount(userDid, feedUrl, "") - before, "")
   except CatchableError as e:
     r.db.markFeedFetchError(feedUrl, e.msg)
     (0, e.msg)
@@ -197,39 +214,92 @@ proc handle(r: Reader, req: Request) {.async.} =
     else:
       try: parseInt(raw) except ValueError: fallback
 
-  # The gate, before anything reads the database or fetches a URL.
-  if r.token.len > 0:
-    if not constantTimeEq(presentedToken(req, param("key")), r.token):
-      await fail(req, Http401, "unauthorized")
+  # OAuth endpoints are the only public application surface (besides health).
+  if req.reqMethod == HttpGet and path == "oauth-client-metadata.json":
+    try:
+      await jsonResponse(req, Http200, r.oauth("metadata", newJObject()))
+    except CatchableError as e:
+      await fail(req, Http502, "AT Protocol OAuth unavailable: " & e.msg)
+    return
+
+  if req.reqMethod == HttpGet and path == "auth/login":
+    await req.respond(Http200, """<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Sign in to Pulseboard</title></head><body>
+<main><h1>Pulseboard</h1><form action="/auth/authorize" method="get">
+<label>AT Protocol handle <input name="identity" required autofocus
+placeholder="you.bsky.social" autocomplete="username"></label>
+<button type="submit">Continue</button></form></main></body></html>""",
+      newHttpHeaders({"Content-Type": "text/html; charset=utf-8"}))
+    return
+
+  if req.reqMethod == HttpGet and path == "auth/authorize":
+    let identity = param("identity").strip
+    if identity.len == 0 or identity.startsWith("did:"):
+      await fail(req, Http400, "an AT Protocol handle is required")
       return
-    # Arriving with ?key= means a person followed a link; remember it so the
-    # rest of the app's requests carry it without the token sitting in every
-    # URL (and in the browser history, and in any Referer it sends).
-    if param("key").len > 0:
+    try:
+      let result = r.oauth("authorize", %*{"identity": identity})
+      await req.respond(Http303, "", newHttpHeaders({
+        "Location": result{"url"}.getStr,
+      }))
+    except CatchableError as e:
+      await fail(req, Http502, "AT Protocol login could not start: " & e.msg)
+    return
+
+  if req.reqMethod == HttpGet and path == "auth/callback":
+    var params = newJArray()
+    for (key, value) in q: params.add %*[key, value]
+    try:
+      let result = r.oauth("callback", %*{"params": params})
+      let did = result{"did"}.getStr
+      if not did.startsWith("did:"):
+        raise newException(ValueError, "login did not return a DID")
+      let token = r.createSession(did)
       await req.respond(Http303, "", newHttpHeaders({
         "Location": "/",
-        "Set-Cookie": "pulseboard_token=" & r.token &
-                      "; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000",
+        "Set-Cookie": "pulseboard_session=" & token &
+          "; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=" & $SessionLifetime,
       }))
-      return
+    except CatchableError as e:
+      await fail(req, Http401, "AT Protocol login failed: " & e.msg)
+    return
+
+  if req.reqMethod == HttpGet and path == "auth/logout":
+    r.clearSession(req)
+    await req.respond(Http303, "", newHttpHeaders({
+      "Location": "/auth/login",
+      "Set-Cookie": "pulseboard_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
+    }))
+    return
+
+  if req.reqMethod == HttpGet and path == "health":
+    await jsonResponse(req, Http200, %*{"ok": true})
+    return
+
+  let userDid = r.sessionUser(req)
+  if userDid.len == 0:
+    if segs[0] in ["feeds", "articles", "unread", "opml", "refresh", "read",
+                   "read-all", "fetch-content"]:
+      await fail(req, Http401, "AT Protocol authentication required")
+    else:
+      await req.respond(Http307, "", newHttpHeaders({"Location": "/auth/login"}))
+    return
 
   case req.reqMethod
   of HttpGet:
     case segs[0]
     of "":
       await serveApp(r, req)
-    of "health":
-      await jsonResponse(req, Http200, %*{"ok": true})
-
     of "feeds":
       var items = newJArray()
-      for s in r.db.listSubscriptions(LocalUser, "", 500, 0):
+      for s in r.db.listSubscriptions(userDid, "", 500, 0):
         items.add toJson(s, s.unreadCount)
       await jsonResponse(req, Http200, items)
 
     of "opml":
       var feeds: seq[OpmlFeed]
-      for s in r.db.listSubscriptions(LocalUser, "", 5000, 0):
+      for s in r.db.listSubscriptions(userDid, "", 5000, 0):
         feeds.add OpmlFeed(url: s.feedUrl, title: s.feedTitle, category: s.category)
       await req.respond(Http200, renderOpml(feeds), newHttpHeaders({
         "Content-Type": "application/xml; charset=utf-8",
@@ -240,7 +310,7 @@ proc handle(r: Reader, req: Request) {.async.} =
       if segs.len == 2:
         # One article, with its full text if we have it.
         let id = try: parseInt(segs[1]) except ValueError: 0
-        let a = r.db.getArticle(LocalUser, id)
+        let a = r.db.getArticle(userDid, id)
         if a.isNone:
           await fail(req, Http404, "no such article")
         else:
@@ -250,10 +320,10 @@ proc handle(r: Reader, req: Request) {.async.} =
       let search = param("q")
       let articles =
         if search.len > 0:
-          r.db.searchArticles(LocalUser, search, intParam("limit", 50), 0)
+          r.db.searchArticles(userDid, search, intParam("limit", 50), 0)
         else:
           r.db.listArticles(
-            LocalUser,
+            userDid,
             filter = (if param("status") == "all": afAll
                       elif param("status") == "read": afRead
                       else: afUnread),
@@ -265,7 +335,7 @@ proc handle(r: Reader, req: Request) {.async.} =
 
     of "unread":
       await jsonResponse(req, Http200,
-                         %*{"count": r.db.getUnreadCount(LocalUser, "", "")})
+                         %*{"count": r.db.getUnreadCount(userDid, "", "")})
     else:
       # Not an API route: it may be an asset of the web client.
       if not await serveStatic(r, req, path):
@@ -290,12 +360,12 @@ proc handle(r: Reader, req: Request) {.async.} =
       var added = 0
       var errors = newJArray()
       for feed in imported:
-        let exists = r.db.getSubscription(LocalUser, feed.url).isSome
+        let exists = r.db.getSubscription(userDid, feed.url).isSome
         r.db.upsertFeed(Feed(feedUrl: feed.url, title: feed.title,
                              siteUrl: feed.siteUrl, description: feed.description))
-        r.db.createSubscription(LocalUser, feed.url, feed.title, feed.category, "", "")
+        r.db.createSubscription(userDid, feed.url, feed.title, feed.category, "", "")
         if not exists: inc added
-        let (_, err) = r.refreshFeed(feed.url)
+        let (_, err) = r.refreshFeed(userDid, feed.url)
         if err.len > 0: errors.add %*{"feed_url": feed.url, "error": err}
       await jsonResponse(req, Http200,
                          %*{"imported": imported.len, "added": added, "errors": errors})
@@ -308,8 +378,8 @@ proc handle(r: Reader, req: Request) {.async.} =
       # Subscribe first so a feed that fails to fetch is still listed, with
       # its error visible, rather than vanishing.
       r.db.upsertFeed(Feed(feedUrl: url, title: url))
-      r.db.createSubscription(LocalUser, url, "", param("category"), "", "")
-      let (added, err) = r.refreshFeed(url)
+      r.db.createSubscription(userDid, url, "", param("category"), "", "")
+      let (added, err) = r.refreshFeed(userDid, url)
       if err.len > 0:
         await jsonResponse(req, Http200,
                            %*{"feed_url": url, "added": 0, "error": err})
@@ -319,8 +389,8 @@ proc handle(r: Reader, req: Request) {.async.} =
     of "refresh":
       var total = 0
       var errors = newJArray()
-      for s in r.db.listSubscriptions(LocalUser, "", 500, 0):
-        let (added, err) = r.refreshFeed(s.feedUrl)
+      for s in r.db.listSubscriptions(userDid, "", 500, 0):
+        let (added, err) = r.refreshFeed(userDid, s.feedUrl)
         total += added
         if err.len > 0:
           errors.add %*{"feed_url": s.feedUrl, "error": err}
@@ -332,20 +402,20 @@ proc handle(r: Reader, req: Request) {.async.} =
         await fail(req, Http400, "id required")
         return
       if param("undo") == "1":
-        r.db.markArticleUnread(LocalUser, id)
+        r.db.markArticleUnread(userDid, id)
       else:
-        r.db.markArticleRead(LocalUser, id)
+        r.db.markArticleRead(userDid, id)
       await jsonResponse(req, Http200, %*{"id": id})
 
     of "read-all":
-      r.db.markAllRead(LocalUser, param("feed"))
+      r.db.markAllRead(userDid, param("feed"))
       await jsonResponse(req, Http200,
-                         %*{"unread": r.db.getUnreadCount(LocalUser, "", "")})
+                         %*{"unread": r.db.getUnreadCount(userDid, "", "")})
 
     of "fetch-content":
       # Most feeds ship an excerpt; this pulls the real article.
       let id = intParam("id", 0)
-      let a = r.db.getArticle(LocalUser, id)
+      let a = r.db.getArticle(userDid, id)
       if a.isNone or a.get.url.len == 0:
         await fail(req, Http404, "no such article")
         return
@@ -363,7 +433,7 @@ proc handle(r: Reader, req: Request) {.async.} =
 
   of HttpDelete:
     if segs[0] == "feeds" and param("url").len > 0:
-      r.db.deleteSubscription(LocalUser, param("url"))
+      r.db.deleteSubscription(userDid, param("url"))
       await jsonResponse(req, Http200, %*{"ok": true})
     else:
       await fail(req, Http400, "url required")
@@ -379,26 +449,28 @@ proc main() {.async.} =
 
   var db = pulseboarddb.open(dbPath)
   db.migrate()
-  db.db.run("INSERT OR IGNORE INTO users (did) VALUES (?)", p(LocalUser))
+  db.db.run("DELETE FROM web_sessions WHERE expires_at <= ?", p(getTime().toUnix))
 
-  let token = getEnv("PULSEBOARD_TOKEN")
   let webRoot = getEnv("PULSEBOARD_WEB")
+  let publicUrl = getEnv("PULSEBOARD_PUBLIC_URL")
+  let oauthRoot = getEnv("PULSEBOARD_OAUTH_ROOT", dbPath.parentDir / "oauth")
+  let oauthHelper = getEnv("PULSEBOARD_OAUTH_HELPER",
+                           getAppDir() / "auth/atproto-oauth.mjs")
   if webRoot.len == 0:
     quit("PULSEBOARD_WEB is required and must point at a Flutter web build")
   if not dirExists(webRoot) or not fileExists(webRoot / "index.html"):
     quit(&"PULSEBOARD_WEB points at {webRoot}, which has no index.html")
+  if publicUrl.len == 0:
+    quit("PULSEBOARD_PUBLIC_URL is required for AT Protocol OAuth")
+  if not fileExists(oauthHelper):
+    quit(&"AT Protocol OAuth helper is missing: {oauthHelper}")
+  putEnv("PULSEBOARD_OAUTH_ROOT", oauthRoot)
 
-  let reader = Reader(db: db, token: token, webRoot: webRoot)
+  let reader = Reader(db: db, webRoot: webRoot, oauthHelper: oauthHelper)
 
   echo &"pulseboard reading from {dbPath}"
-  if webRoot.len > 0: echo &"serving the client from {webRoot}"
-  if token.len > 0:
-    echo "token required: append ?key=… once to set the cookie"
-  else:
-    # Worth saying out loud, because the difference between this and an open
-    # instance on a public address is the whole of the security model.
-    echo "no token set — anyone who can reach this port has full access"
-  echo &"open http://127.0.0.1:{port}"
+  echo &"serving the client from {webRoot}"
+  echo &"AT Protocol callback: {publicUrl}/auth/callback"
 
   var server = newAsyncHttpServer()
   # Single-threaded server, single Reader: the cast is asserting that, not
@@ -409,11 +481,7 @@ proc main() {.async.} =
   proc cb(req: Request) {.async, gcsafe.} =
     {.cast(gcsafe).}:
       await reader.handle(req)
-  # Loopback unless a token guards it. Modal and other containers need a
-  # listener on all interfaces, and requiring the token for that is what
-  # keeps "reachable" from meaning "open".
-  let address = if token.len > 0: "0.0.0.0" else: "127.0.0.1"
-  await server.serve(Port(port), cb, address = address)
+  await server.serve(Port(port), cb, address = "0.0.0.0")
 
 when isMainModule:
   waitFor main()

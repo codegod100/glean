@@ -32,10 +32,10 @@ an excerpt.
 
 ## Security
 
-The reader has no accounts and no auth. It binds loopback deliberately:
-anything that can reach the port can read and change everything, and
-`/feeds` and `/fetch-content` will fetch any URL handed to them. **Do not
-expose it to a network** without putting something in front of it.
+The reader requires AT Protocol OAuth. It uses the official ATProto client for
+discovery, PKCE, PAR, and DPoP, then immediately revokes the OAuth credential:
+Pulseboard keeps only the verified DID in a short-lived, opaque web session.
+Subscriptions and read state are scoped to that DID.
 
 Article bodies are markup from other people's servers, so every body the API
 serves — scraped and straight-from-the-feed alike — goes through a

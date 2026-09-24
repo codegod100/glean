@@ -35,7 +35,7 @@ proc main() =
   var g = pulseboarddb.open(base)
   defer: g.close()
 
-  report("the schema covers the reader's tables", readerSchema.len == 15,
+  report("the schema covers the reader's tables", readerSchema.len == 17,
          &"{readerSchema.len} statements")
 
   # --- the three databases ------------------------------------------------
@@ -64,10 +64,10 @@ proc main() =
       let n = g.db.queryInt(
         &"SELECT count(*) FROM {schemaName}.sqlite_master WHERE type='table'")
       n.get(0).int
-    # main holds only the local user now; everything that grows lives in
-    # the articles database.
-    report("the users database holds just the user table",
-           tableCount("main") == 1, $tableCount("main"))
+    # main holds identities and short-lived web sessions; everything that
+    # grows with feed contents lives in the articles database.
+    report("the users database holds users and web sessions",
+           tableCount("main") == 2, $tableCount("main"))
     report("articles holds feeds, subscriptions, articles and read state",
            tableCount("articles") >= 5, $tableCount("articles"))
 
