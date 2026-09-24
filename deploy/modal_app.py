@@ -67,7 +67,7 @@ image = (
     # something the developer machine has already produced.
     .add_local_dir(REPO / "app" / "build" / "web", remote_path="/web", copy=True)
     .run_commands("cd /src/auth && npm ci --omit=dev")
-    .run_commands("cd /src && nim c -d:release -d:ssl --hints:off -o:/usr/local/bin/pulseboard pulseboard.nim")
+    .run_commands("cd /src && nim c --threads:on -d:release -d:ssl --hints:off -o:/usr/local/bin/pulseboard pulseboard.nim")
 )
 
 volume = modal.Volume.from_name("pulseboard-data", create_if_missing=True)

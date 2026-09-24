@@ -10,7 +10,7 @@ An RSS reader. Two pieces:
 Run the reader, point the client at it:
 
 ```
-cd spike/nim && nim c -d:ssl pulseboard.nim && ./pulseboard
+cd spike/nim && nim c --threads:on -d:ssl pulseboard.nim && ./pulseboard
 ```
 
 It listens on `127.0.0.1:8080`, keeps a SQLite database under

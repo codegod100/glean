@@ -14,7 +14,7 @@
 ## extraction -- are the same modules the larger port built and tested.
 
 import std/[asyncdispatch, asynchttpserver, base64, httpclient, json, options,
-            os, osproc, strformat, strutils, sysrand, times, uri]
+            os, osproc, strformat, strutils, sysrand, threadpool, times, uri]
 import reader/[articlestore, feedfetcher, feedparser, feedstore, pulseboarddb,
                 opml, scraper, sqlite]
 
@@ -34,12 +34,24 @@ proc cookieValue(header, name: string): string =
     if i > 0 and kv[0 ..< i] == name: return kv[i + 1 .. ^1]
   ""
 
-proc oauth(r: Reader, command: string, payload: JsonNode): JsonNode =
-  let invocation = "node " & quoteShell(r.oauthHelper) & " " & quoteShell(command)
-  let res = execCmdEx(invocation, input = $payload)
+proc runOauth(helper, command, payload: string): tuple[output: string,
+                                                        exitCode: int] =
+  ## The helper makes network requests during authorize/callback. In particular,
+  ## an authorization server fetches our public client metadata while the
+  ## authorize command is in flight. Running it on the HTTP event-loop thread
+  ## deadlocks that fetch against this same server.
+  let invocation = "node " & quoteShell(helper) & " " & quoteShell(command)
+  let res = execCmdEx(invocation, input = payload)
+  (res.output, res.exitCode)
+
+proc oauth(r: Reader, command: string, payload: JsonNode): Future[JsonNode] {.async.} =
+  let work = spawn runOauth(r.oauthHelper, command, $payload)
+  while not work.isReady:
+    await sleepAsync(5)
+  let res = ^work
   if res.exitCode != 0:
     raise newException(IOError, res.output.strip)
-  parseJson(res.output)
+  return parseJson(res.output)
 
 proc newSessionToken(): string =
   var bytes = newSeq[byte](32)
@@ -217,7 +229,7 @@ proc handle(r: Reader, req: Request) {.async.} =
   # OAuth endpoints are the only public application surface (besides health).
   if req.reqMethod == HttpGet and path == "oauth-client-metadata.json":
     try:
-      await jsonResponse(req, Http200, r.oauth("metadata", newJObject()))
+      await jsonResponse(req, Http200, await r.oauth("metadata", newJObject()))
     except CatchableError as e:
       await fail(req, Http502, "AT Protocol OAuth unavailable: " & e.msg)
     return
@@ -239,7 +251,7 @@ placeholder="you.bsky.social" autocomplete="username"></label>
       await fail(req, Http400, "an AT Protocol handle is required")
       return
     try:
-      let result = r.oauth("authorize", %*{"identity": identity})
+      let result = await r.oauth("authorize", %*{"identity": identity})
       await req.respond(Http303, "", newHttpHeaders({
         "Location": result{"url"}.getStr,
       }))
@@ -251,7 +263,7 @@ placeholder="you.bsky.social" autocomplete="username"></label>
     var params = newJArray()
     for (key, value) in q: params.add %*[key, value]
     try:
-      let result = r.oauth("callback", %*{"params": params})
+      let result = await r.oauth("callback", %*{"params": params})
       let did = result{"did"}.getStr
       if not did.startsWith("did:"):
         raise newException(ValueError, "login did not return a DID")
