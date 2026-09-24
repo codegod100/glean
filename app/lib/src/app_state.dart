@@ -22,13 +22,6 @@ String get kDefaultBaseUrl => kConfiguredBaseUrl.isNotEmpty
     ? kConfiguredBaseUrl
     : (kIsWeb ? '' : 'http://127.0.0.1:8080');
 
-/// Shared secret, for a reader running with PULSEBOARD_TOKEN set.
-///
-/// Empty by default, which is right for a local reader and for the web build
-/// served by the reader itself -- there the browser already holds the cookie
-/// the reader set, and same-origin requests carry it automatically.
-const kToken = String.fromEnvironment('PULSEBOARD_TOKEN', defaultValue: '');
-
 /// Feed list and unread counts, shared across screens.
 ///
 /// Articles are not held here: each screen fetches its own, because the
@@ -37,9 +30,8 @@ const kToken = String.fromEnvironment('PULSEBOARD_TOKEN', defaultValue: '');
 class AppState extends ChangeNotifier {
   AppState({
     String? baseUrl,
-    String token = kToken,
     PulseboardClient? client,
-  }) : client = client ?? PulseboardClient(baseUrl: baseUrl ?? kDefaultBaseUrl, token: token);
+  }) : client = client ?? PulseboardClient(baseUrl: baseUrl ?? kDefaultBaseUrl);
 
   final PulseboardClient client;
 

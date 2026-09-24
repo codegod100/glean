@@ -14,25 +14,14 @@ class ApiException implements Exception {
 
 /// The reader's API.
 ///
-/// No cookies, no CSRF, no auth: the server is single-user and binds
-/// loopback. That is why this class is a thin wrapper rather than a session.
+/// The hosted web app is same-origin, so the browser automatically sends the
+/// HttpOnly session cookie issued after AT Protocol OAuth.
 class PulseboardClient {
-  PulseboardClient({required this.baseUrl, this.token = '', http.Client? client})
+  PulseboardClient({required this.baseUrl, http.Client? client})
     : _client = client ?? http.Client();
 
   final String baseUrl;
-
-  /// Shared secret, when the reader is running with PULSEBOARD_TOKEN set. Empty
-  /// for a local reader, which has no gate.
-  ///
-  /// Sent as a header rather than a query parameter so it stays out of the
-  /// browser's history and any Referer it sends.
-  final String token;
-
   final http.Client _client;
-
-  Map<String, String> get _headers =>
-      token.isEmpty ? const {} : {'X-Pulseboard-Token': token};
 
   Uri _uri(String path, [Map<String, String>? query]) {
     final q = query?.entries.where((e) => e.value.isNotEmpty);
@@ -61,13 +50,12 @@ class PulseboardClient {
   }
 
   Future<dynamic> _get(String path, [Map<String, String>? q]) async =>
-      _decode(await _client.get(_uri(path, q), headers: _headers));
+      _decode(await _client.get(_uri(path, q)));
 
   Future<dynamic> _post(String path, [Map<String, String>? form]) async =>
       _decode(
         await _client.post(
           _uri(path),
-          headers: _headers,
           body: form ?? const {},
         ),
       );
@@ -90,11 +78,11 @@ class PulseboardClient {
   }
 
   Future<void> removeFeed(String feedUrl) async => _decode(
-    await _client.delete(_uri('/feeds', {'url': feedUrl}), headers: _headers),
+    await _client.delete(_uri('/feeds', {'url': feedUrl})),
   );
 
   Future<String> exportOpml() async {
-    final res = await _client.get(_uri('/opml'), headers: _headers);
+    final res = await _client.get(_uri('/opml'));
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw ApiException('Export failed (${res.statusCode}).');
     }

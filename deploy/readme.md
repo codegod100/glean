@@ -1,14 +1,13 @@
 # Deploying
 
 ```
-modal secret create pulseboard PULSEBOARD_TOKEN="$(openssl rand -hex 24)"
 cd app && flutter build web --release --dart-define=PULSEBOARD_BASE_URL=
 modal deploy deploy/modal_app.py
 ```
 
-Then open `https://<your-app>.modal.run/?key=<token>` once. That sets a
-cookie and redirects, so the token stays out of the URL bar, the browser's
-history, and any `Referer` the page sends.
+Then open the deployed URL and sign in with an AT Protocol handle. The OAuth
+callback is `<your-app>.modal.run/auth/callback`; the public client metadata is
+served at `/oauth-client-metadata.json`.
 
 ## One container, one port
 
@@ -21,15 +20,13 @@ Flutter there would add gigabytes and minutes to produce something the
 developer machine has already made — so **rebuild it before deploying** or
 the deployment ships the previous client.
 
-## The token is not optional here
+## Authentication
 
-Without `PULSEBOARD_TOKEN` the reader binds loopback, Modal's proxy reaches
-nothing, and the deploy looks broken rather than insecure. The function
-raises with the reason instead of starting.
-
-That is deliberate: `/feeds` and `/fetch-content` retrieve any URL handed to
-them, so an open instance is an SSRF proxy as much as it is someone else's
-feed list.
+Every UI and API route except health and the OAuth endpoints requires an
+authenticated browser session. OAuth protocol state is kept under
+`/data/oauth`; application sessions live in the users SQLite database and
+expire after 12 hours. The OAuth access credential is revoked immediately
+after the DID has been verified.
 
 ## Storage, and what it costs
 

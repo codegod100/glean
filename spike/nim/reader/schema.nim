@@ -1,15 +1,13 @@
 ## The reader's schema.
 ##
-## Two databases: `main` holds the single local user, `articles` holds feeds
-## and their contents. They are separate files so the article store -- the
+## Two databases: `main` holds authenticated users and their web sessions,
+## while `articles` holds feeds and their contents. They are separate files so the article store -- the
 ## only one that grows without bound -- can be vacuumed or discarded on its
 ## own.
 ##
-## Originally generated from a Go server's schema and then trimmed to what a
-## single-user reader needs: no accounts, no OAuth, no social records, no
-## derived recommendation tables. What is left is feeds, subscriptions,
-## articles, read state and the full-text index. It is maintained by hand
-## from here.
+## Originally generated from a Go server's schema and then trimmed to what the
+## reader needs. OAuth protocol state lives in the official ATProto client's
+## durable store; only verified DIDs and opaque application sessions live here.
 ##
 ## `read_state_history` is not redundant with `read_state`. Articles are
 ## purged on a retention window and can return from the feed later under a
@@ -23,6 +21,12 @@ const readerSchema* = [
 		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		follows_dirty BOOLEAN NOT NULL DEFAULT 1
 	)""",
+  """CREATE TABLE IF NOT EXISTS web_sessions (
+		token TEXT PRIMARY KEY,
+		user_did TEXT NOT NULL,
+		expires_at INTEGER NOT NULL
+	)""",
+  """CREATE INDEX IF NOT EXISTS idx_web_sessions_expiry ON web_sessions(expires_at)""",
   """CREATE TABLE IF NOT EXISTS articles.feeds (
 		feed_url TEXT PRIMARY KEY,
 		title TEXT,
