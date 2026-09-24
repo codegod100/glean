@@ -3,7 +3,7 @@
 One binary, one SQLite database, no accounts.
 
 ```
-nim c -d:ssl pulseboard.nim
+nim c --threads:on -d:ssl pulseboard.nim
 ./pulseboard
 ```
 
