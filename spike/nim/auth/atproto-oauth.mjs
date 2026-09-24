@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /** Durable AT Protocol OAuth bridge, adapted from ~/code-editor. */
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { createHash, randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { NodeOAuthClient } from '@atproto/oauth-client-node';
 import { requestLocalLock } from '@atproto/oauth-client';
@@ -11,37 +12,36 @@ if (!root || !appUrl) {
   throw new Error('PULSEBOARD_OAUTH_ROOT and PULSEBOARD_PUBLIC_URL are required');
 }
 
-const stateFile = join(root, 'states.json');
-const sessionFile = join(root, 'sessions.json');
+const stateDir = join(root, 'states');
+const sessionDir = join(root, 'sessions');
 
-async function readStore(path) {
-  try {
-    return JSON.parse(await readFile(path, 'utf8'));
-  } catch (error) {
-    if (error.code === 'ENOENT') return {};
-    throw error;
-  }
-}
-
-async function writeStore(path, value) {
-  await mkdir(root, { recursive: true, mode: 0o700 });
-  const temporary = `${path}.next`;
-  await writeFile(temporary, JSON.stringify(value), { mode: 0o600 });
-  await rename(temporary, path);
-}
-
-function durableStore(path) {
+function durableStore(directory) {
+  const pathFor = (key) => join(
+    directory,
+    createHash('sha256').update(key).digest('hex') + '.json',
+  );
   return {
-    async get(key) { return (await readStore(path))[key]; },
+    async get(key) {
+      try {
+        return JSON.parse(await readFile(pathFor(key), 'utf8'));
+      } catch (error) {
+        if (error.code === 'ENOENT') return undefined;
+        throw error;
+      }
+    },
     async set(key, value) {
-      const all = await readStore(path);
-      all[key] = value;
-      await writeStore(path, all);
+      await mkdir(directory, { recursive: true, mode: 0o700 });
+      const path = pathFor(key);
+      const temporary = `${path}.${process.pid}.${randomBytes(8).toString('hex')}.next`;
+      await writeFile(temporary, JSON.stringify(value), { mode: 0o600 });
+      await rename(temporary, path);
     },
     async del(key) {
-      const all = await readStore(path);
-      delete all[key];
-      await writeStore(path, all);
+      try {
+        await unlink(pathFor(key));
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
     },
   };
 }
@@ -59,8 +59,8 @@ const client = new NodeOAuthClient({
     dpop_bound_access_tokens: true,
   },
   requestLock: requestLocalLock,
-  stateStore: durableStore(stateFile),
-  sessionStore: durableStore(sessionFile),
+  stateStore: durableStore(stateDir),
+  sessionStore: durableStore(sessionDir),
 });
 
 const input = JSON.parse(await new Promise((resolve, reject) => {
@@ -78,10 +78,25 @@ if (command === 'metadata') {
 } else if (command === 'authorize') {
   result = { url: String(await client.authorize(input.identity, { scope: 'atproto' })) };
 } else if (command === 'callback') {
-  const { session } = await client.callback(new URLSearchParams(input.params));
-  // Pulseboard needs verified identity, not ongoing access to the user's PDS.
-  await client.revoke(session.did);
-  result = { did: session.did };
+  const params = new URLSearchParams(input.params);
+  try {
+    const { session } = await client.callback(params);
+    // Pulseboard needs verified identity, not ongoing access to the user's PDS.
+    await client.revoke(session.did);
+    result = { did: session.did };
+  } catch (error) {
+    // OAuth errors and missing state are expected when a user returns to an
+    // expired, cancelled, or already-consumed authorization page. Do not leak
+    // library stack traces or weaken state validation; ask them to start over.
+    if (params.has('error') || error?.name === 'OAuthCallbackError') {
+      result = {
+        error: params.get('error_description') || 'This login is no longer valid.',
+        retry: true,
+      };
+    } else {
+      throw error;
+    }
+  }
 } else {
   throw new Error(`unknown command: ${command}`);
 }
