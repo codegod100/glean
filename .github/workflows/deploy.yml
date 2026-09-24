@@ -1,0 +1,64 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pulseboard-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy to Modal
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+
+    steps:
+      - name: Check deployment credentials
+        run: |
+          if [[ -z "$MODAL_TOKEN_ID" || -z "$MODAL_TOKEN_SECRET" ]]; then
+            echo "Add MODAL_TOKEN_ID and MODAL_TOKEN_SECRET as GitHub Actions secrets."
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Flutter dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Test Flutter app
+        working-directory: app
+        run: flutter test
+
+      - name: Build Flutter web app
+        working-directory: app
+        run: flutter build web --release --dart-define=PULSEBOARD_BASE_URL=
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Modal
+        run: python -m pip install "modal==1.5.5"
+
+      - name: Deploy to Modal
+        run: modal deploy deploy/modal_app.py
