@@ -26,6 +26,7 @@ type Reader = ref object
   db: PulseboardDb
   webRoot: string  ## required Flutter web bundle
   oauthHelper: string
+  oauthMetadata: JsonNode
 
 proc cookieValue(header, name: string): string =
   for part in header.split(';'):
@@ -228,10 +229,11 @@ proc handle(r: Reader, req: Request) {.async.} =
 
   # OAuth endpoints are the only public application surface (besides health).
   if req.reqMethod == HttpGet and path == "oauth-client-metadata.json":
-    try:
-      await jsonResponse(req, Http200, await r.oauth("metadata", newJObject()))
-    except CatchableError as e:
-      await fail(req, Http502, "AT Protocol OAuth unavailable: " & e.msg)
+    # The authorization server fetches this while the authorize helper is
+    # waiting for its PAR response. Serving it through the same bounded worker
+    # pool would deadlock when the pool has only one thread (as on Modal's
+    # smallest containers), so cache it before the HTTP server starts.
+    await jsonResponse(req, Http200, r.oauthMetadata)
     return
 
   if req.reqMethod == HttpGet and path == "auth/login":
@@ -263,8 +265,16 @@ placeholder="you.bsky.social" autocomplete="username"></label>
     var params = newJArray()
     for (key, value) in q: params.add %*[key, value]
     try:
-      let result = await r.oauth("callback", %*{"params": params})
-      let did = result{"did"}.getStr
+      let callbackResult = await r.oauth("callback", %*{"params": params})
+      if callbackResult.hasKey("error"):
+        await req.respond(Http401, """<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Sign in again</title></head><body><main><h1>Sign in again</h1>
+<p>The AT Protocol login expired or was cancelled.</p>
+<p><a href="/auth/login">Start a new login</a></p></main></body></html>""",
+          newHttpHeaders({"Content-Type": "text/html; charset=utf-8"}))
+        return
+      let did = callbackResult{"did"}.getStr
       if not did.startsWith("did:"):
         raise newException(ValueError, "login did not return a DID")
       let token = r.createSession(did)
@@ -478,7 +488,16 @@ proc main() {.async.} =
     quit(&"AT Protocol OAuth helper is missing: {oauthHelper}")
   putEnv("PULSEBOARD_OAUTH_ROOT", oauthRoot)
 
-  let reader = Reader(db: db, webRoot: webRoot, oauthHelper: oauthHelper)
+  let metadataResult = runOauth(oauthHelper, "metadata", "{}")
+  if metadataResult.exitCode != 0:
+    quit("AT Protocol OAuth metadata unavailable: " & metadataResult.output.strip)
+  let oauthMetadata = try:
+      parseJson(metadataResult.output)
+    except JsonParsingError as e:
+      quit("AT Protocol OAuth metadata is invalid: " & e.msg)
+
+  let reader = Reader(db: db, webRoot: webRoot, oauthHelper: oauthHelper,
+                      oauthMetadata: oauthMetadata)
 
   echo &"pulseboard reading from {dbPath}"
   echo &"serving the client from {webRoot}"
