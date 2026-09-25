@@ -134,13 +134,29 @@ proc serveStatic(r: Reader, req: Request, rel: string): Future[bool] {.async.} =
   let root = absolutePath(r.webRoot)
   if not full.startsWith(root) or not fileExists(full): return false
   var headers = newHttpHeaders({"Content-Type": contentTypeFor(full)})
-  # Flutter's bootstrap and main bundle keep stable filenames. Revalidate
-  # them so a Modal deploy cannot leave browsers running yesterday's client.
+  # Flutter's bootstrap, manifest and service worker keep stable filenames.
+  # Revalidate them so a deploy cannot leave an installed app on yesterday's
+  # shell. Other assets get a short browser cache; Flutter's versioned service
+  # worker remains the durable cache and can replace them on the next deploy.
   let ext = full.splitFile.ext.toLowerAscii
-  if ext in [".html", ".js", ".mjs"]:
+  if ext in [".html", ".js", ".mjs", ".json"]:
     headers["Cache-Control"] = "no-cache"
+  else:
+    headers["Cache-Control"] = "public, max-age=86400"
   await req.respond(Http200, readFile(full), headers)
-  true
+  return true
+
+proc isPublicWebAsset(path: string): bool =
+  ## The application data stays behind the session, but the browser must be
+  ## able to install and update the PWA even after that session expires.
+  if path in ["manifest.json", "flutter_service_worker.js",
+              "flutter_bootstrap.js", "flutter.js", "main.dart.js",
+              "version.json",
+              "favicon.png"]:
+    return true
+  for prefix in ["assets/", "canvaskit/", "icons/"]:
+    if path.startsWith(prefix): return true
+  false
 
 proc serveApp(r: Reader, req: Request) {.async.} =
   if not await serveStatic(r, req, "index.html"):
@@ -297,6 +313,11 @@ placeholder="you.bsky.social" autocomplete="username"></label>
 
   if req.reqMethod == HttpGet and path == "health":
     await jsonResponse(req, Http200, %*{"ok": true})
+    return
+
+  if req.reqMethod == HttpGet and isPublicWebAsset(path):
+    if not await serveStatic(r, req, path):
+      await fail(req, Http404, "not found")
     return
 
   let userDid = r.sessionUser(req)

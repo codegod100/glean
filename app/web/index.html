@@ -18,11 +18,15 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A personal feed reader.">
+  <meta name="description" content="A fast, focused personal feed reader.">
+  <meta name="theme-color" content="#00754A" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Pulseboard">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
@@ -31,6 +35,16 @@
 
   <title>Pulseboard</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    html, body {
+      background: #fafaf7;
+      height: 100%;
+      margin: 0;
+    }
+    @media (prefers-color-scheme: dark) {
+      html, body { background: #0a0a0a; }
+    }
+  </style>
 </head>
 <body>
   <!--

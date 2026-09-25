@@ -1,17 +1,25 @@
-# pulseboard_app
+# Pulseboard app
 
-A new Flutter project.
+The Flutter client for Pulseboard. Web release builds are installable PWAs:
+Flutter generates and registers the service worker, while `web/manifest.json`
+contains the app identity, standalone display mode, colors, and maskable icons.
 
-## Getting Started
+## Run locally
 
-This project is a starting point for a Flutter application.
+```sh
+flutter run -d chrome --dart-define=PULSEBOARD_BASE_URL=http://127.0.0.1:8080
+```
 
 A few resources to get you started if this is your first Flutter project:
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Build the PWA
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```sh
+flutter build web --release --dart-define=PULSEBOARD_BASE_URL=
+```
+
+Serve `build/web` over HTTPS (localhost also works for development). Do not
+open `index.html` directly: installation and offline caching require a secure
+HTTP origin. The production Nim server exposes the PWA shell files publicly so
+the browser can refresh an installed app after its login session expires; API
+and user data routes remain authenticated.

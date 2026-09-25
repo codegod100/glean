@@ -1,13 +1,15 @@
 {
-    "name": "Pulseboard",
+    "id": "/",
+    "name": "Pulseboard — Personal Feed Reader",
     "short_name": "Pulseboard",
-    "start_url": ".",
+    "description": "A fast, focused personal feed reader.",
+    "start_url": "/",
+    "scope": "/",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A personal feed reader.",
-    "orientation": "portrait-primary",
+    "background_color": "#FAFAF7",
+    "theme_color": "#00754A",
     "prefer_related_applications": false,
+    "categories": ["news", "productivity"],
     "icons": [
         {
             "src": "icons/Icon-192.png",
