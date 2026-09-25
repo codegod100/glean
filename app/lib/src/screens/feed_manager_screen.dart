@@ -198,32 +198,32 @@ class _FeedManagerScreenState extends State<FeedManagerScreen> {
             ...feeds.map(
               (feed) => Container(
                 margin: const EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(
-                  border: Border.all(color: c.border, width: 2),
+                child: Material(
                   color: c.surface,
-                ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.only(left: 14, right: 4),
-                  title: Text(
-                    feed.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(
-                    feed.feedUrl,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (feed.unread > 0) Text('${feed.unread} unread'),
-                      IconButton(
-                        tooltip: 'Remove ${feed.title}',
-                        icon: Icon(Icons.delete_outline, color: c.danger),
-                        onPressed: () => _remove(feed),
-                      ),
-                    ],
+                  shape: Border.all(color: c.border, width: 2),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.only(left: 14, right: 4),
+                    title: Text(
+                      feed.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      feed.feedUrl,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (feed.unread > 0) Text('${feed.unread} unread'),
+                        IconButton(
+                          tooltip: 'Remove ${feed.title}',
+                          icon: Icon(Icons.delete_outline, color: c.danger),
+                          onPressed: () => _remove(feed),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
