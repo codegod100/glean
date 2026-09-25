@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../api/client.dart';
 import '../app_state.dart';
@@ -81,24 +80,30 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
     }
   }
 
-  Future<void> _open(Article a) async {
-    final app = AppScope.read(context);
+  Uri? _articleUri(Article a) {
     final uri = Uri.tryParse(a.url);
-    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
-      showToast(context, 'This article does not have a valid link.');
-      return;
-    }
-    if (!await launchUrl(
-      uri,
-      mode: LaunchMode.platformDefault,
-      webOnlyWindowName: '_blank',
-    )) {
-      if (mounted) showToast(context, 'Could not open the link.');
-      return;
-    }
-    if (mounted && !a.isRead) {
-      setState(() => _patched[a.id] = a.copyWith(isRead: true));
-      app.adjustUnread(-1);
+    return uri != null && (uri.scheme == 'http' || uri.scheme == 'https')
+        ? uri
+        : null;
+  }
+
+  void _showInvalidLink() {
+    showToast(context, 'This article does not have a valid link.');
+  }
+
+  Future<void> _markOpened(Article a) async {
+    final app = AppScope.read(context);
+    if (a.isRead) return;
+
+    setState(() => _patched[a.id] = a.copyWith(isRead: true));
+    app.adjustUnread(-1);
+    try {
+      await app.client.setRead(a.id, read: true);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _patched[a.id] = a);
+      app.adjustUnread(1);
+      showToast(context, e.message);
     }
   }
 
@@ -168,10 +173,14 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
                   itemCount: items.length,
                   itemBuilder: (context, i) {
                     final a = _patched[items[i].id] ?? items[i];
+                    final uri = _articleUri(a);
                     return ArticleTile(
                       article: a,
+                      uri: uri,
                       onToggleRead: () => _toggleRead(a),
-                      onTap: () => _open(a),
+                      onTap: uri == null
+                          ? _showInvalidLink
+                          : () => _markOpened(a),
                     );
                   },
                 ),

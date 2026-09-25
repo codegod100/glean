@@ -9,6 +9,8 @@ import 'package:pulseboard_app/src/api/client.dart';
 import 'package:pulseboard_app/src/app_state.dart';
 import 'package:pulseboard_app/src/screens/home_shell.dart';
 import 'package:pulseboard_app/src/theme.dart';
+import 'package:pulseboard_app/src/widgets/article_tile.dart';
+import 'package:url_launcher/link.dart';
 
 /// A stand-in for the reader, covering the routes the shell touches.
 http.Client fakeReader({
@@ -102,6 +104,19 @@ void main() {
 
     expect(seen, contains('GET /articles'));
     expect(seen, contains('GET /feeds'));
+  });
+
+  testWidgets('article links use native same-tab navigation', (tester) async {
+    await pump(tester);
+
+    final link = tester.widget<Link>(
+      find.descendant(
+        of: find.byType(ArticleTile),
+        matching: find.byType(Link),
+      ),
+    );
+    expect(link.uri, Uri.parse('https://a.test/1'));
+    expect(link.target, LinkTarget.defaultTarget);
   });
 
   testWidgets('an empty reader says so rather than showing a spinner',
