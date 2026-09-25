@@ -126,13 +126,13 @@ class _HomeShellState extends State<HomeShell> {
         ],
       ),
       drawer: Drawer(
-        backgroundColor: c.bg,
         child: SafeArea(
           child: Column(
             children: [
               ListTile(
+                contentPadding: const EdgeInsets.fromLTRB(20, 8, 8, 8),
                 title: Text(
-                  'Feeds',
+                  'FEEDS',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 trailing: Row(
@@ -162,20 +162,41 @@ class _HomeShellState extends State<HomeShell> {
                 child: ListView(
                   children: [
                     for (final f in app.sidebar)
-                      ListTile(
-                        selected: f.feedUrl == _selected.feedUrl,
-                        title: Text(
-                          f.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border(
+                            left: BorderSide(
+                              color: f.feedUrl == _selected.feedUrl
+                                  ? c.accent
+                                  : Colors.transparent,
+                              width: 4,
+                            ),
+                          ),
                         ),
-                        trailing: f.unread > 0
-                            ? PulseboardTag('${f.unread}', emphasis: !f.isAll)
-                            : null,
-                        onTap: () {
-                          setState(() => _selected = f);
-                          Navigator.of(context).pop();
-                        },
+                        child: ListTile(
+                          selected: f.feedUrl == _selected.feedUrl,
+                          leading: f.isAll
+                              ? const Icon(Icons.inbox_outlined, size: 18)
+                              : FaviconBadge(
+                                  url: f.faviconUrl,
+                                  seed: f.title,
+                                ),
+                          title: Text(
+                            f.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: f.unread > 0
+                              ? PulseboardTag(
+                                  '${f.unread}',
+                                  emphasis: !f.isAll,
+                                )
+                              : null,
+                          onTap: () {
+                            setState(() => _selected = f);
+                            Navigator.of(context).pop();
+                          },
+                        ),
                       ),
                   ],
                 ),

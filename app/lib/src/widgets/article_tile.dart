@@ -27,60 +27,79 @@ class ArticleTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: c.faint, width: 1)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(article.feedTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.bodySmall),
-                ),
-                if (article.published != null)
-                  Text(relativeTime(article.published), style: text.bodySmall),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Opacity(
-              opacity: read ? 0.55 : 1,
-              child: Text(
-                article.title.isEmpty ? '(untitled)' : article.title,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: text.bodyLarge?.copyWith(
-                  fontWeight: read ? FontWeight.w400 : FontWeight.w700,
-                ),
-              ),
-            ),
-            if (article.summary.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                // Feed summaries are HTML; show them as the text they read as.
-                stripHtml(article.summary),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: text.bodySmall,
-              ),
-            ],
-            if (onToggleRead != null)
-              Align(
-                alignment: Alignment.centerRight,
-                child: IconButton(
-                  visualDensity: VisualDensity.compact,
-                  tooltip: read ? 'Mark unread' : 'Mark read',
-                  icon: Icon(
-                    read ? Icons.mark_email_unread_outlined : Icons.check,
-                    size: 18,
-                    color: c.muted,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: read ? c.faint : c.accent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Text(
+                          article.feedTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodySmall,
+                        ),
+                      ),
+                      if (article.published != null) ...[
+                        const SizedBox(width: 12),
+                        Text(
+                          relativeTime(article.published),
+                          style: text.bodySmall,
+                        ),
+                      ],
+                    ],
                   ),
-                  onPressed: onToggleRead,
+                  const SizedBox(height: 6),
+                  Opacity(
+                    opacity: read ? 0.55 : 1,
+                    child: Text(
+                      article.title.isEmpty ? '(untitled)' : article.title,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodyLarge?.copyWith(
+                        fontWeight: read ? FontWeight.w400 : FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (article.summary.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      stripHtml(article.summary),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodySmall,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (onToggleRead != null)
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: read ? 'Mark unread' : 'Mark read',
+                icon: Icon(
+                  read ? Icons.mark_email_unread_outlined : Icons.check,
+                  size: 18,
+                  color: c.muted,
                 ),
+                onPressed: onToggleRead,
               ),
           ],
         ),

@@ -13,6 +13,7 @@ class PulseboardBox extends StatelessWidget {
     this.onTap,
     this.filled = false,
     this.shadow = true,
+    this.color,
   });
 
   final Widget child;
@@ -20,6 +21,7 @@ class PulseboardBox extends StatelessWidget {
   final VoidCallback? onTap;
   final bool filled;
   final bool shadow;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +29,7 @@ class PulseboardBox extends StatelessWidget {
     final box = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: filled ? c.surface : c.bg,
+        color: color ?? (filled ? c.surface : c.bg),
         border: Border.all(color: c.border, width: 2),
         boxShadow: shadow
             ? [BoxShadow(color: c.border, offset: const Offset(3, 3))]
@@ -91,41 +93,35 @@ class PulseboardButton extends StatelessWidget {
       child: PulseboardBox(
         onTap: enabled ? onPressed : null,
         filled: !accent,
+        color: accent ? c.accent : null,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: Container(
-          color: accent ? c.accent : null,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (busy) ...[
-                SizedBox(
-                  width: 12,
-                  height: 12,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: accent ? c.accentInk : c.fg,
-                  ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (busy) ...[
+              SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: accent ? c.accentInk : c.fg,
                 ),
-                const SizedBox(width: 8),
-              ],
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: accent ? c.accentInk : c.fg,
-                    ),
               ),
+              const SizedBox(width: 8),
             ],
-          ),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: accent ? c.accentInk : c.fg,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// Renders a future with consistent loading, error and empty states.
-///
-/// Every screen fetches independently, so this is where retry and the
-/// "session expired" path live rather than being re-written per screen.
 /// Renders a future with consistent loading, error and empty states.
 ///
 /// Every screen fetches independently, so retry lives here rather than being
@@ -178,12 +174,15 @@ class ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('!', style: TextStyle(
-              fontFamilyFallback: kMonoFallback,
-              fontSize: 40,
-              fontWeight: FontWeight.w700,
-              color: c.danger,
-            )),
+            Text(
+              '!',
+              style: TextStyle(
+                fontFamilyFallback: kMonoFallback,
+                fontSize: 40,
+                fontWeight: FontWeight.w700,
+                color: c.danger,
+              ),
+            ),
             const SizedBox(height: 8),
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 16),
@@ -218,7 +217,12 @@ class EmptyView extends StatelessWidget {
 /// Feed favicon with a letter fallback, so rows keep their rhythm when a site
 /// has no icon or the request fails.
 class FaviconBadge extends StatelessWidget {
-  const FaviconBadge({super.key, required this.url, required this.seed, this.size = 18});
+  const FaviconBadge({
+    super.key,
+    required this.url,
+    required this.seed,
+    this.size = 18,
+  });
 
   final String url;
   final String seed;
@@ -271,7 +275,6 @@ void showToast(BuildContext context, String message) {
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(message)));
 }
-
 
 /// Flatten HTML to the text it reads as.
 ///

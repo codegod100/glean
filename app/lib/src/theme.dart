@@ -111,6 +111,47 @@ ThemeData pulseboardTheme(Brightness brightness) {
       titleTextStyle: mono(18, weight: FontWeight.w700),
     ),
     iconTheme: IconThemeData(color: c.fg, size: 20),
+    visualDensity: VisualDensity.standard,
+    progressIndicatorTheme: ProgressIndicatorThemeData(color: c.accent),
+    drawerTheme: DrawerThemeData(
+      backgroundColor: c.bg,
+      shape: Border(right: BorderSide(color: c.border, width: 2)),
+    ),
+    listTileTheme: ListTileThemeData(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      minVerticalPadding: 10,
+      selectedColor: c.fg,
+      selectedTileColor: c.surface,
+      titleTextStyle: mono(14, weight: FontWeight.w600),
+      subtitleTextStyle: mono(12, color: c.muted),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: c.accent,
+        foregroundColor: c.accentInk,
+        disabledBackgroundColor: c.faint,
+        disabledForegroundColor: c.muted,
+        shape: const RoundedRectangleBorder(),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        textStyle: mono(13, weight: FontWeight.w700),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: c.fg,
+        side: BorderSide(color: c.border, width: 2),
+        shape: const RoundedRectangleBorder(),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        textStyle: mono(13, weight: FontWeight.w700),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: c.fg,
+        shape: const RoundedRectangleBorder(),
+        textStyle: mono(13, weight: FontWeight.w700),
+      ),
+    ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: c.fg,
       contentTextStyle: mono(13, color: c.bg),
@@ -133,6 +174,7 @@ ThemeData pulseboardTheme(Brightness brightness) {
         borderSide: BorderSide(color: c.accent, width: 2),
       ),
       hintStyle: mono(14, color: c.muted),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
     ),
   );
 }

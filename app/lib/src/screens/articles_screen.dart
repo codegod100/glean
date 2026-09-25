@@ -98,17 +98,28 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
           child: Row(
             children: [
               Expanded(
                 child: TextField(
                   controller: _searchController,
                   textInputAction: TextInputAction.search,
-                  decoration: const InputDecoration(
-                    hintText: 'Search',
+                  decoration: InputDecoration(
+                    hintText: 'Search articles',
                     isDense: true,
-                    prefixIcon: Icon(Icons.search, size: 18),
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    suffixIcon: _search.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear search',
+                            icon: const Icon(Icons.close, size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              _search = '';
+                              _load();
+                            },
+                          ),
                   ),
                   onSubmitted: (v) {
                     _search = v.trim();
@@ -173,16 +184,26 @@ class _StatusFilter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = PulseboardColors.of(context);
-    return DropdownButton<String>(
-      value: status,
-      underline: const SizedBox.shrink(),
-      style: Theme.of(context).textTheme.labelLarge?.copyWith(color: c.fg),
-      onChanged: (v) => onChanged(v ?? 'unread'),
-      items: const [
-        DropdownMenuItem(value: 'unread', child: Text('Unread')),
-        DropdownMenuItem(value: 'all', child: Text('All')),
-        DropdownMenuItem(value: 'read', child: Text('Read')),
-      ],
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.only(left: 12, right: 8),
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border.all(color: c.border, width: 2),
+      ),
+      child: DropdownButton<String>(
+        value: status,
+        underline: const SizedBox.shrink(),
+        borderRadius: BorderRadius.zero,
+        dropdownColor: c.surface,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(color: c.fg),
+        onChanged: (v) => onChanged(v ?? 'unread'),
+        items: const [
+          DropdownMenuItem(value: 'unread', child: Text('Unread')),
+          DropdownMenuItem(value: 'all', child: Text('All')),
+          DropdownMenuItem(value: 'read', child: Text('Read')),
+        ],
+      ),
     );
   }
 }
