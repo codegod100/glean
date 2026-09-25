@@ -46,7 +46,9 @@ jobs:
 
       - name: Test Flutter app
         working-directory: app
-        run: flutter test
+        # The `live` suite expects a separately running, authenticated reader.
+        # CI runs the deterministic unit/widget suite before building.
+        run: flutter test --exclude-tags live
 
       - name: Build Flutter web app
         working-directory: app
