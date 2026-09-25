@@ -37,11 +37,13 @@ class AppState extends ChangeNotifier {
 
   List<Feed> _feeds = const [];
   int _unread = 0;
+  int _articlesRevision = 0;
   bool _loading = true;
   String? _error;
 
   List<Feed> get feeds => _feeds;
   int get unread => _unread;
+  int get articlesRevision => _articlesRevision;
   bool get loading => _loading;
   String? get error => _error;
 
@@ -87,6 +89,8 @@ class AppState extends ChangeNotifier {
   Future<RefreshResult> refresh() async {
     final result = await client.refresh();
     await load();
+    _articlesRevision++;
+    notifyListeners();
     return result;
   }
 

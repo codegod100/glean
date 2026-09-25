@@ -11,7 +11,11 @@ import 'package:pulseboard_app/src/screens/home_shell.dart';
 import 'package:pulseboard_app/src/theme.dart';
 
 /// A stand-in for the reader, covering the routes the shell touches.
-http.Client fakeReader({List<String>? seen, bool empty = false}) {
+http.Client fakeReader({
+  List<String>? seen,
+  bool empty = false,
+  List<Map<String, Object?>>? articles,
+}) {
   return MockClient((req) async {
     seen?.add('${req.method} ${req.url.path}');
     Map<String, String> q = req.url.queryParameters;
@@ -37,7 +41,7 @@ http.Client fakeReader({List<String>? seen, bool empty = false}) {
       case '/unread':
         body = {'count': empty ? 0 : 2};
       case '/articles':
-        body = empty
+        body = articles ?? (empty
             ? []
             : [
                 {
@@ -52,7 +56,7 @@ http.Client fakeReader({List<String>? seen, bool empty = false}) {
                   'published': '2026-09-20T10:00:00Z',
                   'is_read': false,
                 },
-              ];
+              ]);
       case '/refresh':
         body = {'added': 4, 'errors': []};
       default:
@@ -64,11 +68,15 @@ http.Client fakeReader({List<String>? seen, bool empty = false}) {
 }
 
 Future<AppState> pump(WidgetTester tester,
-    {List<String>? seen, bool empty = false}) async {
+    {
+      List<String>? seen,
+      bool empty = false,
+      List<Map<String, Object?>>? articles,
+    }) async {
   final state = AppState(
     client: PulseboardClient(
         baseUrl: 'https://reader.test',
-        client: fakeReader(seen: seen, empty: empty)),
+        client: fakeReader(seen: seen, empty: empty, articles: articles)),
   );
   await tester.pumpWidget(AppScope(
     state: state,
@@ -121,6 +129,47 @@ void main() {
 
     expect(seen, contains('POST /refresh'));
     expect(find.textContaining('4 new'), findsOneWidget);
+  });
+
+  testWidgets('refresh reloads the visible articles', (tester) async {
+    final seen = <String>[];
+    final articles = <Map<String, Object?>>[
+      {
+        'id': 1,
+        'feed_url': 'https://a.test/feed',
+        'feed_title': 'Feed A',
+        'title': 'First article',
+        'url': 'https://a.test/1',
+        'author': 'Alice',
+        'summary': '',
+        'content': '',
+        'published': '2026-09-20T10:00:00Z',
+        'is_read': false,
+      },
+    ];
+    await pump(tester, seen: seen, articles: articles);
+
+    articles
+      ..clear()
+      ..add({
+        'id': 2,
+        'feed_url': 'https://a.test/feed',
+        'feed_title': 'Feed A',
+        'title': 'New article',
+        'url': 'https://a.test/2',
+        'author': 'Bob',
+        'summary': '',
+        'content': '',
+        'published': '2026-09-24T10:00:00Z',
+        'is_read': false,
+      });
+
+    await tester.tap(find.byTooltip('Refresh'));
+    await tester.pumpAndSettle();
+
+    expect(seen.where((request) => request == 'GET /articles'), hasLength(2));
+    expect(find.text('First article'), findsNothing);
+    expect(find.text('New article'), findsOneWidget);
   });
 
   testWidgets('feed management exposes add and removal controls',

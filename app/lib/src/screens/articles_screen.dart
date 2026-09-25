@@ -21,6 +21,7 @@ class ArticlesScreen extends StatefulWidget {
 class _ArticlesScreenState extends State<ArticlesScreen> {
   Future<List<Article>>? _future;
   final _searchController = TextEditingController();
+  int? _articlesRevision;
 
   String _status = 'unread';
   String _search = '';
@@ -30,9 +31,17 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
   final Map<int, Article> _patched = {};
 
   @override
-  void initState() {
-    super.initState();
-    _load();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final revision = AppScope.of(context).articlesRevision;
+    if (_articlesRevision == revision) return;
+    _articlesRevision = revision;
+    _patched.clear();
+    _future = AppScope.read(context).client.articles(
+      status: _status,
+      feedUrl: widget.feed.feedUrl,
+      search: _search,
+    );
   }
 
   @override
