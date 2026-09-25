@@ -134,10 +134,11 @@ proc serveStatic(r: Reader, req: Request, rel: string): Future[bool] {.async.} =
   let root = absolutePath(r.webRoot)
   if not full.startsWith(root) or not fileExists(full): return false
   var headers = newHttpHeaders({"Content-Type": contentTypeFor(full)})
-  # Flutter's bootstrap, manifest and service worker keep stable filenames.
+  # Flutter's bootstrap, manifest and Pulseboard's service worker keep stable
+  # filenames.
   # Revalidate them so a deploy cannot leave an installed app on yesterday's
-  # shell. Other assets get a short browser cache; Flutter's versioned service
-  # worker remains the durable cache and can replace them on the next deploy.
+  # shell. Other assets get a short browser cache; the persistent service
+  # worker is rechecked by the browser and updated on the next deploy.
   let ext = full.splitFile.ext.toLowerAscii
   if ext in [".html", ".js", ".mjs", ".json"]:
     headers["Cache-Control"] = "no-cache"
@@ -149,7 +150,7 @@ proc serveStatic(r: Reader, req: Request, rel: string): Future[bool] {.async.} =
 proc isPublicWebAsset(path: string): bool =
   ## The application data stays behind the session, but the browser must be
   ## able to install and update the PWA even after that session expires.
-  if path in ["manifest.json", "flutter_service_worker.js",
+  if path in ["manifest.json", "pulseboard_service_worker.js",
               "flutter_bootstrap.js", "flutter.js", "main.dart.js",
               "version.json",
               "favicon.png"]:

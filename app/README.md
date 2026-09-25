@@ -1,8 +1,10 @@
 # Pulseboard app
 
 The Flutter client for Pulseboard. Web release builds are installable PWAs:
-Flutter generates and registers the service worker, while `web/manifest.json`
-contains the app identity, standalone display mode, colors, and maskable icons.
+`web/flutter_bootstrap.js` registers Pulseboard's persistent service worker,
+while `web/manifest.json` contains the app identity, standalone display mode,
+colors, and maskable icons. The worker deliberately does not cache
+authenticated API responses or reader data.
 
 ## Run locally
 
