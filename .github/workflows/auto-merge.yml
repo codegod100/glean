@@ -24,7 +24,15 @@ jobs:
     steps:
       - name: Enable GitHub auto-merge
         env:
-          GH_TOKEN: ${{ github.token }}
+          # A merge made with GITHUB_TOKEN does not trigger other workflows, so
+          # auto-merged PRs would never run Deploy. A personal access token
+          # (contents + pull requests: write) makes the merge a normal push.
+          GH_TOKEN: ${{ secrets.AUTO_MERGE_TOKEN || github.token }}
+          HAS_PAT: ${{ secrets.AUTO_MERGE_TOKEN != '' }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPOSITORY: ${{ github.repository }}
-        run: gh pr merge "$PR_NUMBER" --repo "$REPOSITORY" --auto --squash
+        run: |
+          if [[ "$HAS_PAT" != "true" ]]; then
+            echo "::warning::AUTO_MERGE_TOKEN is not set; this PR will not deploy when auto-merged."
+          fi
+          gh pr merge "$PR_NUMBER" --repo "$REPOSITORY" --auto --squash
