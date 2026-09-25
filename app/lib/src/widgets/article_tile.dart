@@ -28,11 +28,10 @@ class ArticleTile extends StatelessWidget {
     final read = article.isRead;
 
     return Link(
-      // A real same-tab link lets the browser preserve its native modifier
-      // behavior: Ctrl/Cmd-click opens a background tab instead of focusing a
-      // programmatically created `_blank` tab.
+      // `_blank` sends article links out of the installed PWA, so Ctrl/Cmd-click
+      // opens the page in Chrome rather than another PWA window.
       uri: uri,
-      target: LinkTarget.defaultTarget,
+      target: LinkTarget.blank,
       builder: (context, followLink) => InkWell(
         onTap: () {
           onTap();

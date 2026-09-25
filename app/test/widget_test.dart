@@ -106,7 +106,7 @@ void main() {
     expect(seen, contains('GET /feeds'));
   });
 
-  testWidgets('article links use native same-tab navigation', (tester) async {
+  testWidgets('article links open outside the installed PWA', (tester) async {
     await pump(tester);
 
     final link = tester.widget<Link>(
@@ -116,7 +116,7 @@ void main() {
       ),
     );
     expect(link.uri, Uri.parse('https://a.test/1'));
-    expect(link.target, LinkTarget.defaultTarget);
+    expect(link.target, LinkTarget.blank);
   });
 
   testWidgets('an empty reader says so rather than showing a spinner',
