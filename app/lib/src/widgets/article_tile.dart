@@ -4,8 +4,8 @@ import '../models/models.dart';
 import '../theme.dart';
 import 'common.dart';
 
-/// One row in the article list. Read state shows as weight and opacity
-/// rather than a badge, so an unread item simply reads louder.
+/// One row in the article list. An editorial title and excerpt are paired with
+/// quiet, technical metadata to make the list scan like a compact paper shelf.
 class ArticleTile extends StatelessWidget {
   const ArticleTile({
     super.key,
@@ -27,7 +27,7 @@ class ArticleTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+        padding: const EdgeInsets.fromLTRB(20, 18, 10, 18),
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: c.faint, width: 1)),
         ),
@@ -54,19 +54,19 @@ class ArticleTile extends StatelessWidget {
                           article.feedTitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: text.bodySmall,
+                          style: text.bodySmall?.copyWith(letterSpacing: 0.25),
                         ),
                       ),
                       if (article.published != null) ...[
                         const SizedBox(width: 12),
                         Text(
                           relativeTime(article.published),
-                          style: text.bodySmall,
+                          style: text.bodySmall?.copyWith(letterSpacing: 0.25),
                         ),
                       ],
                     ],
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 10),
                   Opacity(
                     opacity: read ? 0.55 : 1,
                     child: Text(
@@ -74,17 +74,21 @@ class ArticleTile extends StatelessWidget {
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                       style: text.bodyLarge?.copyWith(
-                        fontWeight: read ? FontWeight.w400 : FontWeight.w700,
+                        fontWeight: read ? FontWeight.w400 : FontWeight.w600,
+                        height: 1.35,
                       ),
                     ),
                   ),
                   if (article.summary.isNotEmpty) ...[
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 9),
                     Text(
                       stripHtml(article.summary),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: text.bodySmall,
+                      style: text.bodyMedium?.copyWith(
+                        color: read ? c.muted.withOpacity(0.78) : c.muted,
+                        height: 1.5,
+                      ),
                     ),
                   ],
                 ],

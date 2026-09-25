@@ -65,22 +65,49 @@ class PulseboardColors extends ThemeExtension<PulseboardColors> {
       t < 0.5 ? this : (other as PulseboardColors? ?? this);
 }
 
-/// The web app asks for JetBrains Mono and falls back through IBM Plex Mono to
-/// the platform monospace. Doing the same here keeps the look without a
-/// runtime font download; bundling the TTF would pin it exactly.
+/// Compact UI labels retain the app's technical voice.
 const kMonoFallback = <String>['JetBrains Mono', 'IBM Plex Mono', 'monospace'];
 
-ThemeData pulseboardTheme(Brightness brightness) {
-  final c = brightness == Brightness.dark ? PulseboardColors.dark : PulseboardColors.light;
+/// Reading text is deliberately a separate voice: a classic serif, with the
+/// looser leading of a paper viewer. This is what lets a long article title or
+/// excerpt feel like something to read rather than another UI control.
+const kEditorialFallback = <String>[
+  'Noto Serif',
+  'Georgia',
+  'Times New Roman',
+  'serif',
+];
 
-  TextStyle mono(double size, {FontWeight weight = FontWeight.w400, Color? color}) =>
-      TextStyle(
-        fontFamilyFallback: kMonoFallback,
-        fontSize: size,
-        fontWeight: weight,
-        color: color ?? c.fg,
-        height: 1.45,
-      );
+ThemeData pulseboardTheme(Brightness brightness) {
+  final c = brightness == Brightness.dark
+      ? PulseboardColors.dark
+      : PulseboardColors.light;
+
+  TextStyle mono(
+    double size, {
+    FontWeight weight = FontWeight.w400,
+    Color? color,
+  }) => TextStyle(
+    fontFamilyFallback: kMonoFallback,
+    fontSize: size,
+    fontWeight: weight,
+    color: color ?? c.fg,
+    height: 1.45,
+  );
+
+  TextStyle editorial(
+    double size, {
+    FontWeight weight = FontWeight.w400,
+    Color? color,
+    FontStyle? fontStyle,
+  }) => TextStyle(
+    fontFamilyFallback: kEditorialFallback,
+    fontSize: size,
+    fontWeight: weight,
+    color: color ?? c.fg,
+    fontStyle: fontStyle,
+    height: 1.58,
+  );
 
   return ThemeData(
     brightness: brightness,
@@ -94,13 +121,16 @@ ThemeData pulseboardTheme(Brightness brightness) {
     ).copyWith(surface: c.bg, primary: c.accent, error: c.danger),
     extensions: [c],
     textTheme: TextTheme(
-      displaySmall: mono(28, weight: FontWeight.w700),
-      headlineSmall: mono(20, weight: FontWeight.w700),
+      displaySmall: editorial(30, weight: FontWeight.w600),
+      headlineSmall: editorial(23, weight: FontWeight.w600),
       titleMedium: mono(16, weight: FontWeight.w700),
-      bodyLarge: mono(15),
-      bodyMedium: mono(14),
+      bodyLarge: editorial(19, weight: FontWeight.w500),
+      bodyMedium: editorial(16),
       bodySmall: mono(12, color: c.muted),
-      labelLarge: mono(13, weight: FontWeight.w700),
+      labelLarge: mono(
+        12,
+        weight: FontWeight.w700,
+      ).copyWith(letterSpacing: 0.35),
     ),
     appBarTheme: AppBarTheme(
       backgroundColor: c.bg,
