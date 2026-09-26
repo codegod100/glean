@@ -3,4 +3,8 @@ version = 1
 name = "pulseboard"
 
 [setup]
-script = ""
+script = """
+mise use --global flutter@stable
+flutter config --no-analytics
+(cd app && flutter pub get)
+"""
