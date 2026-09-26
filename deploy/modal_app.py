@@ -44,6 +44,14 @@ DB_SUFFIXES = ("_users", "_articles")
 # Worst case a crash costs, if the container dies without its exit handler.
 SNAPSHOT_INTERVAL = 300
 
+# The users database holds web sessions, and a login is only good for as long
+# as its row survives. A redeploy starts the new container from the Volume
+# while the old one is still serving, so a session younger than the last
+# snapshot would vanish and the browser's cookie would start drawing 401s.
+# The database is tiny and changes only on login and logout, so it is copied
+# as soon as it changes rather than waiting for the interval.
+USERS_CHECK_INTERVAL = 5
+
 image = (
     modal.Image.debian_slim(python_version="3.12")
     .apt_install(
@@ -75,7 +83,7 @@ volume = modal.Volume.from_name("pulseboard-data", create_if_missing=True)
 app = modal.App(APP_NAME)
 
 
-def _snapshot_once() -> None:
+def _snapshot_once(suffixes: tuple[str, ...] = DB_SUFFIXES) -> None:
     """Copy each live database to the Volume, via a local staging file.
 
     VACUUM INTO journals as it writes, so it is pointed at local disk rather
@@ -83,7 +91,7 @@ def _snapshot_once() -> None:
     off. Only the finished file is copied across.
     """
     os.makedirs(SNAPSHOT_DIR, exist_ok=True)
-    for suffix in DB_SUFFIXES:
+    for suffix in suffixes:
         live = f"{DB_BASE}{suffix}"
         if not os.path.exists(live):
             continue
@@ -107,10 +115,28 @@ def _restore() -> None:
             print(f"[pulseboard] restored {snap}", flush=True)
 
 
+def _users_mtime() -> float:
+    """When the users database last changed, counting its write-ahead log."""
+    base = f"{DB_BASE}_users"
+    return max(
+        (os.path.getmtime(p) for p in (base, f"{base}-wal") if os.path.exists(p)),
+        default=0.0,
+    )
+
+
 def _snapshot_loop(stop: threading.Event) -> None:
-    while not stop.wait(SNAPSHOT_INTERVAL):
+    # One thread does every snapshot, so two never share a staging file.
+    users_seen = _users_mtime()
+    last_full = time.monotonic()
+    while not stop.wait(USERS_CHECK_INTERVAL):
         try:
-            _snapshot_once()
+            if time.monotonic() - last_full >= SNAPSHOT_INTERVAL:
+                users_seen = _users_mtime()
+                _snapshot_once()
+                last_full = time.monotonic()
+            elif (users_now := _users_mtime()) != users_seen:
+                users_seen = users_now
+                _snapshot_once(("_users",))
         except Exception as exc:  # a failed snapshot must not kill the server
             print(f"[pulseboard] snapshot failed: {exc}", file=sys.stderr, flush=True)
 

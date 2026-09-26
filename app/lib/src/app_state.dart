@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'api/client.dart';
 import 'models/models.dart';
@@ -31,7 +32,23 @@ class AppState extends ChangeNotifier {
   AppState({
     String? baseUrl,
     PulseboardClient? client,
-  }) : client = client ?? PulseboardClient(baseUrl: baseUrl ?? kDefaultBaseUrl);
+  }) : client = client ??
+            PulseboardClient(
+              baseUrl: baseUrl ?? kDefaultBaseUrl,
+              onUnauthorized: kIsWeb ? _signInAgain : null,
+            );
+
+  static bool _signingIn = false;
+
+  /// The session cookie is gone or expired, so every request will keep
+  /// failing. The reader serves the login page, and the callback sets a new
+  /// cookie and returns to the app; several requests fail together, so only
+  /// the first one navigates.
+  static void _signInAgain() {
+    if (_signingIn) return;
+    _signingIn = true;
+    launchUrl(Uri.base.resolve('/auth/login'), webOnlyWindowName: '_self');
+  }
 
   final PulseboardClient client;
 

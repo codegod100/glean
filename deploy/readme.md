@@ -46,6 +46,12 @@ authenticated browser session. OAuth protocol state is kept under
 expire after 12 hours. The OAuth access credential is revoked immediately
 after the DID has been verified.
 
+The session is an HttpOnly cookie, not a bearer token, so the client has
+nothing to attach. The users database is copied to the Volume within seconds
+of a login, rather than on the five-minute schedule, so a session survives a
+redeploy. When a session is missing or has expired, the API answers 401 and the
+web client sends the browser back to `/auth/login`.
+
 ## Storage, and what it costs
 
 SQLite runs in WAL mode, which wants a real POSIX filesystem with working
