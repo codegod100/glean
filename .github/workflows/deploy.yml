@@ -1,9 +1,11 @@
 name: Deploy
 
 on:
-  push:
+  pull_request_target:
     branches:
       - main
+    types:
+      - closed
   workflow_dispatch:
 
 permissions:
@@ -16,6 +18,7 @@ concurrency:
 jobs:
   deploy:
     name: Build and deploy to Modal
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
@@ -33,6 +36,11 @@ jobs:
 
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          # pull_request_target runs the trusted workflow from the base branch;
+          # build the commit that actually landed rather than the base ref that
+          # happened to be current when the event was delivered.
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2

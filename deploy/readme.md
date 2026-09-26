@@ -1,8 +1,10 @@
 # Deploying
 
-Production deploys automatically after a commit lands on `main`. The
+Production deploys automatically after a pull request is merged into `main`. The
 [`Deploy` workflow](../.github/workflows/deploy.yml) tests and builds the
-Flutter web client, then deploys the complete application to Modal.
+Flutter web client from the merged commit, then deploys the complete application
+to Modal. Direct pushes do not deploy; use the workflow's manual trigger when a
+deployment is needed without a pull request.
 
 Before merging the workflow for the first time, add these GitHub Actions
 secrets to the repository (or to its `production` environment):
