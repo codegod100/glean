@@ -102,6 +102,75 @@ proc jsonResponse(req: Request, code: HttpCode, node: JsonNode) {.async.} =
 proc fail(req: Request, code: HttpCode, msg: string) {.async.} =
   await jsonResponse(req, code, %*{"error": msg})
 
+proc escapeHtml(s: string): string =
+  for c in s:
+    case c
+    of '&': result.add "&amp;"
+    of '<': result.add "&lt;"
+    of '>': result.add "&gt;"
+    of '"': result.add "&quot;"
+    of '\'': result.add "&#39;"
+    else: result.add c
+
+const AuthPageStyle = """
+:root{--bg:#fafaf7;--fg:#0a0a0a;--surface:#f0efe9;--muted:#6b6b6b;
+--accent:#00754a;--accent-ink:#ecfff4;--danger:#c82014;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0a0a0a;--fg:#f5f5ef;
+--surface:#161616;--muted:#9a9a9a;--danger:#ff5a4d}}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;
+background:var(--bg);color:var(--fg);
+font:15px/1.5 "JetBrains Mono","IBM Plex Mono",ui-monospace,monospace}
+main{width:100%;max-width:380px;background:var(--surface);
+border:2px solid var(--fg);box-shadow:6px 6px 0 var(--fg);padding:28px 24px}
+.brand{display:flex;align-items:center;gap:10px;margin:0 0 20px;
+font-size:20px;font-weight:700;letter-spacing:-.02em}
+.brand img{width:28px;height:28px;border:2px solid var(--fg)}
+p{margin:0 0 16px;color:var(--muted)}
+label{display:block;font-size:12px;font-weight:700;text-transform:uppercase;
+letter-spacing:.06em;margin-bottom:6px}
+input{display:block;width:100%;font:inherit;padding:10px 12px;margin-bottom:16px;
+background:var(--bg);color:var(--fg);border:2px solid var(--fg);border-radius:0}
+input:focus{outline:2px solid var(--accent);outline-offset:2px}
+button,.button{display:block;width:100%;font:inherit;font-weight:700;
+text-align:center;text-decoration:none;padding:10px 12px;cursor:pointer;
+background:var(--accent);color:var(--accent-ink);border:2px solid var(--fg);
+box-shadow:3px 3px 0 var(--fg)}
+button:active,.button:active{transform:translate(3px,3px);box-shadow:none}
+.error{color:var(--danger);border-left:3px solid var(--danger);padding-left:10px}
+small{display:block;margin-top:16px;color:var(--muted);font-size:12px}
+"""
+
+proc authPage(req: Request, code: HttpCode, title, body: string) {.async.} =
+  ## Every page the reader renders itself sits in front of a login, so they
+  ## share one card that looks like the client they lead into.
+  await req.respond(code, "<!doctype html>\n<html lang=\"en\"><head>" &
+    "<meta charset=\"utf-8\">" &
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" &
+    "<title>" & escapeHtml(title) & "</title>" &
+    "<link rel=\"icon\" href=\"/favicon.png\">" &
+    "<style>" & AuthPageStyle & "</style></head><body><main>" &
+    "<h1 class=\"brand\"><img src=\"/favicon.png\" alt=\"\">Pulseboard</h1>" &
+    body & "</main></body></html>",
+    newHttpHeaders({"Content-Type": "text/html; charset=utf-8"}))
+
+proc loginPage(req: Request, code = Http200, identity = "",
+               error = "") {.async.} =
+  var body = ""
+  if error.len > 0:
+    body.add "<p class=\"error\" role=\"alert\">" & escapeHtml(error) & "</p>"
+  else:
+    body.add "<p>Sign in with your Bluesky or other AT Protocol account.</p>"
+  body.add """<form action="/auth/authorize" method="get">
+<label for="identity">Handle</label>
+<input id="identity" name="identity" required autofocus autocapitalize="none"
+spellcheck="false" placeholder="you.bsky.social" autocomplete="username" value="""" &
+    escapeHtml(identity) & """">
+<button type="submit">Continue</button></form>
+<small>Only your DID is kept. Access to your account is revoked right after
+sign-in.</small>"""
+  await authPage(req, code, "Sign in to Pulseboard", body)
+
 proc contentTypeFor(path: string): string =
   ## Enough types for a Flutter web build. A wrong type here is not cosmetic:
   ## a browser will refuse to execute JavaScript served as text/plain.
@@ -254,20 +323,14 @@ proc handle(r: Reader, req: Request) {.async.} =
     return
 
   if req.reqMethod == HttpGet and path == "auth/login":
-    await req.respond(Http200, """<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>Sign in to Pulseboard</title></head><body>
-<main><h1>Pulseboard</h1><form action="/auth/authorize" method="get">
-<label>AT Protocol handle <input name="identity" required autofocus
-placeholder="you.bsky.social" autocomplete="username"></label>
-<button type="submit">Continue</button></form></main></body></html>""",
-      newHttpHeaders({"Content-Type": "text/html; charset=utf-8"}))
+    await loginPage(req)
     return
 
   if req.reqMethod == HttpGet and path == "auth/authorize":
     let identity = param("identity").strip
     if identity.len == 0 or identity.startsWith("did:"):
-      await fail(req, Http400, "an AT Protocol handle is required")
+      await loginPage(req, Http400, identity,
+                      "Enter a handle, like you.bsky.social.")
       return
     try:
       let result = await r.oauth("authorize", %*{"identity": identity})
@@ -275,7 +338,11 @@ placeholder="you.bsky.social" autocomplete="username"></label>
         "Location": result{"url"}.getStr,
       }))
     except CatchableError as e:
-      await fail(req, Http502, "AT Protocol login could not start: " & e.msg)
+      # The helper's output is a Node error, and in debug builds the message
+      # also carries an async traceback: log it, show the reader a sentence.
+      echo "auth/authorize failed for ", identity, ": ", e.msg
+      await loginPage(req, Http502, identity,
+                      "Couldn't start sign-in for that handle. Check it and try again.")
     return
 
   if req.reqMethod == HttpGet and path == "auth/callback":
@@ -284,12 +351,9 @@ placeholder="you.bsky.social" autocomplete="username"></label>
     try:
       let callbackResult = await r.oauth("callback", %*{"params": params})
       if callbackResult.hasKey("error"):
-        await req.respond(Http401, """<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>Sign in again</title></head><body><main><h1>Sign in again</h1>
-<p>The AT Protocol login expired or was cancelled.</p>
-<p><a href="/auth/login">Start a new login</a></p></main></body></html>""",
-          newHttpHeaders({"Content-Type": "text/html; charset=utf-8"}))
+        await authPage(req, Http401, "Sign in again",
+          "<p>That sign-in expired or was cancelled.</p>" &
+          "<a class=\"button\" href=\"/auth/login\">Sign in again</a>")
         return
       let did = callbackResult{"did"}.getStr
       if not did.startsWith("did:"):
@@ -301,7 +365,8 @@ placeholder="you.bsky.social" autocomplete="username"></label>
           "; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=" & $SessionLifetime,
       }))
     except CatchableError as e:
-      await fail(req, Http401, "AT Protocol login failed: " & e.msg)
+      echo "auth/callback failed: ", e.msg
+      await loginPage(req, Http401, error = "Sign-in failed. Please try again.")
     return
 
   if req.reqMethod == HttpGet and path == "auth/logout":
