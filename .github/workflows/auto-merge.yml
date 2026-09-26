@@ -9,6 +9,8 @@ on:
       - synchronize
 
 permissions:
+  # actions: write lets the job dispatch Deploy itself when no PAT is set.
+  actions: write
   contents: write
   pull-requests: write
 
@@ -19,7 +21,9 @@ jobs:
     # enables auto-merge as soon as a draft becomes eligible.
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
+    env:
+      HAS_PAT: ${{ secrets.AUTO_MERGE_TOKEN != '' }}
 
     steps:
       - name: Enable GitHub auto-merge
@@ -28,11 +32,35 @@ jobs:
           # auto-merged PRs would never run Deploy. A personal access token
           # (contents + pull requests: write) makes the merge a normal push.
           GH_TOKEN: ${{ secrets.AUTO_MERGE_TOKEN || github.token }}
-          HAS_PAT: ${{ secrets.AUTO_MERGE_TOKEN != '' }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPOSITORY: ${{ github.repository }}
         run: |
-          if [[ "$HAS_PAT" != "true" ]]; then
-            echo "::warning::AUTO_MERGE_TOKEN is not set; this PR will not deploy when auto-merged."
-          fi
           gh pr merge "$PR_NUMBER" --repo "$REPOSITORY" --auto --squash
+
+      - name: Deploy once merged
+        # With the PAT, the merge itself triggers Deploy. Without it, the merge
+        # is made as github-actions and starts nothing, so wait for it to land
+        # and dispatch Deploy directly: workflow_dispatch is the one event
+        # GITHUB_TOKEN is allowed to trigger.
+        if: env.HAS_PAT != 'true' && github.event.pull_request.base.ref == 'main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          for _ in $(seq 90); do
+            state=$(gh pr view "$PR_NUMBER" --repo "$REPOSITORY" --json state --jq .state)
+            case "$state" in
+              MERGED)
+                gh workflow run deploy.yml --repo "$REPOSITORY" --ref main
+                echo "Dispatched Deploy for #$PR_NUMBER."
+                exit 0
+                ;;
+              CLOSED)
+                echo "#$PR_NUMBER was closed without merging; nothing to deploy."
+                exit 0
+                ;;
+            esac
+            sleep 10
+          done
+          echo "::warning::#$PR_NUMBER did not merge within 15 minutes; run Deploy manually once it does."
