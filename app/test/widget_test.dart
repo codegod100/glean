@@ -10,6 +10,7 @@ import 'package:pulseboard_app/src/app_state.dart';
 import 'package:pulseboard_app/src/screens/home_shell.dart';
 import 'package:pulseboard_app/src/theme.dart';
 import 'package:pulseboard_app/src/widgets/article_tile.dart';
+import 'package:url_launcher/link.dart';
 
 /// A stand-in for the reader, covering the routes the shell touches.
 http.Client fakeReader({
@@ -105,19 +106,18 @@ void main() {
     expect(seen, contains('GET /feeds'));
   });
 
-  testWidgets('article links do not create focusable platform views',
+  testWidgets('article links expose a native blank-target anchor',
       (tester) async {
     await pump(tester);
 
-    final semantics = tester.widget<Semantics>(
-      find
-          .descendant(
-            of: find.byType(ArticleTile),
-            matching: find.byType(Semantics),
-          )
-          .first,
+    final link = tester.widget<Link>(
+      find.descendant(
+        of: find.byType(ArticleTile),
+        matching: find.byType(Link),
+      ),
     );
-    expect(semantics.properties.link, isTrue);
+    expect(link.uri, Uri.parse('https://a.test/1'));
+    expect(link.target, LinkTarget.blank);
   });
 
   testWidgets('an empty reader says so rather than showing a spinner',
