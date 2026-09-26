@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:url_launcher/link.dart';
 
 import '../models/models.dart';
 import '../theme.dart';
@@ -27,20 +27,16 @@ class ArticleTile extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final read = article.isRead;
 
-    return Semantics(
-      link: uri != null,
-      child: InkWell(
+    return Link(
+      // Keep a real anchor in the web DOM so the browser can offer its native
+      // link context menu, including "Open link in new tab". `_blank` also
+      // ensures a normal click leaves an installed PWA open.
+      uri: uri,
+      target: LinkTarget.blank,
+      builder: (context, followLink) => InkWell(
         onTap: () {
           onTap();
-          if (uri != null) {
-            // Avoid url_launcher's Link widget here. On the web it is backed by
-            // a focusable platform view; Flutter can hide that view while its
-            // anchor still owns focus, which makes the browser report an
-            // aria-hidden accessibility violation. Launching directly has no
-            // platform view, while `_blank` still sends links outside an
-            // installed PWA.
-            launchUrl(uri!, webOnlyWindowName: '_blank');
-          }
+          followLink?.call();
         },
         child: Container(
           padding: const EdgeInsets.fromLTRB(20, 18, 10, 18),
