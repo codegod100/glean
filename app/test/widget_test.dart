@@ -92,6 +92,21 @@ Future<AppState> pump(WidgetTester tester,
 }
 
 void main() {
+  test('a 401 reports the lost session before failing the request', () async {
+    var signIns = 0;
+    final client = PulseboardClient(
+      baseUrl: 'https://reader.test',
+      client: MockClient((_) async => http.Response(
+          jsonEncode({'error': 'AT Protocol authentication required'}), 401,
+          headers: {'content-type': 'application/json'})),
+      onUnauthorized: () => signIns++,
+    );
+
+    await expectLater(client.articles(), throwsA(isA<ApiException>()));
+    await expectLater(client.exportOpml(), throwsA(isA<ApiException>()));
+    expect(signIns, 2);
+  });
+
   testWidgets('articles and unread counts load on open', (tester) async {
     final seen = <String>[];
     await pump(tester, seen: seen);

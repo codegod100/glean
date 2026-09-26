@@ -15,13 +15,21 @@ class ApiException implements Exception {
 /// The reader's API.
 ///
 /// The hosted web app is same-origin, so the browser automatically sends the
-/// HttpOnly session cookie issued after AT Protocol OAuth.
+/// HttpOnly session cookie issued after AT Protocol OAuth. There is no token
+/// for the client to attach: when the cookie is missing or its session has
+/// expired, the reader answers 401 and [onUnauthorized] decides what to do.
 class PulseboardClient {
-  PulseboardClient({required this.baseUrl, http.Client? client})
-    : _client = client ?? http.Client();
+  PulseboardClient({
+    required this.baseUrl,
+    http.Client? client,
+    this.onUnauthorized,
+  }) : _client = client ?? http.Client();
 
   final String baseUrl;
   final http.Client _client;
+
+  /// Called on any 401, before the request's [ApiException] is thrown.
+  final void Function()? onUnauthorized;
 
   Uri _uri(String path, [Map<String, String>? query]) {
     final q = query?.entries.where((e) => e.value.isNotEmpty);
@@ -33,7 +41,12 @@ class PulseboardClient {
     );
   }
 
+  void _checkSession(http.Response res) {
+    if (res.statusCode == 401) onUnauthorized?.call();
+  }
+
   dynamic _decode(http.Response res) {
+    _checkSession(res);
     late final dynamic body;
     try {
       body = jsonDecode(res.body.isEmpty ? 'null' : res.body);
@@ -83,6 +96,7 @@ class PulseboardClient {
 
   Future<String> exportOpml() async {
     final res = await _client.get(_uri('/opml'));
+    _checkSession(res);
     if (res.statusCode < 200 || res.statusCode >= 300) {
       throw ApiException('Export failed (${res.statusCode}).');
     }
